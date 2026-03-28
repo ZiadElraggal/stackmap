@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+*.whl
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# Node / Frontend
+node_modules/
+frontend/.output/
+frontend/.nuxt/
+frontend/.nitro/
+frontend/dist/
+.pnpm-store/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Output
+stackmap-output.json
+stackmap-output.html
+*.tfstate.backup
+
+.claude
