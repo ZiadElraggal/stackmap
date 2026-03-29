@@ -47,3 +47,4 @@ stackmap-output.html
 
 .claude
 /.tmp-pkg-venv
+/stackmap/webapp/static
