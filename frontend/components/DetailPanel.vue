@@ -2,7 +2,7 @@
   <Transition name="slide">
     <div
       v-if="node"
-      class="fixed right-0 top-0 h-full w-96 bg-[#12121a] overflow-y-auto z-50 detail-shell"
+      class="fixed right-0 top-0 h-full w-96 bg-[#12121a] overflow-y-auto overflow-x-hidden z-50 detail-shell"
       :style="{ '--panel-color': categoryColor }"
     >
       <div class="panel-accent" />
@@ -123,10 +123,11 @@
         >
           {{ showRaw ? 'Hide' : 'View' }} Raw JSON
         </button>
-        <pre
-          v-if="showRaw"
-          class="mt-2 p-2 bg-black/30 rounded text-xs text-gray-400 overflow-x-auto font-mono max-h-64 overflow-y-auto"
-        >{{ JSON.stringify(node.properties, null, 2) }}</pre>
+        <div v-if="showRaw" class="mt-2 max-w-full overflow-hidden">
+          <pre
+            class="p-2 bg-black/30 rounded text-xs text-gray-400 font-mono max-h-80 overflow-y-auto whitespace-pre-wrap break-words"
+          >{{ rawJsonText }}</pre>
+        </div>
       </div>
     </div>
   </Transition>
@@ -147,6 +148,12 @@ const iconPath = computed(() => CATEGORY_ICONS[node.value?.category || 'other'] 
 const edges = computed(() => (node.value ? store.nodeEdges(node.value.id) : []))
 const outgoing = computed(() => edges.value.filter(e => e.source === node.value?.id))
 const incoming = computed(() => edges.value.filter(e => e.target === node.value?.id))
+const rawJsonText = computed(() => {
+  if (!node.value) return ''
+  const pretty = JSON.stringify(normalizeEmbeddedJson(node.value.properties), null, 2)
+  // Keep raw viewer human-readable even when upstream stores escaped newline text.
+  return pretty.replace(/\\n/g, '\n')
+})
 
 const SKIP_KEYS = new Set([
   'tags', 'tags_all', 'arn', 'id', 'definition', 'policy',
@@ -171,6 +178,34 @@ function formatValue(val: any): string {
   if (typeof val === 'boolean') return val ? 'true' : 'false'
   if (typeof val === 'number') return String(val)
   return String(val)
+}
+
+function normalizeEmbeddedJson(value: any): any {
+  if (Array.isArray(value)) {
+    return value.map(v => normalizeEmbeddedJson(v))
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, normalizeEmbeddedJson(v)])
+    )
+  }
+  if (typeof value !== 'string') return value
+
+  const trimmed = value.trim()
+  const looksLikeJson =
+    (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+    (trimmed.startsWith('[') && trimmed.endsWith(']'))
+
+  if (looksLikeJson) {
+    try {
+      return normalizeEmbeddedJson(JSON.parse(trimmed))
+    } catch {
+      // Keep original string if it's not valid JSON.
+    }
+  }
+
+  // Convert escaped line breaks in stored strings into readable multi-line text.
+  return value.replace(/\\n/g, '\n')
 }
 
 function nodeNameById(id: string): string {
