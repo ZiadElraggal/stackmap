@@ -132,6 +132,7 @@
       </div>
       <span>{{ store.visibleNodes.length }}/{{ store.nodes.length }} resources</span>
       <span>{{ store.visibleEdges.length }} connections</span>
+      <span class="text-gray-600">{{ store.viewMode === 'architecture' ? 'architecture view' : 'terraform raw view' }}</span>
       <span v-if="store.groups.length > 0">{{ store.groups.length }} groups</span>
       <span v-if="store.metadata.terraform_version">Terraform v{{ store.metadata.terraform_version }}</span>
       <span>{{ Math.round(zoomScale * 100) }}%</span>
@@ -141,7 +142,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { onMounted, onUnmounted, ref, reactive, watch } from 'vue'
 import * as d3 from 'd3'
 import { useGraphStore } from '~/stores/graph'
 import { useLayout } from '~/composables/useLayout'
@@ -211,8 +212,7 @@ function edgePos(nodeId: string) {
 onMounted(async () => {
   await store.loadFromJSON('/sample-data.json')
 
-  const positions = computeLayout(store.nodes, store.edges, store.groups)
-  store.setPositions(positions)
+  recomputeLayout()
 
   if (svgRef.value && zoomGroupRef.value) {
     svgSelection = d3.select(svgRef.value)
@@ -237,6 +237,14 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown)
 })
+
+watch(
+  () => [store.viewMode, store.nodes.length, store.edges.length],
+  () => {
+    if (!store.loaded) return
+    recomputeLayout()
+  }
+)
 
 function onKeydown(e: KeyboardEvent) {
   const tag = (e.target as HTMLElement)?.tagName
@@ -305,6 +313,11 @@ function fitToViewport() {
   const ty = height / 2 - (minY + graphHeight / 2) * scale
 
   svgSelection.transition().duration(500).call(zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(scale))
+}
+
+function recomputeLayout() {
+  const positions = computeLayout(store.graphNodes, store.graphEdges, store.groups)
+  store.setPositions(positions)
 }
 
 function zoomBy(factor: number) {
