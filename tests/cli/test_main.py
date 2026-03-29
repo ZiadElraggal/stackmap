@@ -77,6 +77,27 @@ def test_scan_cloudformation_json_writes_output(tmp_path: Path) -> None:
     assert out.exists()
 
 
+def test_scan_sam_writes_output(tmp_path: Path) -> None:
+    out = tmp_path / "out-sam.json"
+    result = runner.invoke(
+        app,
+        [
+            "scan",
+            "--source",
+            str(FIXTURES / "sam-simple.json"),
+            "--format",
+            "json",
+            "--output",
+            str(out),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert out.exists()
+    assert "Source type" in result.output
+    assert "sam" in result.output.lower()
+
+
 def test_scan_invalid_format_fails_fast(tmp_path: Path) -> None:
     out = tmp_path / "out.invalid"
     result = runner.invoke(

@@ -71,6 +71,14 @@ CFN_CATEGORY_MAP: dict[str, ResourceCategory] = {
     "AWS::SQS::Queue": ResourceCategory.QUEUE,
     "AWS::SNS::Topic": ResourceCategory.QUEUE,
     "AWS::SNS::Subscription": ResourceCategory.QUEUE,
+    # SAM resources
+    "AWS::Serverless::Function": ResourceCategory.COMPUTE,
+    "AWS::Serverless::Api": ResourceCategory.INTEGRATION,
+    "AWS::Serverless::HttpApi": ResourceCategory.INTEGRATION,
+    "AWS::Serverless::StateMachine": ResourceCategory.INTEGRATION,
+    "AWS::Serverless::SimpleTable": ResourceCategory.DATABASE,
+    "AWS::Serverless::LayerVersion": ResourceCategory.COMPUTE,
+    "AWS::Serverless::Application": ResourceCategory.OTHER,
 }
 
 TIER_MAP: dict[ResourceCategory, str] = {
@@ -133,6 +141,7 @@ _HELPER_TYPES = {
     "AWS::EC2::SubnetRouteTableAssociation",
     "AWS::EC2::EIP",
     "AWS::EC2::NatGateway",
+    "AWS::Serverless::LayerVersion",
 }
 
 _CFN_INTRINSIC_SHORTCUTS = {
@@ -205,6 +214,14 @@ def _parse_template(source_path: str) -> dict[str, Any]:
         return data
 
 
+def _is_sam_transform(transform: Any) -> bool:
+    if isinstance(transform, str):
+        return transform == "AWS::Serverless-2016-10-31"
+    if isinstance(transform, list):
+        return any(isinstance(t, str) and t == "AWS::Serverless-2016-10-31" for t in transform)
+    return False
+
+
 def _resolve_name(logical_id: str, resource_type: str, props: dict[str, Any]) -> str:
     for key in (
         "FunctionName",
@@ -268,7 +285,7 @@ def _iter_refs(value: Any) -> list[tuple[str, str]]:
 
 
 def _edge_type_for(source_type: str, target_type: str) -> EdgeType:
-    if source_type == "AWS::Lambda::Function" and target_type == "AWS::IAM::Role":
+    if source_type in {"AWS::Lambda::Function", "AWS::Serverless::Function"} and target_type == "AWS::IAM::Role":
         return EdgeType.AUTHENTICATES
     if source_type == "AWS::EC2::Subnet" and target_type == "AWS::EC2::VPC":
         return EdgeType.CONTAINS
@@ -414,12 +431,47 @@ class CloudFormationParser(BaseParser):
                                 )
                             )
 
+            # SAM: implicit API event wiring (Api/HttpApi event -> Function)
+            if source_node.resource_type == "AWS::Serverless::Function":
+                props = spec.get("Properties", {})
+                if isinstance(props, dict):
+                    events = props.get("Events")
+                    if isinstance(events, dict):
+                        for event in events.values():
+                            if not isinstance(event, dict):
+                                continue
+                            event_type = event.get("Type")
+                            event_props = event.get("Properties")
+                            if event_type not in {"Api", "HttpApi"} or not isinstance(event_props, dict):
+                                continue
+                            api_ref_obj = event_props.get("RestApiId") or event_props.get("ApiId")
+                            api_refs = _iter_refs(api_ref_obj)
+                            for api_logical_id, _kind in api_refs:
+                                api_node = node_by_id.get(api_logical_id)
+                                if not api_node or api_node.id == source_node.id:
+                                    continue
+                                key = (api_node.id, source_node.id, EdgeType.TRIGGERS.value)
+                                if key in edge_keys:
+                                    continue
+                                edge_keys.add(key)
+                                edges.append(
+                                    StackMapEdge(
+                                        id=f"{api_node.id}->{source_node.id}:{EdgeType.TRIGGERS.value}",
+                                        source=api_node.id,
+                                        target=source_node.id,
+                                        edge_type=EdgeType.TRIGGERS,
+                                        label="triggers",
+                                    )
+                                )
+
         self._mark_helper_parents(nodes, edges)
         groups = self._extract_groups(nodes, edges)
 
+        is_sam = _is_sam_transform(template.get("Transform"))
+
         return StackMapIR(
             metadata={
-                "source_type": "cloudformation",
+                "source_type": "sam" if is_sam else "cloudformation",
                 "template_format_version": str(template.get("AWSTemplateFormatVersion", "unknown")),
                 "total_resources": len(nodes),
                 "has_logical_helpers": True,
