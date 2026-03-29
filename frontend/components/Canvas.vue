@@ -209,7 +209,7 @@
       </div>
       <span>{{ store.visibleNodes.length }}/{{ store.nodes.length }} resources</span>
       <span>{{ store.visibleEdges.length }} connections</span>
-      <span class="text-gray-600">{{ store.viewMode === 'architecture' ? 'architecture view' : 'raw view' }}</span>
+      <span class="text-gray-600">{{ viewModeLabel }}</span>
       <span v-if="store.groups.length > 0">{{ store.groups.length }} groups</span>
       <span v-if="store.metadata.terraform_version">Terraform v{{ store.metadata.terraform_version }}</span>
       <span>{{ Math.round(zoomScale * 100) }}%</span>
@@ -374,6 +374,14 @@ const architectureStrip = computed(() => {
     accent: accents[name],
     bg: backgrounds[name],
   }))
+})
+
+const viewModeLabel = computed(() => {
+  if (store.viewMode === 'architecture') return 'architecture view'
+  const sourceType = String(store.metadata?.source_type || '').toLowerCase()
+  if (sourceType === 'cloudformation') return 'cloudformation raw view'
+  if (sourceType === 'terraform') return 'terraform raw view'
+  return 'raw view'
 })
 
 function tierBandOpacity(bandName: string): number {

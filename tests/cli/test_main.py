@@ -56,3 +56,65 @@ def test_scan_html_uses_exporter(monkeypatch, tmp_path: Path) -> None:
     assert result.exit_code == 0
     assert called["value"] is True
     assert out.exists()
+
+
+def test_scan_cloudformation_json_writes_output(tmp_path: Path) -> None:
+    out = tmp_path / "out-cfn.json"
+    result = runner.invoke(
+        app,
+        [
+            "scan",
+            "--source",
+            str(FIXTURES / "cloudformation-simple.json"),
+            "--format",
+            "json",
+            "--output",
+            str(out),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert out.exists()
+
+
+def test_scan_invalid_format_fails_fast(tmp_path: Path) -> None:
+    out = tmp_path / "out.invalid"
+    result = runner.invoke(
+        app,
+        [
+            "scan",
+            "--source",
+            str(FIXTURES / "simple-lambda-api.tfstate"),
+            "--format",
+            "yaml",
+            "--output",
+            str(out),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Format 'yaml' not supported" in result.output
+
+
+def test_scan_parse_error_is_clean(monkeypatch, tmp_path: Path) -> None:
+    out = tmp_path / "out.json"
+
+    def fake_parse(_source: str):  # type: ignore[no-untyped-def]
+        raise ValueError("YAML CloudFormation template detected but PyYAML is not installed.")
+
+    monkeypatch.setattr("stackmap.cli.main._parse_source", fake_parse)
+    result = runner.invoke(
+        app,
+        [
+            "scan",
+            "--source",
+            str(FIXTURES / "cloudformation-simple.json"),
+            "--format",
+            "json",
+            "--output",
+            str(out),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "PyYAML is not installed" in result.output

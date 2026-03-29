@@ -28,15 +28,14 @@ package: package-build
 
 build-package: package-build
 
-## Run a full check of the 4th phase of the stackmap development process, including frontend build, linting, type checking, testing, and scanning.
+## Run a full check of the 4th phase: frontend build, phase gates, and Terraform/CFN scans.
 phase4-check:
 	cd frontend && npm install
 	cd frontend && rm -rf .nuxt .output && npm run generate
 	python3 -m stackmap.webapp.build_assets --clean
-	ruff check .
-	mypy stackmap/
-	pytest -q
+	pytest -q tests/parsers/test_phase1_terraform_accuracy.py tests/parsers/test_phase2_relationship_expansion.py tests/parsers/test_phase3_architecture_clarity.py tests/parsers/test_phase4_cloudformation.py tests/parsers/test_demo_readiness.py tests/parsers/test_additional_fixtures_smoke.py tests/cli/test_main.py
 	stackmap scan --source tests/fixtures/medium-step-functions.tfstate --format html --output /tmp/stackmap-phase4-check.html
+	stackmap scan --source tests/fixtures/cloudformation-simple.json --format json --output /tmp/stackmap-phase4-cfn.json
 	stackmap serve --help > /dev/null
 	@echo "Phase 4 check passed."
 

@@ -28,7 +28,7 @@
             :class="store.viewMode === 'raw' ? 'bg-blue-500/20 text-blue-400' : 'bg-transparent text-gray-400 hover:bg-white/5'"
             @click="store.setViewMode('raw')"
           >
-            Terraform raw
+            Raw
           </button>
         </div>
       </section>
