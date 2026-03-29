@@ -1,0 +1,880 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Aegis - Static site hosting (Private S3 + CloudFront w/ OAC). Cognito later.
+
+Parameters:
+  SiteBucketName:
+    Type: String
+    Description: Globally unique S3 bucket name (e.g., aegis-ziadelraggal-2026)
+  
+  SiteDomainName:
+    Type: String
+    Description: Custom domain for the site (e.g., aegis.elraggal.dev)
+
+  AcmCertificateArn:
+    Type: String
+    Description: ACM certificate ARN (MUST be in us-east-1 for CloudFront)
+  
+  PipelinePrefix:
+    Type: String
+    Default: "pipeline"
+    Description: S3 prefix for pipeline artifacts (raw/scored/reports)
+
+  DeployApi:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Whether to deploy API Gateway + Lambda resources
+
+  DataBucketName:
+    Type: String
+    Default: aegis-data-ziad-2026
+    Description: Bucket that holds source datasets (manual bucket is fine)
+
+  DataKey:
+    Type: String
+    Default: datasets/creditcard/creditcard.csv
+    Description: S3 key for the dataset object
+  
+  KaggleDataset:
+    Type: String
+    Default: mlg-ulb/creditcardfraud
+    Description: Kaggle dataset slug (owner/dataset)
+
+  KaggleFileName:
+    Type: String
+    Default: creditcard.csv
+    Description: File inside the Kaggle dataset zip to extract
+
+  KaggleUsernameParam:
+    Type: String
+    Default: /aegis/kaggle/username
+    Description: SSM parameter name for Kaggle username
+
+  KaggleKeyParam:
+    Type: String
+    Default: /aegis/kaggle/key
+    Description: SSM parameter name for Kaggle API key (SecureString)
+
+  PipelineBucketName:
+    Type: String
+    Default: aegis-pipeline-ziad-2026
+    Description: Bucket to store pipeline artifacts (raw/curated/scored/reports)
+
+  CommonLayerS3Key:
+    Type: String
+    Default: lambda/layers/aegis_common_layer.zip
+    Description: S3 key for the common Lambda Layer zip (in SiteBucket)
+
+  CommonLayerName:
+    Type: String
+    Default: aegis-common-layer
+    Description: Layer name (for readability)
+
+  AwsSdkPandasLayerArn:
+    Type: String
+    Default: arn:aws:lambda:us-east-1:336392948345:layer:AWSSDKPandas-Python312:22
+    Description: AWS SDK for pandas managed layer (includes pandas/pyarrow/numpy)
+    
+  PriceClass:
+    Type: String
+    Default: PriceClass_100
+    AllowedValues:
+      - PriceClass_100
+      - PriceClass_200
+      - PriceClass_All
+    Description: CloudFront price class (100 is cheapest / fewer edge locations)
+
+  ScoreRiskImageUri:
+    Type: String
+    Description: ECR image URI for the container-based score_risk Lambda
+
+Conditions:
+  CreateApi: !Equals [!Ref DeployApi, "true"]
+
+Resources:
+  # ----------------------------
+  # S3 (PRIVATE) for site files
+  # ----------------------------
+  SiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref SiteBucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+  # ----------------------------
+  # S3 Data Bucket (raw datasets)
+  # ----------------------------
+  DataBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref DataBucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  # ----------------------------
+  # S3 Pipeline Bucket (artifacts)
+  # ----------------------------
+  PipelineBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref PipelineBucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  # ----------------------------
+  # CloudFront Origin Access Control
+  # ----------------------------
+  SiteOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "${AWS::StackName}-oac"
+        Description: OAC for Aegis private S3 origin
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # ----------------------------
+  # CloudFront Distribution
+  # ----------------------------
+  SiteDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        PriceClass: !Ref PriceClass
+        DefaultRootObject: index.html
+        HttpVersion: http2
+        IPV6Enabled: true
+
+        Aliases:
+          - !Ref SiteDomainName
+
+        ViewerCertificate:
+          AcmCertificateArn: !Ref AcmCertificateArn
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt SiteBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt SiteOAC.Id
+            S3OriginConfig: {}
+
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD, OPTIONS]
+          Compress: true
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+
+  SiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub "arn:aws:s3:::${SiteBucketName}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${SiteDistribution}"
+
+  # ----------------------------
+  # Cognito Setup
+  # ----------------------------
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: aegis-user-pool
+      AutoVerifiedAttributes: [email]
+      UsernameAttributes: [email]
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 10
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientName: aegis-spa-client
+      GenerateSecret: false
+      PreventUserExistenceErrors: ENABLED
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      TokenValidityUnits:
+        AccessToken: minutes
+        IdToken: minutes
+        RefreshToken: days
+      AccessTokenValidity: 30
+      IdTokenValidity: 30
+      RefreshTokenValidity: 2
+
+  # ----------------------------
+  # Pipeline Lambda IAM Role
+  # PATCH 3: added bedrock:InvokeModel
+  # ----------------------------
+  AegisPipelineLambdaRole:
+    Condition: CreateApi
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-pipeline-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: AegisPipelineAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ReadKaggleCredsFromSSM
+                Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                Resource:
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/aegis/kaggle/*"
+
+              - Sid: ReadFromDataBucket
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "arn:aws:s3:::${DataBucketName}"
+                  - !Sub "arn:aws:s3:::${DataBucketName}/*"
+
+              - Sid: RWToPipelineBucket
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "arn:aws:s3:::${PipelineBucketName}"
+                  - !Sub "arn:aws:s3:::${PipelineBucketName}/*"
+
+              # ── PATCH 3: Bedrock access for generate_report Lambda ──────────
+              - Sid: BedrockInvokeForReport
+                Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - !Sub "arn:aws:bedrock:*::foundation-model/*"
+                  - !Sub "arn:aws:bedrock:*:${AWS::AccountId}:inference-profile/*"
+
+              - Sid: BedrockMarketplaceAccessForAnthropic
+                Effect: Allow
+                Action:
+                  - aws-marketplace:Subscribe
+                  - aws-marketplace:Unsubscribe
+                  - aws-marketplace:ViewSubscriptions
+                Resource: "*"
+
+              # ── X-Ray tracing permissions ──────────────────────────────────
+              - Sid: XRayTracing
+                Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                  - xray:GetSamplingRules
+                  - xray:GetSamplingTargets
+                Resource: "*"
+
+
+  # ----------------------------
+  # Step Functions IAM Role
+  # ----------------------------
+  AegisStateMachineRole:
+    Condition: CreateApi
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-sfn-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: states.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AllowInvokePipelineLambdas
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource:
+                  - !GetAtt FetchDatasetLambda.Arn
+                  - !GetAtt LoadRawLambda.Arn
+                  - !GetAtt TransformToParquetLambda.Arn
+                  - !GetAtt ScoreRiskLambda.Arn
+                  - !GetAtt GenerateReportLambda.Arn
+
+  # ----------------------------
+  # Step Functions State Machine
+  # PATCH 1: GenerateReport ResultSelector now includes summary.$
+  # ----------------------------
+  AegisPipelineStateMachine:
+    Condition: CreateApi
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      RoleArn: !GetAtt AegisStateMachineRole.Arn
+      TracingConfiguration:
+        Enabled: true
+      DefinitionString: !Sub |
+        {
+          "Comment": "Aegis ELT-ish pipeline: Extract -> Load -> Transform -> Score -> Report",
+          "StartAt": "FetchDataset",
+          "States": {
+            "FetchDataset": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": { "FunctionName": "${FetchDatasetLambda.Arn}", "Payload.$": "$" },
+              "ResultSelector": {
+                "bucket.$": "$.Payload.raw.bucket",
+                "key.$": "$.Payload.raw.key",
+                "format.$": "$.Payload.raw.format",
+                "dataset.$": "$.Payload.raw.dataset"
+              },
+              "ResultPath": "$.raw",
+              "Next": "LoadRawToS3"
+            },
+            "LoadRawToS3": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": { "FunctionName": "${LoadRawLambda.Arn}", "Payload.$": "$" },
+              "ResultSelector": { "loaded.$": "$.Payload.loaded" },
+              "ResultPath": "$.loaded",
+              "Next": "TransformToParquet"
+            },
+            "TransformToParquet": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": { "FunctionName": "${TransformToParquetLambda.Arn}", "Payload.$": "$" },
+              "ResultSelector": {
+                "bucket.$": "$.Payload.curated.bucket",
+                "key.$": "$.Payload.curated.key",
+                "format.$": "$.Payload.curated.format"
+              },
+              "ResultPath": "$.curated",
+              "Next": "ScoreRisk"
+            },
+            "ScoreRisk": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": { "FunctionName": "${ScoreRiskLambda.Arn}", "Payload.$": "$" },
+              "ResultSelector": {
+                "bucket.$": "$.Payload.scored.bucket",
+                "key.$": "$.Payload.scored.key",
+                "format.$": "$.Payload.scored.format",
+                "rows.$": "$.Payload.scored.rows"
+              },
+              "ResultPath": "$.scored",
+              "Next": "GenerateReport"
+            },
+            "GenerateReport": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": { "FunctionName": "${GenerateReportLambda.Arn}", "Payload.$": "$" },
+              "ResultSelector": {
+                "bucket.$":  "$.Payload.report.bucket",
+                "key.$":     "$.Payload.report.key",
+                "format.$":  "$.Payload.report.format",
+                "summary.$": "$.Payload.report.summary"
+              },
+              "ResultPath": "$.report",
+              "End": true
+            }
+          }
+        }
+
+  # ----------------------------
+  # API Lambda IAM Role
+  # ----------------------------
+  AegisApiLambdaRole:
+    Condition: CreateApi
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-aegis-api-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AllowStepFunctionsControl
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: StartExecution
+                Effect: Allow
+                Action:
+                  - states:StartExecution
+                Resource:
+                  - !GetAtt AegisPipelineStateMachine.Arn
+              - Sid: DescribeExecution
+                Effect: Allow
+                Action:
+                  - states:DescribeExecution
+                  - states:GetExecutionHistory
+                Resource:
+                  - !Sub "arn:aws:states:${AWS::Region}:${AWS::AccountId}:execution:${AegisPipelineStateMachine.Name}:*"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  # ----------------------------
+  # Lambda Functions
+  # ----------------------------
+  AegisApiLambda:
+    Condition: CreateApi
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-aegis-api"
+      Runtime: python3.12
+      Handler: app.handler
+      Role: !GetAtt AegisApiLambdaRole.Arn
+      Timeout: 10
+      MemorySize: 128
+      Environment:
+        Variables:
+          PIPELINE_ARN: !GetAtt AegisPipelineStateMachine.Arn
+          ALLOWED_ORIGIN: !Sub "https://${SiteDomainName}"
+      Code:
+        S3Bucket: !Ref SiteBucketName
+        S3Key: lambda/aegis_api.zip
+
+  AegisCommonLayer:
+    Condition: CreateApi
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      LayerName: !Ref CommonLayerName
+      Description: Common deps for Aegis Lambdas (pandas/pyarrow/requests/etc.)
+      CompatibleRuntimes:
+        - python3.12
+      Content:
+        S3Bucket: !Ref SiteBucketName
+        S3Key: !Ref CommonLayerS3Key
+
+
+  # ----------------------------
+  # CloudWatch Dashboard
+  # ----------------------------
+  AegisDashboard:
+    Condition: CreateApi
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: aegis-pipeline-ops
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0, "y": 0, "width": 12, "height": 6,
+              "properties": {
+                "title": "Lambda Duration (p50 / p95 / p99)",
+                "metrics": [
+                  ["AWS/Lambda", "Duration", "FunctionName", "${FetchDatasetLambda}", {"stat": "p50"}],
+                  ["AWS/Lambda", "Duration", "FunctionName", "${TransformToParquetLambda}", {"stat": "p50"}],
+                  ["AWS/Lambda", "Duration", "FunctionName", "${ScoreRiskLambda}", {"stat": "p50"}],
+                  ["AWS/Lambda", "Duration", "FunctionName", "${GenerateReportLambda}", {"stat": "p50"}],
+                  ["AWS/Lambda", "Duration", "FunctionName", "${ScoreRiskLambda}", {"stat": "p95", "label": "score_risk p95"}]
+                ],
+                "period": 300,
+                "region": "${AWS::Region}"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12, "y": 0, "width": 12, "height": 6,
+              "properties": {
+                "title": "Lambda Errors & Throttles",
+                "metrics": [
+                  ["AWS/Lambda", "Errors", "FunctionName", "${FetchDatasetLambda}", {"stat": "Sum"}],
+                  ["AWS/Lambda", "Errors", "FunctionName", "${TransformToParquetLambda}", {"stat": "Sum"}],
+                  ["AWS/Lambda", "Errors", "FunctionName", "${ScoreRiskLambda}", {"stat": "Sum"}],
+                  ["AWS/Lambda", "Errors", "FunctionName", "${GenerateReportLambda}", {"stat": "Sum"}],
+                  ["AWS/Lambda", "Throttles", "FunctionName", "${ScoreRiskLambda}", {"stat": "Sum", "label": "score_risk throttles"}]
+                ],
+                "period": 300,
+                "region": "${AWS::Region}"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0, "y": 6, "width": 12, "height": 6,
+              "properties": {
+                "title": "Step Functions Executions",
+                "metrics": [
+                  ["AWS/States", "ExecutionsStarted", "StateMachineArn", "${AegisPipelineStateMachine}", {"stat": "Sum"}],
+                  ["AWS/States", "ExecutionsSucceeded", "StateMachineArn", "${AegisPipelineStateMachine}", {"stat": "Sum"}],
+                  ["AWS/States", "ExecutionsFailed", "StateMachineArn", "${AegisPipelineStateMachine}", {"stat": "Sum"}],
+                  ["AWS/States", "ExecutionTime", "StateMachineArn", "${AegisPipelineStateMachine}", {"stat": "Average"}]
+                ],
+                "period": 300,
+                "region": "${AWS::Region}"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12, "y": 6, "width": 12, "height": 6,
+              "properties": {
+                "title": "Bedrock Invocation Latency",
+                "metrics": [
+                  ["AWS/Bedrock", "InvocationLatency", "ModelId", "us.anthropic.claude-3-5-haiku-20241022-v1:0", {"stat": "Average"}],
+                  ["AWS/Bedrock", "InvocationLatency", "ModelId", "us.anthropic.claude-3-5-haiku-20241022-v1:0", {"stat": "p95"}],
+                  ["AWS/Bedrock", "InvocationCount", "ModelId", "us.anthropic.claude-3-5-haiku-20241022-v1:0", {"stat": "Sum"}]
+                ],
+                "period": 300,
+                "region": "${AWS::Region}"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0, "y": 12, "width": 24, "height": 6,
+              "properties": {
+                "title": "Pipeline Data Flow (S3 Bytes)",
+                "metrics": [
+                  ["AWS/S3", "BytesUploaded", "BucketName", "${PipelineBucketName}", {"stat": "Sum"}],
+                  ["AWS/S3", "BytesDownloaded", "BucketName", "${PipelineBucketName}", {"stat": "Sum"}]
+                ],
+                "period": 3600,
+                "region": "${AWS::Region}"
+              }
+            }
+          ]
+        }
+
+  FetchDatasetLambda:
+    Condition: CreateApi
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-fetch-dataset"
+      Runtime: python3.12
+      Handler: app.handler
+      Role: !GetAtt AegisPipelineLambdaRole.Arn
+      Timeout: 20
+      MemorySize: 256
+      TracingConfig:
+        Mode: Active
+      Layers:
+        - !Ref AegisCommonLayer
+      Environment:
+        Variables:
+          DATA_BUCKET: !Ref DataBucketName
+          PIPELINE_BUCKET: !Ref PipelineBucketName
+          PIPELINE_PREFIX: !Ref PipelinePrefix
+          KAGGLE_DATASET: !Ref KaggleDataset
+          KAGGLE_FILENAME: !Ref KaggleFileName
+          KAGGLE_USERNAME_PARAM: !Ref KaggleUsernameParam
+          KAGGLE_KEY_PARAM: !Ref KaggleKeyParam
+      Code:
+        S3Bucket: !Ref SiteBucketName
+        S3Key: lambda/fetch_dataset.zip
+
+  LoadRawLambda:
+    Condition: CreateApi
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-load-raw"
+      Runtime: python3.12
+      Handler: app.handler
+      Role: !GetAtt AegisPipelineLambdaRole.Arn
+      Timeout: 20
+      MemorySize: 256
+      TracingConfig:
+        Mode: Active
+      Layers:
+        - !Ref AegisCommonLayer
+      Environment:
+        Variables:
+          PIPELINE_BUCKET: !Ref PipelineBucketName
+          PIPELINE_PREFIX: !Ref PipelinePrefix
+      Code:
+        S3Bucket: !Ref SiteBucketName
+        S3Key: lambda/load_raw.zip
+
+  # PATCH 2a: timeout 60 → 300
+  TransformToParquetLambda:
+    Condition: CreateApi
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-transform-parquet"
+      Runtime: python3.12
+      Handler: app.handler
+      Role: !GetAtt AegisPipelineLambdaRole.Arn
+      Timeout: 300
+      MemorySize: 1024
+      TracingConfig:
+        Mode: Active
+      Layers:
+        - !Ref AwsSdkPandasLayerArn
+        - !Ref AegisCommonLayer
+      Environment:
+        Variables:
+          PIPELINE_BUCKET: !Ref PipelineBucketName
+          PIPELINE_PREFIX: !Ref PipelinePrefix
+      Code:
+        S3Bucket: !Ref SiteBucketName
+        S3Key: lambda/transform_parquet.zip
+
+  # Container-based Lambda (xgboost + sklearn + model artifacts baked into image)
+  ScoreRiskLambda:
+    Condition: CreateApi
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-score-risk-v2"
+      PackageType: Image
+      Role: !GetAtt AegisPipelineLambdaRole.Arn
+      Timeout: 180
+      MemorySize: 3008
+      Architectures:
+        - x86_64
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          PIPELINE_BUCKET: !Ref PipelineBucketName
+          PIPELINE_PREFIX: !Ref PipelinePrefix
+      Code:
+        ImageUri: !Ref ScoreRiskImageUri
+
+  # PATCH 2c: timeout 60 → 120
+  GenerateReportLambda:
+    Condition: CreateApi
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-generate-report"
+      Runtime: python3.12
+      Handler: app.handler
+      Role: !GetAtt AegisPipelineLambdaRole.Arn
+      Timeout: 120
+      MemorySize: 2048
+      Architectures:
+        - x86_64
+      TracingConfig:
+        Mode: Active
+      Layers:
+        - !Ref AwsSdkPandasLayerArn
+        - !Ref AegisCommonLayer
+      Environment:
+        Variables:
+          PIPELINE_BUCKET: !Ref PipelineBucketName
+          PIPELINE_PREFIX: !Ref PipelinePrefix
+      Code:
+        S3Bucket: !Ref SiteBucketName
+        S3Key: lambda/generate_report.zip
+
+
+  SimulateTransactionLambda:
+    Condition: CreateApi
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-simulate-transaction"
+      Runtime: python3.12
+      Handler: app.handler
+      Role: !GetAtt AegisPipelineLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          ALLOWED_ORIGIN: !Sub "https://${SiteDomainName}"
+      Code:
+        S3Bucket: !Ref SiteBucketName
+        S3Key: lambda/simulate_transaction.zip
+
+  # ----------------------------
+  # HTTP API Gateway
+  # ----------------------------
+  AegisHttpApi:
+    Condition: CreateApi
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub "${AWS::StackName}-http-api"
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowCredentials: false
+        AllowHeaders:
+          - authorization
+          - content-type
+        AllowMethods:
+          - GET
+          - OPTIONS
+          - POST
+        AllowOrigins:
+          - !Sub "https://${SiteDomainName}"
+
+  AegisJwtAuthorizer:
+    Condition: CreateApi
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref AegisHttpApi
+      AuthorizerType: JWT
+      IdentitySource:
+        - "$request.header.Authorization"
+      Name: AegisCognitoJwt
+      JwtConfiguration:
+        Audience:
+          - !Ref UserPoolClient
+        Issuer: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}"
+
+  AegisApiIntegration:
+    Condition: CreateApi
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref AegisHttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt AegisApiLambda.Arn
+      PayloadFormatVersion: "2.0"
+
+  AegisRunRoute:
+    Condition: CreateApi
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref AegisHttpApi
+      RouteKey: "POST /api/run"
+      Target: !Sub "integrations/${AegisApiIntegration}"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref AegisJwtAuthorizer
+
+  AegisStatusRoute:
+    Condition: CreateApi
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref AegisHttpApi
+      RouteKey: "GET /api/status/{executionArn}"
+      Target: !Sub "integrations/${AegisApiIntegration}"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref AegisJwtAuthorizer
+
+
+  AegisSimulateRoute:
+    Condition: CreateApi
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref AegisHttpApi
+      RouteKey: "POST /api/simulate"
+      Target: !Sub "integrations/${AegisSimulateIntegration}"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref AegisJwtAuthorizer
+
+  AegisSimulateIntegration:
+    Condition: CreateApi
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref AegisHttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt SimulateTransactionLambda.Arn
+      PayloadFormatVersion: "2.0"
+
+  AegisSimulateLambdaPermission:
+    Condition: CreateApi
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref SimulateTransactionLambda
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${AegisHttpApi}/*/*/*"
+
+  AegisApiStage:
+    Condition: CreateApi
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref AegisHttpApi
+      StageName: "$default"
+      AutoDeploy: true
+
+  AegisLambdaInvokePermission:
+    Condition: CreateApi
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref AegisApiLambda
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${AegisHttpApi}/*/*/*"
+
+Outputs:
+  BucketName:
+    Value: !Ref SiteBucket
+
+  CloudFrontDomainName:
+    Description: CloudFront HTTPS URL (no custom domain yet)
+    Value: !GetAtt SiteDistribution.DomainName
+
+  CloudFrontURL:
+    Value: !Sub "https://${SiteDistribution.DomainName}"
+  
+  SiteURL:
+    Value: !Sub "https://${SiteDomainName}"
+
+  DistributionId:
+    Value: !Ref SiteDistribution
+
+  CognitoUserPoolId:
+    Value: !Ref UserPool
+
+  CognitoClientId:
+    Value: !Ref UserPoolClient
+    
+  ApiBaseUrl:
+    Value: !If
+      - CreateApi
+      - !Sub "https://${AegisHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+      - ""
