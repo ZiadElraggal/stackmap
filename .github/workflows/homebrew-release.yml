@@ -1,0 +1,61 @@
+name: Homebrew Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish-formula:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute archive SHA256
+        id: release
+        env:
+          TAG_NAME: ${{ github.event.release.tag_name }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG_NAME#v}"
+          URL="https://github.com/${REPOSITORY}/archive/refs/tags/${TAG_NAME}.tar.gz"
+          curl -L "$URL" -o /tmp/stackmap-release.tar.gz
+          SHA256="$(sha256sum /tmp/stackmap-release.tar.gz | awk '{print $1}')"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+
+      - name: Render formula
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 scripts/render_homebrew_formula.py \
+            --version "${{ steps.release.outputs.version }}" \
+            --sha256 "${{ steps.release.outputs.sha256 }}" \
+            --repository "${REPOSITORY}" \
+            --output /tmp/stackmap.rb
+
+      - name: Upload formula artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: stackmap-homebrew-formula
+          path: /tmp/stackmap.rb
+
+      - name: Push formula to tap repository
+        if: ${{ secrets.HOMEBREW_TAP_TOKEN != '' && vars.HOMEBREW_TAP_REPO != '' }}
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          HOMEBREW_TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/${HOMEBREW_TAP_REPO}.git" /tmp/homebrew-tap
+          mkdir -p /tmp/homebrew-tap/Formula
+          cp /tmp/stackmap.rb /tmp/homebrew-tap/Formula/stackmap.rb
+          cd /tmp/homebrew-tap
+          git add Formula/stackmap.rb
+          git commit -m "stackmap ${VERSION}" || exit 0
+          git push origin HEAD
