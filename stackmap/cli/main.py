@@ -13,6 +13,18 @@ from rich.console import Console
 from rich.table import Table
 
 from stackmap.parsers.base import BaseParser, StackMapIR
+from stackmap.parsers.registry import (
+    build_parser as _registry_build_parser,
+    detect_source_type as _registry_detect_source_type,
+    parse_source as _registry_parse_source,
+)
+from stackmap.repo_scan import (
+    DiscoveredSource,
+    build_sam_templates,
+    discover_sources,
+    merge_sources,
+    parse_discovered_sources,
+)
 from stackmap.webapp import get_preferred_public_dir
 
 app = typer.Typer(
@@ -42,64 +54,29 @@ class _LiveGraphState:
 
 def _detect_source_type(source_path: str) -> str:
     """Auto-detect infrastructure source type from file extension or content."""
-    path = Path(source_path)
-    if path.suffix == ".tfstate" or "terraform" in path.name.lower():
-        return "terraform"
-    if path.suffix.lower() in {".template", ".cfn"}:
-        return "cloudformation"
-    if path.suffix.lower() in {".yaml", ".yml", ".json"}:
-        try:
-            raw = path.read_text()
-            if path.suffix.lower() in {".yaml", ".yml"}:
-                if "AWS::Serverless-2016-10-31" in raw:
-                    return "sam"
-                return "cloudformation"
-            data = json.loads(raw)
-            if isinstance(data, dict) and (
-                "AWSTemplateFormatVersion" in data
-                or "Resources" in data
-            ):
-                transform = data.get("Transform")
-                if transform == "AWS::Serverless-2016-10-31" or (
-                    isinstance(transform, list) and "AWS::Serverless-2016-10-31" in transform
-                ):
-                    return "sam"
-                return "cloudformation"
-        except Exception:
-            pass
-    try:
-        data = json.loads(path.read_text())
-        if "terraform_version" in data:
-            return "terraform"
-    except Exception:
-        pass
-    raise typer.BadParameter(
-        f"Cannot auto-detect source type for {source_path}. "
-        "Supported formats: Terraform state (.tfstate), CloudFormation template (.json/.yaml/.yml), "
-        "SAM template (.json/.yaml/.yml with AWS::Serverless transform)"
-    )
+    return _registry_detect_source_type(source_path)
 
 
 def _build_parser(source_type: str) -> BaseParser:
-    if source_type == "terraform":
-        from stackmap.parsers.terraform import TerraformParser
-
-        return TerraformParser()
-    if source_type == "cloudformation":
-        from stackmap.parsers.cloudformation import CloudFormationParser
-
-        return CloudFormationParser()
-    if source_type == "sam":
-        from stackmap.parsers.sam import SamParser
-
-        return SamParser()
-    raise typer.BadParameter(f"Unsupported source type: {source_type}")
+    return _registry_build_parser(source_type)
 
 
 def _parse_source(source_path: str) -> tuple[str, StackMapIR]:
-    source_type = _detect_source_type(source_path)
-    parser = _build_parser(source_type)
-    return source_type, parser.parse(source_path)
+    return _registry_parse_source(source_path)
+
+
+def _validate_include_types(include: list[str]) -> set[str] | None:
+    if not include:
+        return None
+    normalized = {value.strip().lower() for value in include if value.strip()}
+    supported = {"terraform", "cloudformation", "sam"}
+    invalid = sorted(normalized - supported)
+    if invalid:
+        raise typer.BadParameter(
+            f"Unsupported include type(s): {', '.join(invalid)}. "
+            f"Supported types: {', '.join(sorted(supported))}"
+        )
+    return normalized
 
 
 def _pull_remote_terraform_state(target_path: Path, terraform_dir: Path) -> Path:
@@ -159,6 +136,57 @@ def _resolve_source_with_remote_pull(
     pulled = _pull_remote_terraform_state(source_path, tf_dir)
     console.print(f"[green]✓[/green] Pulled remote state to [cyan]{pulled}[/cyan]")
     return pulled
+
+
+def _scan_repository_sources(
+    root: Path,
+    include_types: set[str] | None,
+    max_depth: int,
+    strict_linking: bool,
+    sam_build: bool,
+    terraform_pull_missing: bool,
+) -> tuple[StackMapIR, list[DiscoveredSource], list[str], dict[str, int]]:
+    discovered, missing_tfstate_dirs = discover_sources(
+        root=root,
+        include_types=include_types,
+        max_depth=max_depth,
+    )
+    warnings: list[str] = []
+
+    if terraform_pull_missing and (include_types is None or "terraform" in include_types):
+        if missing_tfstate_dirs:
+            should_pull = typer.confirm(
+                f"Found {len(missing_tfstate_dirs)} Terraform directories without state files. "
+                "Pull remote state using `terraform state pull`?",
+                default=True,
+            )
+            if should_pull:
+                for tf_dir in missing_tfstate_dirs:
+                    target = tf_dir / "terraform.tfstate"
+                    try:
+                        pulled = _pull_remote_terraform_state(target, tf_dir)
+                        discovered.append(DiscoveredSource(path=pulled, source_type="terraform"))
+                    except Exception as exc:  # pragma: no cover
+                        warnings.append(f"{tf_dir}: {exc}")
+
+    if sam_build and (include_types is None or "sam" in include_types):
+        discovered, sam_warnings = build_sam_templates(discovered)
+        warnings.extend(sam_warnings)
+
+    parsed, parse_errors = parse_discovered_sources(discovered)
+    if not parsed:
+        raise RuntimeError(
+            "No parseable infrastructure sources found in repository scan. "
+            "Add Terraform state, CloudFormation, or SAM templates."
+        )
+
+    merged = merge_sources(
+        parsed,
+        strict_linking=strict_linking,
+        parse_errors=parse_errors,
+    )
+    all_warnings = warnings + parse_errors
+    return merged.ir, merged.discovered, all_warnings, merged.link_counts
 
 
 def _write_graph_json(path: Path, ir_data: dict[str, Any]) -> None:
@@ -285,6 +313,119 @@ def scan(
     console.print(
         f"\n[green]✓[/green] Scanned {len(ir.nodes)} resources, "
         f"found {len(ir.edges)} connections, {len(ir.groups)} groups."
+    )
+
+
+@app.command("scan-repo")
+def scan_repo(
+    root: str = typer.Option(".", help="Repository root path"),
+    include: list[str] = typer.Option(
+        [],
+        "--include",
+        "-i",
+        help="Source types to include (terraform, cloudformation, sam). Can be repeated.",
+    ),
+    max_depth: int = typer.Option(6, help="Maximum directory depth to scan"),
+    strict_linking: bool = typer.Option(
+        True,
+        "--strict-linking/--loose-linking",
+        help="Cross-source link confidence policy (strict=high confidence only).",
+    ),
+    sam_build: bool = typer.Option(
+        False,
+        "--sam-build/--no-sam-build",
+        help="Run `sam build` for discovered SAM templates before parsing.",
+    ),
+    terraform_pull_missing: bool = typer.Option(
+        False,
+        "--terraform-pull-missing/--no-terraform-pull-missing",
+        help="When Terraform *.tf exists without state, offer `terraform state pull`.",
+    ),
+    output: str = typer.Option("stackmap-repo-output.json", help="Output file path"),
+    format: str = typer.Option("json", help="Output format: json or html"),
+) -> None:
+    """Scan a repository for Terraform/CloudFormation/SAM sources and merge into one map."""
+    output_format = format.lower()
+    if output_format not in {"json", "html"}:
+        console.print(
+            f"[red]Error:[/red] Format '{format}' not supported. Use 'json' or 'html'."
+        )
+        raise typer.Exit(1)
+
+    root_path = Path(root).resolve()
+    if not root_path.exists() or not root_path.is_dir():
+        console.print(f"[red]Error:[/red] Repository root not found: {root_path}")
+        raise typer.Exit(1)
+
+    try:
+        include_types = _validate_include_types(include)
+    except typer.BadParameter as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(1)
+
+    with console.status("[bold]Scanning repository sources...[/bold]"):
+        try:
+            merged_ir, discovered, warnings, link_counts = _scan_repository_sources(
+                root=root_path,
+                include_types=include_types,
+                max_depth=max_depth,
+                strict_linking=strict_linking,
+                sam_build=sam_build,
+                terraform_pull_missing=terraform_pull_missing,
+            )
+        except Exception as exc:
+            console.print(f"[red]Error:[/red] {exc}")
+            raise typer.Exit(1)
+
+    if output_format == "json":
+        merged_ir.write_json(output)
+    else:
+        from stackmap.export import export_ir_to_html
+
+        try:
+            export_ir_to_html(merged_ir, output)
+        except RuntimeError as exc:
+            console.print(f"[red]Error:[/red] {exc}")
+            raise typer.Exit(1)
+
+    type_counts: dict[str, int] = {}
+    for src in discovered:
+        type_counts[src.source_type] = type_counts.get(src.source_type, 0) + 1
+
+    table = Table(title="StackMap Repository Scan Results", show_header=False)
+    table.add_column("Metric", style="bold")
+    table.add_column("Value", style="cyan")
+    table.add_row("Root", str(root_path))
+    table.add_row("Discovered sources", str(len(discovered)))
+    table.add_row(
+        "By type",
+        ", ".join(f"{key}={value}" for key, value in sorted(type_counts.items())) or "-",
+    )
+    table.add_row("Resources", str(len(merged_ir.nodes)))
+    table.add_row("Connections", str(len(merged_ir.edges)))
+    table.add_row("Groups", str(len(merged_ir.groups)))
+    table.add_row(
+        "Cross links",
+        f"high={link_counts.get('high', 0)}, "
+        f"medium={link_counts.get('medium', 0)}, "
+        f"low={link_counts.get('low', 0)}",
+    )
+    table.add_row("Link policy", "strict" if strict_linking else "loose")
+    table.add_row("Output", output)
+    console.print()
+    console.print(table)
+
+    if warnings:
+        console.print()
+        console.print("[yellow]Warnings:[/yellow]")
+        for warning in warnings[:20]:
+            console.print(f"- {warning}")
+        if len(warnings) > 20:
+            console.print(f"- ... and {len(warnings) - 20} more")
+
+    console.print(
+        f"\n[green]✓[/green] Repository scan complete: {len(merged_ir.nodes)} resources, "
+        f"{len(merged_ir.edges)} connections."
     )
 
 
