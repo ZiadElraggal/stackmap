@@ -43,13 +43,16 @@ jobs:
           path: /tmp/stackmap.rb
 
       - name: Push formula to tap repository
-        if: ${{ secrets.HOMEBREW_TAP_TOKEN != '' && vars.HOMEBREW_TAP_REPO != '' }}
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           HOMEBREW_TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
           VERSION: ${{ steps.release.outputs.version }}
         run: |
           set -euo pipefail
+          if [ -z "${HOMEBREW_TAP_TOKEN:-}" ] || [ -z "${HOMEBREW_TAP_REPO:-}" ]; then
+            echo "HOMEBREW_TAP_TOKEN or HOMEBREW_TAP_REPO missing; skipping tap push."
+            exit 0
+          fi
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/${HOMEBREW_TAP_REPO}.git" /tmp/homebrew-tap
