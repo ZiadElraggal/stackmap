@@ -45,6 +45,23 @@ def _detect_source_type(source_path: str) -> str:
     path = Path(source_path)
     if path.suffix == ".tfstate" or "terraform" in path.name.lower():
         return "terraform"
+    if path.suffix.lower() in {".template", ".cfn"}:
+        return "cloudformation"
+    if path.suffix.lower() in {".yaml", ".yml", ".json"}:
+        try:
+            raw = path.read_text()
+            if path.suffix.lower() in {".yaml", ".yml"}:
+                # YAML is CloudFormation/SAM in our current support scope.
+                return "cloudformation"
+            data = json.loads(raw)
+            if isinstance(data, dict) and (
+                "AWSTemplateFormatVersion" in data
+                or "Resources" in data
+                or data.get("Transform") == "AWS::Serverless-2016-10-31"
+            ):
+                return "cloudformation"
+        except Exception:
+            pass
     try:
         data = json.loads(path.read_text())
         if "terraform_version" in data:
@@ -53,7 +70,7 @@ def _detect_source_type(source_path: str) -> str:
         pass
     raise typer.BadParameter(
         f"Cannot auto-detect source type for {source_path}. "
-        "Supported formats: Terraform state (.tfstate)"
+        "Supported formats: Terraform state (.tfstate), CloudFormation template (.json/.yaml/.yml)"
     )
 
 
@@ -62,6 +79,10 @@ def _build_parser(source_type: str) -> BaseParser:
         from stackmap.parsers.terraform import TerraformParser
 
         return TerraformParser()
+    if source_type == "cloudformation":
+        from stackmap.parsers.cloudformation import CloudFormationParser
+
+        return CloudFormationParser()
     raise typer.BadParameter(f"Unsupported source type: {source_type}")
 
 
@@ -198,6 +219,13 @@ def scan(
     format: str = typer.Option("json", help="Output format: json or html"),
 ) -> None:
     """Scan infrastructure source and generate an architecture map."""
+    output_format = format.lower()
+    if output_format not in {"json", "html"}:
+        console.print(
+            f"[red]Error:[/red] Format '{format}' not supported. Use 'json' or 'html'."
+        )
+        raise typer.Exit(1)
+
     try:
         source_path = _resolve_source_with_remote_pull(source, terraform_dir, auto_pull_remote)
     except RuntimeError as exc:
@@ -214,10 +242,13 @@ def scan(
         except typer.BadParameter as exc:
             console.print(f"[red]Error:[/red] {exc}")
             raise typer.Exit(1)
+        except Exception as exc:
+            console.print(f"[red]Error:[/red] {exc}")
+            raise typer.Exit(1)
 
-    if format == "json":
+    if output_format == "json":
         ir.write_json(output)
-    elif format == "html":
+    elif output_format == "html":
         from stackmap.export import export_ir_to_html
 
         try:
@@ -225,9 +256,6 @@ def scan(
         except RuntimeError as exc:
             console.print(f"[red]Error:[/red] {exc}")
             raise typer.Exit(1)
-    else:
-        console.print(f"[red]Error:[/red] Format '{format}' not supported. Use 'json' or 'html'.")
-        raise typer.Exit(1)
 
     table = Table(title="StackMap Scan Results", show_header=False)
     table.add_column("Metric", style="bold")
@@ -286,6 +314,9 @@ def serve(
         try:
             source_type, ir = _parse_source(source)
         except typer.BadParameter as exc:
+            console.print(f"[red]Error:[/red] {exc}")
+            raise typer.Exit(1)
+        except Exception as exc:
             console.print(f"[red]Error:[/red] {exc}")
             raise typer.Exit(1)
 
