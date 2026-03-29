@@ -38,6 +38,7 @@ jobs:
             desc "Architecture diagrams that generate themselves from infrastructure code"
             homepage "https://github.com/${GITHUB_REPOSITORY}"
             url "file:///tmp/stackmap-ci.tar.gz"
+            version "0.0.0-ci"
             sha256 "${STACKMAP_SHA256}"
             license "MIT"
 
@@ -58,7 +59,7 @@ jobs:
           end
           EOF
 
-      - name: Install StackMap formula (HEAD)
+      - name: Install StackMap formula
         run: brew install stackmap/local/stackmap
 
       - name: Smoke test
