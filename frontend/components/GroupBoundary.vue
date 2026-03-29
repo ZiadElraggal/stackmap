@@ -1,30 +1,53 @@
 <template>
-  <g v-if="bounds" class="group-boundary">
+  <g v-if="bounds" class="group-boundary" :style="{ '--group-color': groupColor }">
     <rect
       :x="bounds.x"
-      :y="bounds.y - 20"
+      :y="bounds.y - 28"
       :width="bounds.width"
-      :height="bounds.height + 20"
-      :rx="12"
-      :ry="12"
-      fill="rgba(255,255,255,0.02)"
-      stroke="rgba(255,255,255,0.08)"
-      stroke-width="1"
-      stroke-dasharray="8 4"
+      :height="bounds.height + 28"
+      :rx="16"
+      :ry="16"
+      :fill="fillColor"
+      :stroke="strokeColor"
+      stroke-width="1.5"
+      :stroke-dasharray="dashPattern"
     />
-    <text
+
+    <rect
+      :x="bounds.x + 1"
+      :y="bounds.y - 27"
+      :width="bounds.width - 2"
+      height="28"
+      rx="12"
+      ry="12"
+      fill="rgba(18,18,26,0.6)"
+    />
+
+    <svg
       :x="bounds.x + 10"
-      :y="bounds.y - 6"
-      fill="#6b7280"
+      :y="bounds.y - 20"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      :style="{ color: groupColor }"
+    >
+      <g v-html="iconPath" />
+    </svg>
+
+    <text
+      :x="bounds.x + 30"
+      :y="bounds.y - 10"
+      fill="#94a3b8"
       font-size="10"
       font-family="'JetBrains Mono', 'SF Mono', monospace"
-    >{{ group.group_type.toUpperCase() }}: {{ group.name }}</text>
+    >{{ group.group_type.toUpperCase() }} · {{ group.name }}</text>
   </g>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { StackMapGroup, NodePosition } from '~/stores/graph'
+import { CATEGORY_COLORS, CATEGORY_ICONS } from '~/composables/useGraph'
 import { useLayout } from '~/composables/useLayout'
 
 const props = defineProps<{
@@ -34,5 +57,22 @@ const props = defineProps<{
 
 const { computeGroupBounds } = useLayout()
 
-const bounds = computed(() => computeGroupBounds(props.group, props.positions))
+const bounds = computed(() => computeGroupBounds(props.group, props.positions, 60))
+
+const isNested = computed(() => Boolean(props.group.parent))
+const groupColor = computed(() => {
+  if (props.group.group_type === 'vpc' || props.group.group_type === 'subnet') {
+    return CATEGORY_COLORS.network
+  }
+  return CATEGORY_COLORS.other
+})
+
+const fillColor = computed(() => {
+  return isNested.value
+    ? 'color-mix(in srgb, var(--group-color) 2%, transparent)'
+    : 'color-mix(in srgb, var(--group-color) 3%, transparent)'
+})
+const strokeColor = computed(() => 'color-mix(in srgb, var(--group-color) 12%, transparent)')
+const dashPattern = computed(() => (isNested.value ? '8 5' : '12 6'))
+const iconPath = computed(() => CATEGORY_ICONS.network)
 </script>
