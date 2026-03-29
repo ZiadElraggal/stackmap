@@ -12,7 +12,7 @@
           :id="`arrow-${edgeType}`"
           :key="`marker-${edgeType}`"
           viewBox="0 0 6 5"
-          refX="5.6"
+          refX="8"
           refY="2.5"
           markerWidth="6"
           markerHeight="5"
@@ -48,16 +48,30 @@
           @click="store.selectNode(null)"
         />
 
-        <g v-for="tier in tierLabels" :key="`tier-${tier.name}`" :transform="`translate(${tier.x}, ${tier.y}) rotate(-90)`">
+        <g v-for="band in tierBands" :key="`tier-${band.name}`">
           <text
-            text-anchor="middle"
-            fill="rgba(255,255,255,0.08)"
-            font-size="10"
+            :x="graphBounds.minX - 60"
+            :y="band.labelY"
+            fill="rgba(255,255,255,0.1)"
+            font-size="11"
+            font-weight="600"
             letter-spacing="3"
-            font-family="'JetBrains Mono', 'SF Mono', monospace"
-          >
-            {{ tier.name.toUpperCase() }}
-          </text>
+            text-anchor="end"
+            dominant-baseline="central"
+            font-family="'JetBrains Mono', monospace"
+          >{{ band.name.toUpperCase() }}</text>
+        </g>
+
+        <g v-for="(band, idx) in tierBands" :key="`flow-arrow-${band.name}`">
+          <text
+            v-if="idx < tierBands.length - 1"
+            :x="graphBounds.minX + graphBounds.width / 2"
+            :y="band.yEnd + 10"
+            fill="rgba(255,255,255,0.06)"
+            font-size="16"
+            text-anchor="middle"
+            dominant-baseline="central"
+          >↓</text>
         </g>
 
         <GroupBoundary
@@ -71,10 +85,10 @@
           v-for="(edge, idx) in store.visibleEdges"
           :key="edge.id"
           :edge="edge"
-          :x1="edgePos(edge.source).x"
-          :y1="edgePos(edge.source).y"
-          :x2="edgePos(edge.target).x"
-          :y2="edgePos(edge.target).y"
+          :x1="edgeSourcePos(edge).x"
+          :y1="edgeSourcePos(edge).y"
+          :x2="edgeTargetPos(edge).x"
+          :y2="edgeTargetPos(edge).y"
           :zoom-scale="zoomScale"
           :entry-delay="edgeEntryBaseDelay + idx * 4"
         />
@@ -158,12 +172,12 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import * as d3 from 'd3'
-import { useGraphStore } from '~/stores/graph'
+import { useGraphStore, type StackMapEdge, type StackMapNode } from '~/stores/graph'
 import { useLayout } from '~/composables/useLayout'
-import { EDGE_COLORS } from '~/composables/useGraph'
+import { EDGE_COLORS, getNodeHeight } from '~/composables/useGraph'
 
 const store = useGraphStore()
-const { computeLayout, sortByTier, TIER_Y } = useLayout()
+const { computeLayout, sortByTier } = useLayout()
 
 const svgRef = ref<SVGSVGElement>()
 const zoomGroupRef = ref<SVGGElement>()
@@ -177,16 +191,10 @@ const zoomScale = ref(1)
 let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null
 let svgSelection: d3.Selection<SVGSVGElement, unknown, null, undefined> | null = null
 
-const orderedVisibleNodes = computed(() => {
-  const nodes = sortByTier(store.visibleNodes)
-  return nodes
-})
-
+const orderedVisibleNodes = computed(() => sortByTier(store.visibleNodes))
+const visibleNodeMap = computed(() => new Map(store.visibleNodes.map(n => [n.id, n])))
 const edgeEntryBaseDelay = computed(() => orderedVisibleNodes.value.length * 15 + 200)
-
-const edgeTypesInGraph = computed(() => {
-  return [...new Set(store.visibleEdges.map(edge => edge.edge_type))]
-})
+const edgeTypesInGraph = computed(() => [...new Set(store.visibleEdges.map(edge => edge.edge_type))])
 
 const graphBounds = computed(() => {
   const points = Object.values(store.positions)
@@ -205,34 +213,69 @@ const graphBounds = computed(() => {
   }
 })
 
-const tierLabels = computed(() => {
-  const minX = graphBounds.value.minX - 120
-  return [
-    { name: 'frontend', x: minX, y: TIER_Y.frontend },
-    { name: 'api', x: minX, y: TIER_Y.api },
-    { name: 'backend', x: minX, y: TIER_Y.backend },
-    { name: 'data', x: minX, y: TIER_Y.data },
-  ]
-})
-
 const tierBands = computed(() => {
-  const midFa = (TIER_Y.frontend + TIER_Y.api) / 2
-  const midAb = (TIER_Y.api + TIER_Y.backend) / 2
-  const midBd = (TIER_Y.backend + TIER_Y.data) / 2
-  return [
-    { name: 'frontend', yStart: TIER_Y.frontend - 220, yEnd: midFa, fill: 'rgba(34,211,238,0.03)' },
-    { name: 'api', yStart: midFa, yEnd: midAb, fill: 'rgba(59,130,246,0.025)' },
-    { name: 'backend', yStart: midAb, yEnd: midBd, fill: 'rgba(99,102,241,0.02)' },
-    { name: 'data', yStart: midBd, yEnd: TIER_Y.data + 220, fill: 'rgba(16,185,129,0.02)' },
-  ]
+  const tierNodes: Record<string, number[]> = {}
+  for (const node of store.visibleNodes) {
+    const tier = node.position_hint?.tier || 'backend'
+    const pos = store.positions[node.id]
+    if (!pos) continue
+    if (!tierNodes[tier]) tierNodes[tier] = []
+    tierNodes[tier].push(pos.y)
+  }
+
+  const bands: Array<{ name: string; yStart: number; yEnd: number; fill: string; labelY: number }> = []
+  const tierOrder = ['frontend', 'api', 'backend', 'data']
+  const tierColors: Record<string, string> = {
+    frontend: 'rgba(34,211,238,0.025)',
+    api: 'rgba(59,130,246,0.02)',
+    backend: 'rgba(99,102,241,0.015)',
+    data: 'rgba(16,185,129,0.02)',
+  }
+
+  for (const tier of tierOrder) {
+    const ys = tierNodes[tier]
+    if (!ys || ys.length === 0) continue
+    const minY = Math.min(...ys)
+    const maxY = Math.max(...ys)
+    const padding = 80
+    bands.push({
+      name: tier,
+      yStart: minY - padding,
+      yEnd: maxY + padding,
+      fill: tierColors[tier] || 'transparent',
+      labelY: (minY + maxY) / 2,
+    })
+  }
+
+  return bands
 })
 
 function edgeColor(edgeType: string): string {
   return EDGE_COLORS[edgeType] || '#64748b'
 }
 
-function edgePos(nodeId: string) {
-  return store.positions[nodeId] ?? { x: 0, y: 0 }
+function edgeSourcePos(edge: StackMapEdge) {
+  const pos = store.positions[edge.source]
+  if (!pos) return { x: 0, y: 0 }
+  const node = visibleNodeMap.value.get(edge.source)
+  if (!node) return pos
+  const h = getNodeHeight(node)
+  const targetPos = store.positions[edge.target]
+  if (!targetPos) return pos
+  const dy = targetPos.y - pos.y
+  return { x: pos.x, y: pos.y + (dy > 0 ? h / 2 : -h / 2) }
+}
+
+function edgeTargetPos(edge: StackMapEdge) {
+  const pos = store.positions[edge.target]
+  if (!pos) return { x: 0, y: 0 }
+  const node = visibleNodeMap.value.get(edge.target)
+  if (!node) return pos
+  const h = getNodeHeight(node)
+  const sourcePos = store.positions[edge.source]
+  if (!sourcePos) return pos
+  const dy = sourcePos.y - pos.y
+  return { x: pos.x, y: pos.y + (dy > 0 ? h / 2 : -h / 2) }
 }
 
 onMounted(async () => {
@@ -321,25 +364,31 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
+const SIDEBAR_WIDTH = 256
+const DETAIL_PANEL_WIDTH = 0 // Detail panel overlaps, accounted only when open
+
 function fitToViewport() {
   if (!svgSelection || !zoomBehavior) return
 
   const positions = Object.values(store.positions)
   if (!positions.length) return
 
-  const padding = 140
+  const padding = 120
   const minX = Math.min(...positions.map(p => p.x)) - padding
   const maxX = Math.max(...positions.map(p => p.x)) + padding
   const minY = Math.min(...positions.map(p => p.y)) - padding
   const maxY = Math.max(...positions.map(p => p.y)) + padding
 
-  const width = svgRef.value?.clientWidth || 1000
-  const height = svgRef.value?.clientHeight || 800
+  const totalWidth = svgRef.value?.clientWidth || 1000
+  const height = (svgRef.value?.clientHeight || 800) - 40 // subtract status bar
+  // Account for sidebar taking space on the left
+  const availableWidth = totalWidth - SIDEBAR_WIDTH
+  const offsetX = SIDEBAR_WIDTH
 
   const graphWidth = Math.max(1, maxX - minX)
   const graphHeight = Math.max(1, maxY - minY)
-  const scale = Math.min(width / graphWidth, height / graphHeight, 1.45)
-  const tx = width / 2 - (minX + graphWidth / 2) * scale
+  const scale = Math.min(availableWidth / graphWidth, height / graphHeight, 1.45)
+  const tx = offsetX + availableWidth / 2 - (minX + graphWidth / 2) * scale
   const ty = height / 2 - (minY + graphHeight / 2) * scale
 
   svgSelection.transition().duration(500).call(zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(scale))
