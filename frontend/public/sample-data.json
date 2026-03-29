@@ -2,24 +2,24 @@
   "metadata": {
     "source_type": "terraform",
     "terraform_version": "1.8.5",
-    "total_resources": 11
+    "total_resources": 16
   },
   "nodes": [
     {
       "id": "aws_vpc.main",
-      "name": "vpc-0ff1ce",
+      "name": "vpc-0123456789abcdef0",
       "resource_type": "aws_vpc",
       "provider": "aws",
       "category": "network",
       "properties": {
-        "id": "vpc-0ff1ce",
-        "arn": "arn:aws:ec2:us-east-1:111122223333:vpc/vpc-0ff1ce",
+        "id": "vpc-0123456789abcdef0",
+        "arn": "arn:aws:ec2:us-east-1:111122223333:vpc/vpc-0123456789abcdef0",
         "tags_all": {
-          "Name": "lambda-vpc"
+          "Name": "main-vpc"
         }
       },
       "tags": {
-        "Name": "lambda-vpc"
+        "Name": "main-vpc"
       },
       "position_hint": {
         "tier": "api",
@@ -27,14 +27,15 @@
       }
     },
     {
-      "id": "aws_subnet.private_a",
-      "name": "subnet-priv-a",
+      "id": "aws_subnet.public_a",
+      "name": "subnet-aaa111",
       "resource_type": "aws_subnet",
       "provider": "aws",
       "category": "network",
       "properties": {
-        "id": "subnet-priv-a",
-        "vpc_id": "vpc-0ff1ce"
+        "id": "subnet-aaa111",
+        "arn": "arn:aws:ec2:us-east-1:111122223333:subnet/subnet-aaa111",
+        "vpc_id": "vpc-0123456789abcdef0"
       },
       "tags": {},
       "position_hint": {
@@ -43,14 +44,15 @@
       }
     },
     {
-      "id": "aws_subnet.private_b",
-      "name": "subnet-priv-b",
+      "id": "aws_subnet.public_b",
+      "name": "subnet-bbb222",
       "resource_type": "aws_subnet",
       "provider": "aws",
       "category": "network",
       "properties": {
-        "id": "subnet-priv-b",
-        "vpc_id": "vpc-0ff1ce"
+        "id": "subnet-bbb222",
+        "arn": "arn:aws:ec2:us-east-1:111122223333:subnet/subnet-bbb222",
+        "vpc_id": "vpc-0123456789abcdef0"
       },
       "tags": {},
       "position_hint": {
@@ -59,15 +61,16 @@
       }
     },
     {
-      "id": "aws_security_group.lambda",
-      "name": "lambda-sg",
+      "id": "aws_security_group.app",
+      "name": "app-sg",
       "resource_type": "aws_security_group",
       "provider": "aws",
       "category": "network",
       "properties": {
-        "id": "sg-lambda",
-        "vpc_id": "vpc-0ff1ce",
-        "name": "lambda-sg"
+        "id": "sg-0abc123",
+        "arn": "arn:aws:ec2:us-east-1:111122223333:security-group/sg-0abc123",
+        "vpc_id": "vpc-0123456789abcdef0",
+        "name": "app-sg"
       },
       "tags": {},
       "position_hint": {
@@ -76,15 +79,74 @@
       }
     },
     {
-      "id": "aws_iam_role.fn",
-      "name": "fn-role",
-      "resource_type": "aws_iam_role",
+      "id": "aws_lb.app",
+      "name": "main-alb",
+      "resource_type": "aws_lb",
       "provider": "aws",
-      "category": "security",
+      "category": "network",
       "properties": {
-        "id": "fn-role",
-        "arn": "arn:aws:iam::111122223333:role/fn-role",
-        "name": "fn-role"
+        "id": "arn:aws:elasticloadbalancing:us-east-1:111122223333:loadbalancer/app/main-alb/123456",
+        "arn": "arn:aws:elasticloadbalancing:us-east-1:111122223333:loadbalancer/app/main-alb/123456",
+        "name": "main-alb",
+        "dns_name": "main-alb-123456.us-east-1.elb.amazonaws.com",
+        "subnets": [
+          "subnet-aaa111",
+          "subnet-bbb222"
+        ],
+        "security_groups": [
+          "sg-0abc123"
+        ]
+      },
+      "tags": {},
+      "position_hint": {
+        "tier": "api",
+        "weight": 5
+      }
+    },
+    {
+      "id": "aws_lb_listener.http",
+      "name": "listener-001",
+      "resource_type": "aws_lb_listener",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "listener-001",
+        "arn": "arn:aws:elasticloadbalancing:us-east-1:111122223333:listener/app/main-alb/123456/abcdef",
+        "load_balancer_arn": "arn:aws:elasticloadbalancing:us-east-1:111122223333:loadbalancer/app/main-alb/123456"
+      },
+      "tags": {},
+      "position_hint": {
+        "tier": "api",
+        "weight": 2
+      }
+    },
+    {
+      "id": "aws_ecs_cluster.main",
+      "name": "main-cluster",
+      "resource_type": "aws_ecs_cluster",
+      "provider": "aws",
+      "category": "container",
+      "properties": {
+        "id": "arn:aws:ecs:us-east-1:111122223333:cluster/main-cluster",
+        "arn": "arn:aws:ecs:us-east-1:111122223333:cluster/main-cluster",
+        "name": "main-cluster"
+      },
+      "tags": {},
+      "position_hint": {
+        "tier": "backend",
+        "weight": 4
+      }
+    },
+    {
+      "id": "aws_ecs_task_definition.api",
+      "name": "api-task",
+      "resource_type": "aws_ecs_task_definition",
+      "provider": "aws",
+      "category": "container",
+      "properties": {
+        "id": "api-task:5",
+        "arn": "arn:aws:ecs:us-east-1:111122223333:task-definition/api-task:5",
+        "family": "api-task"
       },
       "tags": {},
       "position_hint": {
@@ -93,30 +155,25 @@
       }
     },
     {
-      "id": "aws_lambda_function.worker",
-      "name": "worker-fn",
-      "resource_type": "aws_lambda_function",
+      "id": "aws_ecs_service.api",
+      "name": "api-service",
+      "resource_type": "aws_ecs_service",
       "provider": "aws",
-      "category": "compute",
+      "category": "container",
       "properties": {
-        "id": "worker-fn",
-        "arn": "arn:aws:lambda:us-east-1:111122223333:function:worker-fn",
-        "function_name": "worker-fn",
-        "role": "arn:aws:iam::111122223333:role/fn-role",
-        "vpc_config": [
+        "id": "arn:aws:ecs:us-east-1:111122223333:service/main-cluster/api-service",
+        "name": "api-service",
+        "cluster": "arn:aws:ecs:us-east-1:111122223333:cluster/main-cluster",
+        "task_definition": "arn:aws:ecs:us-east-1:111122223333:task-definition/api-task:5",
+        "network_configuration": [
           {
-            "subnet_ids": [
-              "subnet-priv-a",
-              "subnet-priv-b"
+            "subnets": [
+              "subnet-aaa111",
+              "subnet-bbb222"
             ],
-            "security_group_ids": [
-              "sg-lambda"
+            "security_groups": [
+              "sg-0abc123"
             ]
-          }
-        ],
-        "logging_config": [
-          {
-            "log_group": "/aws/lambda/worker-fn"
           }
         ]
       },
@@ -127,66 +184,35 @@
       }
     },
     {
-      "id": "aws_cloudwatch_log_group.worker",
-      "name": "/aws/lambda/worker-fn",
-      "resource_type": "aws_cloudwatch_log_group",
-      "provider": "aws",
-      "category": "monitoring",
-      "properties": {
-        "id": "/aws/lambda/worker-fn",
-        "name": "/aws/lambda/worker-fn",
-        "arn": "arn:aws:logs:us-east-1:111122223333:log-group:/aws/lambda/worker-fn"
-      },
-      "tags": {},
-      "position_hint": {
-        "tier": "backend",
-        "weight": 1
-      }
-    },
-    {
-      "id": "aws_sqs_queue.jobs",
-      "name": "jobs",
-      "resource_type": "aws_sqs_queue",
-      "provider": "aws",
-      "category": "queue",
-      "properties": {
-        "id": "https://sqs.us-east-1.amazonaws.com/111122223333/jobs",
-        "arn": "arn:aws:sqs:us-east-1:111122223333:jobs",
-        "name": "jobs"
-      },
-      "tags": {},
-      "position_hint": {
-        "tier": "backend",
-        "weight": 4
-      }
-    },
-    {
-      "id": "aws_sns_topic.alerts",
-      "name": "alerts",
-      "resource_type": "aws_sns_topic",
-      "provider": "aws",
-      "category": "queue",
-      "properties": {
-        "id": "arn:aws:sns:us-east-1:111122223333:alerts",
-        "arn": "arn:aws:sns:us-east-1:111122223333:alerts",
-        "name": "alerts"
-      },
-      "tags": {},
-      "position_hint": {
-        "tier": "backend",
-        "weight": 4
-      }
-    },
-    {
-      "id": "aws_dynamodb_table.events",
-      "name": "events",
-      "resource_type": "aws_dynamodb_table",
+      "id": "aws_db_subnet_group.main",
+      "name": "app-db-subnets",
+      "resource_type": "aws_db_subnet_group",
       "provider": "aws",
       "category": "database",
       "properties": {
-        "id": "events",
-        "arn": "arn:aws:dynamodb:us-east-1:111122223333:table/events",
-        "name": "events"
+        "id": "app-db-subnets",
+        "name": "app-db-subnets"
+      },
+      "tags": {},
+      "position_hint": {
+        "tier": "data",
+        "weight": 2
+      }
+    },
+    {
+      "id": "aws_db_instance.app",
+      "name": "app-db",
+      "resource_type": "aws_db_instance",
+      "provider": "aws",
+      "category": "database",
+      "properties": {
+        "id": "app-db",
+        "identifier": "app-db",
+        "arn": "arn:aws:rds:us-east-1:111122223333:db:app-db",
+        "db_subnet_group_name": "app-db-subnets",
+        "vpc_security_group_ids": [
+          "sg-0abc123"
+        ]
       },
       "tags": {},
       "position_hint": {
@@ -195,136 +221,238 @@
       }
     },
     {
-      "id": "aws_iam_role_policy.fn_access",
-      "name": "fn-role:fn-access",
+      "id": "aws_s3_bucket.assets",
+      "name": "acme-app-assets",
+      "resource_type": "aws_s3_bucket",
+      "provider": "aws",
+      "category": "storage",
+      "properties": {
+        "id": "acme-app-assets",
+        "arn": "arn:aws:s3:::acme-app-assets",
+        "bucket": "acme-app-assets"
+      },
+      "tags": {},
+      "position_hint": {
+        "tier": "data",
+        "weight": 4
+      }
+    },
+    {
+      "id": "aws_iam_role.task",
+      "name": "ecs-task-role",
+      "resource_type": "aws_iam_role",
+      "provider": "aws",
+      "category": "security",
+      "properties": {
+        "id": "ecs-task-role",
+        "arn": "arn:aws:iam::111122223333:role/ecs-task-role",
+        "name": "ecs-task-role"
+      },
+      "tags": {},
+      "position_hint": {
+        "tier": "backend",
+        "weight": 2
+      }
+    },
+    {
+      "id": "aws_iam_role_policy.task_access",
+      "name": "ecs-task-role:task-access",
       "resource_type": "aws_iam_role_policy",
       "provider": "aws",
       "category": "security",
       "properties": {
-        "id": "fn-role:fn-access",
-        "role": "fn-role",
-        "policy": "{\"Version\": \"2012-10-17\", \"Statement\": [{\"Effect\": \"Allow\", \"Action\": [\"sqs:SendMessage\"], \"Resource\": [\"arn:aws:sqs:us-east-1:111122223333:jobs\"]}, {\"Effect\": \"Allow\", \"Action\": [\"dynamodb:PutItem\", \"dynamodb:GetItem\"], \"Resource\": [\"arn:aws:dynamodb:us-east-1:111122223333:table/events\"]}, {\"Effect\": \"Allow\", \"Action\": [\"sns:Publish\"], \"Resource\": [\"arn:aws:sns:us-east-1:111122223333:alerts\"]}]}"
+        "id": "ecs-task-role:task-access",
+        "role": "ecs-task-role",
+        "policy": "{\"Version\": \"2012-10-17\", \"Statement\": [{\"Effect\": \"Allow\", \"Action\": [\"s3:GetObject\", \"s3:PutObject\"], \"Resource\": [\"arn:aws:s3:::acme-app-assets/*\"]}, {\"Effect\": \"Allow\", \"Action\": [\"dynamodb:PutItem\", \"dynamodb:GetItem\"], \"Resource\": [\"arn:aws:dynamodb:us-east-1:111122223333:table/orders\"]}]}"
       },
       "tags": {},
       "position_hint": {
         "tier": "backend",
         "weight": 1
       }
+    },
+    {
+      "id": "aws_dynamodb_table.orders",
+      "name": "orders",
+      "resource_type": "aws_dynamodb_table",
+      "provider": "aws",
+      "category": "database",
+      "properties": {
+        "id": "orders",
+        "arn": "arn:aws:dynamodb:us-east-1:111122223333:table/orders",
+        "name": "orders"
+      },
+      "tags": {},
+      "position_hint": {
+        "tier": "data",
+        "weight": 5
+      }
+    },
+    {
+      "id": "aws_route53_record.app",
+      "name": "app.internal",
+      "resource_type": "aws_route53_record",
+      "provider": "aws",
+      "category": "dns",
+      "properties": {
+        "id": "Z12345_app.internal_A",
+        "name": "app.internal",
+        "alias": [
+          {
+            "name": "main-alb-123456.us-east-1.elb.amazonaws.com"
+          }
+        ]
+      },
+      "tags": {},
+      "position_hint": {
+        "tier": "frontend",
+        "weight": 2
+      }
     }
   ],
   "edges": [
     {
-      "id": "aws_subnet.private_a->aws_vpc.main",
-      "source": "aws_subnet.private_a",
+      "id": "aws_subnet.public_a->aws_vpc.main",
+      "source": "aws_subnet.public_a",
       "target": "aws_vpc.main",
       "edge_type": "contains",
       "label": "in vpc"
     },
     {
-      "id": "aws_subnet.private_b->aws_vpc.main",
-      "source": "aws_subnet.private_b",
+      "id": "aws_subnet.public_b->aws_vpc.main",
+      "source": "aws_subnet.public_b",
       "target": "aws_vpc.main",
       "edge_type": "contains",
       "label": "in vpc"
     },
     {
-      "id": "aws_security_group.lambda->aws_vpc.main",
-      "source": "aws_security_group.lambda",
+      "id": "aws_security_group.app->aws_vpc.main",
+      "source": "aws_security_group.app",
       "target": "aws_vpc.main",
       "edge_type": "references",
       "label": "in vpc"
     },
     {
-      "id": "aws_lambda_function.worker->aws_iam_role.fn",
-      "source": "aws_lambda_function.worker",
-      "target": "aws_iam_role.fn",
-      "edge_type": "authenticates",
-      "label": "assumes role"
-    },
-    {
-      "id": "aws_lambda_function.worker->aws_subnet.private_a",
-      "source": "aws_lambda_function.worker",
-      "target": "aws_subnet.private_a",
+      "id": "aws_lb.app->aws_subnet.public_a",
+      "source": "aws_lb.app",
+      "target": "aws_subnet.public_a",
       "edge_type": "references",
       "label": "in subnet"
     },
     {
-      "id": "aws_lambda_function.worker->aws_subnet.private_b",
-      "source": "aws_lambda_function.worker",
-      "target": "aws_subnet.private_b",
+      "id": "aws_lb.app->aws_subnet.public_b",
+      "source": "aws_lb.app",
+      "target": "aws_subnet.public_b",
       "edge_type": "references",
       "label": "in subnet"
     },
     {
-      "id": "aws_lambda_function.worker->aws_security_group.lambda",
-      "source": "aws_lambda_function.worker",
-      "target": "aws_security_group.lambda",
+      "id": "aws_lb.app->aws_security_group.app",
+      "source": "aws_lb.app",
+      "target": "aws_security_group.app",
       "edge_type": "references",
       "label": "secured by"
     },
     {
-      "id": "aws_lambda_function.worker->aws_cloudwatch_log_group.worker",
-      "source": "aws_lambda_function.worker",
-      "target": "aws_cloudwatch_log_group.worker",
-      "edge_type": "references",
-      "label": "logs to"
+      "id": "aws_lb_listener.http->aws_lb.app",
+      "source": "aws_lb_listener.http",
+      "target": "aws_lb.app",
+      "edge_type": "routes_to",
+      "label": "listens on"
     },
     {
-      "id": "aws_iam_role_policy.fn_access->aws_iam_role.fn",
-      "source": "aws_iam_role_policy.fn_access",
-      "target": "aws_iam_role.fn",
+      "id": "aws_ecs_service.api->aws_ecs_cluster.main",
+      "source": "aws_ecs_service.api",
+      "target": "aws_ecs_cluster.main",
+      "edge_type": "references",
+      "label": "runs in"
+    },
+    {
+      "id": "aws_ecs_service.api->aws_ecs_task_definition.api",
+      "source": "aws_ecs_service.api",
+      "target": "aws_ecs_task_definition.api",
+      "edge_type": "references",
+      "label": "uses"
+    },
+    {
+      "id": "aws_ecs_service.api->aws_subnet.public_a",
+      "source": "aws_ecs_service.api",
+      "target": "aws_subnet.public_a",
+      "edge_type": "references",
+      "label": "in subnet"
+    },
+    {
+      "id": "aws_ecs_service.api->aws_subnet.public_b",
+      "source": "aws_ecs_service.api",
+      "target": "aws_subnet.public_b",
+      "edge_type": "references",
+      "label": "in subnet"
+    },
+    {
+      "id": "aws_ecs_service.api->aws_security_group.app",
+      "source": "aws_ecs_service.api",
+      "target": "aws_security_group.app",
+      "edge_type": "references",
+      "label": "secured by"
+    },
+    {
+      "id": "aws_db_instance.app->aws_db_subnet_group.main",
+      "source": "aws_db_instance.app",
+      "target": "aws_db_subnet_group.main",
+      "edge_type": "references",
+      "label": "in subnet group"
+    },
+    {
+      "id": "aws_db_instance.app->aws_security_group.app",
+      "source": "aws_db_instance.app",
+      "target": "aws_security_group.app",
+      "edge_type": "references",
+      "label": "secured by"
+    },
+    {
+      "id": "aws_iam_role_policy.task_access->aws_iam_role.task",
+      "source": "aws_iam_role_policy.task_access",
+      "target": "aws_iam_role.task",
       "edge_type": "references",
       "label": "policy of"
     },
     {
-      "id": "aws_lambda_function.worker->aws_sqs_queue.jobs",
-      "source": "aws_lambda_function.worker",
-      "target": "aws_sqs_queue.jobs",
-      "edge_type": "writes_to",
-      "label": "sqs"
-    },
-    {
-      "id": "aws_lambda_function.worker->aws_dynamodb_table.events",
-      "source": "aws_lambda_function.worker",
-      "target": "aws_dynamodb_table.events",
-      "edge_type": "writes_to",
-      "label": "dynamodb"
-    },
-    {
-      "id": "aws_lambda_function.worker->aws_sns_topic.alerts",
-      "source": "aws_lambda_function.worker",
-      "target": "aws_sns_topic.alerts",
-      "edge_type": "writes_to",
-      "label": "sns"
+      "id": "aws_route53_record.app->aws_lb.app",
+      "source": "aws_route53_record.app",
+      "target": "aws_lb.app",
+      "edge_type": "routes_to",
+      "label": "routes to"
     }
   ],
   "groups": [
     {
       "id": "group:aws_vpc.main",
-      "name": "vpc-0ff1ce",
+      "name": "vpc-0123456789abcdef0",
       "group_type": "vpc",
       "children": [
-        "aws_subnet.private_a",
-        "aws_subnet.private_b",
-        "aws_security_group.lambda"
+        "aws_subnet.public_a",
+        "aws_subnet.public_b",
+        "aws_security_group.app"
       ],
       "parent": null
     },
     {
-      "id": "group:aws_subnet.private_a",
-      "name": "subnet-priv-a",
+      "id": "group:aws_subnet.public_a",
+      "name": "subnet-aaa111",
       "group_type": "subnet",
       "children": [
-        "aws_lambda_function.worker"
+        "aws_lb.app",
+        "aws_ecs_service.api"
       ],
       "parent": "group:aws_vpc.main"
     },
     {
-      "id": "group:aws_subnet.private_b",
-      "name": "subnet-priv-b",
+      "id": "group:aws_subnet.public_b",
+      "name": "subnet-bbb222",
       "group_type": "subnet",
       "children": [
-        "aws_lambda_function.worker"
+        "aws_lb.app",
+        "aws_ecs_service.api"
       ],
       "parent": "group:aws_vpc.main"
     }

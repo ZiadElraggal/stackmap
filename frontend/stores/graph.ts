@@ -95,10 +95,17 @@ const ARCH_DROPPED_EDGE_TYPES = new Set(['authenticates', 'contains'])
 const REFERENCE_TYPE_ALLOWLIST = new Set([
   'aws_ecs_service->aws_ecs_cluster',
   'aws_ecs_service->aws_ecs_task_definition',
+  'aws_ecs_service->aws_lb_target_group',
   'aws_lb->aws_subnet',
   'aws_lb->aws_vpc',
+  'aws_lb_listener->aws_lb_target_group',
+  'aws_lb_listener_rule->aws_lb_target_group',
   'aws_lambda_function->aws_subnet',
   'aws_lambda_function->aws_vpc',
+  'aws_nat_gateway->aws_eip',
+  'aws_route_table_association->aws_route_table',
+  'aws_route_table_association->aws_subnet',
+  'aws_api_gateway_stage->aws_api_gateway_deployment',
   'aws_route53_record->aws_route53_zone',
 ])
 
