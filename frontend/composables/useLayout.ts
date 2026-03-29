@@ -39,8 +39,6 @@ interface SimNode extends d3.SimulationNodeDatum {
 }
 
 export function useLayout() {
-<<<<<<< Updated upstream
-=======
   function cloudfrontPreset(
     nodes: StackMapNode[],
     edges: StackMapEdge[]
@@ -71,7 +69,6 @@ export function useLayout() {
     return positions
   }
 
->>>>>>> Stashed changes
   function computeLayout(
     nodes: StackMapNode[],
     edges: StackMapEdge[],
@@ -79,18 +76,6 @@ export function useLayout() {
   ): Record<string, NodePosition> {
     if (nodes.length === 0) return {}
 
-<<<<<<< Updated upstream
-    // Spread initial positions wider based on node count
-    const spread = Math.max(1000, nodes.length * 20)
-
-    const simNodes: SimNode[] = nodes.map(n => ({
-      id: n.id,
-      tier: n.position_hint?.tier || 'backend',
-      weight: n.position_hint?.weight || 2,
-      x: Math.random() * spread,
-      y: TIER_Y[n.position_hint?.tier || 'backend'] || 600,
-    }))
-=======
     const preset = cloudfrontPreset(nodes, edges)
     const spread = Math.max(1800, nodes.length * 34)
     const tierStartX = 180
@@ -146,7 +131,6 @@ export function useLayout() {
         y: p.y,
       }
     })
->>>>>>> Stashed changes
 
     const nodeIdSet = new Set(nodes.map(n => n.id))
     const simLinks = edges
@@ -154,11 +138,6 @@ export function useLayout() {
       .map(e => ({ source: e.source, target: e.target }))
 
     const simulation = d3.forceSimulation<SimNode>(simNodes)
-<<<<<<< Updated upstream
-      .force('x', d3.forceX<SimNode>(spread / 2).strength(0.03))
-      .force('y', d3.forceY<SimNode>(d => TIER_Y[d.tier] ?? 600).strength(0.7))
-      .force('charge', d3.forceManyBody<SimNode>().strength(-500).distanceMax(600))
-=======
       .force('x', d3.forceX<SimNode>(d => {
         if (preset[d.id]) return preset[d.id].x
         const tierCats = categoryBuckets[d.tier] || ['other']
@@ -168,7 +147,6 @@ export function useLayout() {
       }).strength(0.15))
       .force('y', d3.forceY<SimNode>(d => preset[d.id]?.y ?? (TIER_Y[d.tier] ?? 750)).strength(0.85))
       .force('charge', d3.forceManyBody<SimNode>().strength(-600).distanceMax(900))
->>>>>>> Stashed changes
       .force(
         'link',
         d3.forceLink<SimNode, d3.SimulationLinkDatum<SimNode>>(simLinks)

@@ -25,6 +25,8 @@ classifiers = [
 dependencies = [
     "typer>=0.9.0",
     "rich>=13.0.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.29.0",
 ]
 
 [project.optional-dependencies]
@@ -36,6 +38,13 @@ dev = [
 
 [project.scripts]
 stackmap = "stackmap.cli.main:app"
+
+[tool.setuptools.packages.find]
+include = ["stackmap*"]
+exclude = ["frontend*", "tests*"]
+
+[tool.setuptools.package-data]
+"stackmap.webapp" = ["static/**/*", "static/.gitkeep"]
 
 [tool.ruff]
 target-version = "py310"
