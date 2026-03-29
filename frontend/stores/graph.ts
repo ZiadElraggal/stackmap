@@ -90,6 +90,44 @@ const PRIMARY_CATEGORY_PRIORITY: Record<string, number> = {
   security: 30,
 }
 
+const ARCH_DROPPED_EDGE_TYPES = new Set(['authenticates', 'contains'])
+
+const REFERENCE_TYPE_ALLOWLIST = new Set([
+  'aws_ecs_service->aws_ecs_cluster',
+  'aws_ecs_service->aws_ecs_task_definition',
+  'aws_lb->aws_subnet',
+  'aws_lb->aws_vpc',
+  'aws_lambda_function->aws_subnet',
+  'aws_lambda_function->aws_vpc',
+  'aws_route53_record->aws_route53_zone',
+])
+
+function shouldKeepReferenceEdge(
+  source: StackMapNode | undefined,
+  target: StackMapNode | undefined
+): boolean {
+  if (!source || !target) return false
+
+  const pair = `${source.resource_type}->${target.resource_type}`
+  if (REFERENCE_TYPE_ALLOWLIST.has(pair)) return true
+
+  // Keep references that still communicate business/data intent.
+  const sourceIsComputeLike = ['compute', 'container', 'integration', 'serverless'].includes(
+    source.category
+  )
+  const targetIsDataLike = ['database', 'storage', 'queue'].includes(target.category)
+  if (sourceIsComputeLike && targetIsDataLike) return true
+
+  // Keep references from entry/routing nodes to core compute/data nodes.
+  const sourceIsEntry = ['cdn', 'dns', 'network', 'integration'].includes(source.category)
+  const targetIsCore = ['compute', 'container', 'integration', 'database', 'storage', 'queue'].includes(
+    target.category
+  )
+  if (sourceIsEntry && targetIsCore) return true
+
+  return false
+}
+
 function isHelperNode(node: StackMapNode): boolean {
   if (node.position_hint?.is_helper) return true
   return HELPER_RESOURCE_TYPES.has(node.resource_type)
@@ -226,7 +264,12 @@ export const useGraphStore = defineStore('graph', {
       }
 
       if (state.viewMode === 'architecture') {
-        remapped = remapped.filter(e => !['references', 'authenticates', 'contains'].includes(e.edge_type))
+        const nodeById = new Map(state.nodes.map(n => [n.id, n]))
+        remapped = remapped.filter(e => {
+          if (ARCH_DROPPED_EDGE_TYPES.has(e.edge_type)) return false
+          if (e.edge_type !== 'references') return true
+          return shouldKeepReferenceEdge(nodeById.get(e.source), nodeById.get(e.target))
+        })
       }
 
       return remapped
