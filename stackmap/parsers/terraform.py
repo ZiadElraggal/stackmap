@@ -242,6 +242,14 @@ RELATIONSHIP_RULES: list[tuple[str, str, EdgeType, str, str | None]] = [
     ("aws_lb", "security_groups", EdgeType.REFERENCES, "secured by", None),
     # ALB Listener → ALB
     ("aws_lb_listener", "load_balancer_arn", EdgeType.ROUTES_TO, "listens on", "aws_lb"),
+    # ALB Listener → Target Group
+    (
+        "aws_lb_listener",
+        "default_action.*.target_group_arn",
+        EdgeType.ROUTES_TO,
+        "forwards to",
+        "aws_lb_target_group",
+    ),
     # ALB Target Group (connected via listener rules)
     (
         "aws_lb_listener_rule",
@@ -249,6 +257,22 @@ RELATIONSHIP_RULES: list[tuple[str, str, EdgeType, str, str | None]] = [
         EdgeType.ROUTES_TO,
         "rule on",
         "aws_lb_listener",
+    ),
+    # ALB Listener Rule → Target Group
+    (
+        "aws_lb_listener_rule",
+        "action.*.target_group_arn",
+        EdgeType.ROUTES_TO,
+        "forwards to",
+        "aws_lb_target_group",
+    ),
+    # ECS Service → Target Group
+    (
+        "aws_ecs_service",
+        "load_balancer.*.target_group_arn",
+        EdgeType.ROUTES_TO,
+        "serves via",
+        "aws_lb_target_group",
     ),
     # RDS → Subnet Group
     (
@@ -314,16 +338,42 @@ RELATIONSHIP_RULES: list[tuple[str, str, EdgeType, str, str | None]] = [
         "triggers",
         "aws_lambda_function",
     ),
+    # Route53 Record → Route53 Zone
+    (
+        "aws_route53_record",
+        "zone_id",
+        EdgeType.REFERENCES,
+        "in zone",
+        "aws_route53_zone",
+    ),
     # Subnet → VPC
     ("aws_subnet", "vpc_id", EdgeType.CONTAINS, "in vpc", "aws_vpc"),
     # Internet Gateway → VPC
     ("aws_internet_gateway", "vpc_id", EdgeType.REFERENCES, "attached to", "aws_vpc"),
     # NAT Gateway → Subnet
     ("aws_nat_gateway", "subnet_id", EdgeType.REFERENCES, "in subnet", "aws_subnet"),
+    # NAT Gateway → EIP
+    ("aws_nat_gateway", "allocation_id", EdgeType.REFERENCES, "uses eip", "aws_eip"),
     # Security Group → VPC
     ("aws_security_group", "vpc_id", EdgeType.REFERENCES, "in vpc", "aws_vpc"),
     # Route Table → VPC
     ("aws_route_table", "vpc_id", EdgeType.REFERENCES, "in vpc", "aws_vpc"),
+    # Route Table Association → Route Table
+    (
+        "aws_route_table_association",
+        "route_table_id",
+        EdgeType.REFERENCES,
+        "associates route table",
+        "aws_route_table",
+    ),
+    # Route Table Association → Subnet
+    (
+        "aws_route_table_association",
+        "subnet_id",
+        EdgeType.REFERENCES,
+        "associates subnet",
+        "aws_subnet",
+    ),
     # API Gateway Deployment → REST API
     (
         "aws_api_gateway_deployment",
@@ -339,6 +389,14 @@ RELATIONSHIP_RULES: list[tuple[str, str, EdgeType, str, str | None]] = [
         EdgeType.REFERENCES,
         "stage of",
         "aws_api_gateway_rest_api",
+    ),
+    # API Gateway Stage → Deployment
+    (
+        "aws_api_gateway_stage",
+        "deployment_id",
+        EdgeType.REFERENCES,
+        "uses deployment",
+        "aws_api_gateway_deployment",
     ),
     # IAM Role Policy Attachment → Role
     (
@@ -935,6 +993,53 @@ class TerraformParser(BaseParser):
             if node.resource_type in {"aws_iam_role_policy", "aws_iam_role_policy_attachment"}:
                 role_name = attrs.get("role", "")
                 parent_id = _lookup_target(role_name, id_index, arn_index)
+                _assign(node, parent_id)
+                continue
+
+            if node.resource_type == "aws_api_gateway_deployment":
+                rest_api_id = attrs.get("rest_api_id", "")
+                parent_id = _lookup_target(rest_api_id, id_index, arn_index)
+                _assign(node, parent_id)
+                continue
+
+            if node.resource_type == "aws_api_gateway_stage":
+                deployment_id = attrs.get("deployment_id", "")
+                rest_api_id = attrs.get("rest_api_id", "")
+                parent_id = _lookup_target(rest_api_id, id_index, arn_index) or _lookup_target(
+                    deployment_id, id_index, arn_index
+                )
+                _assign(node, parent_id)
+                continue
+
+            if node.resource_type == "aws_lambda_permission":
+                function_name = attrs.get("function_name", "")
+                parent_id = _lookup_target(function_name, id_index, arn_index)
+                _assign(node, parent_id)
+                continue
+
+            if node.resource_type == "aws_cloudwatch_log_group":
+                log_name = attrs.get("name", "")
+                if isinstance(log_name, str) and log_name.startswith("/aws/lambda/"):
+                    function_name = log_name.removeprefix("/aws/lambda/")
+                    parent_id = _lookup_target(function_name, id_index, arn_index)
+                _assign(node, parent_id)
+                continue
+
+            if node.resource_type == "aws_sns_topic_subscription":
+                topic_arn = attrs.get("topic_arn", "")
+                parent_id = _lookup_target(topic_arn, id_index, arn_index)
+                _assign(node, parent_id)
+                continue
+
+            if node.resource_type == "aws_lb_listener":
+                lb_arn = attrs.get("load_balancer_arn", "")
+                parent_id = _lookup_target(lb_arn, id_index, arn_index)
+                _assign(node, parent_id)
+                continue
+
+            if node.resource_type == "aws_lb_listener_rule":
+                listener_arn = attrs.get("listener_arn", "")
+                parent_id = _lookup_target(listener_arn, id_index, arn_index)
                 _assign(node, parent_id)
                 continue
 

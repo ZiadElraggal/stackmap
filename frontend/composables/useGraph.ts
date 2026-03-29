@@ -1,3 +1,5 @@
+import type { StackMapNode } from '~/stores/graph'
+
 export const CATEGORY_COLORS: Record<string, string> = {
   compute: '#f59e0b',
   storage: '#3b82f6',
@@ -53,6 +55,44 @@ export const CATEGORY_ICONS: Record<string, string> = {
     '<circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="2" fill="none"/><path d="M9.8 9.2a2.4 2.4 0 1 1 4.2 1.6c-.8.7-1.4 1.1-1.4 2.2" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/><circle cx="12" cy="16.8" r="1" fill="currentColor"/>',
 }
 
+const PRIMARY_NODE_CATEGORIES = new Set([
+  'compute',
+  'database',
+  'storage',
+  'integration',
+  'serverless',
+  'cdn',
+  'container',
+  'queue',
+])
+
+export type NodeProminence = 'primary' | 'secondary' | 'tertiary'
+
+export function getNodeProminence(node: StackMapNode): NodeProminence {
+  const weight = node.position_hint?.weight || 2
+  if (weight >= 4 && PRIMARY_NODE_CATEGORIES.has(node.category)) return 'primary'
+  if (weight >= 3) return 'secondary'
+  return 'tertiary'
+}
+
+export function getNodeWidth(node: StackMapNode): number {
+  const prominence = getNodeProminence(node)
+  if (prominence === 'primary') {
+    return Math.max(200, Math.min(280, node.name.length * 8.5 + 80))
+  }
+  if (prominence === 'secondary') {
+    return Math.max(160, Math.min(220, node.name.length * 7.5 + 60))
+  }
+  return Math.max(130, Math.min(180, node.name.length * 6.5 + 50))
+}
+
+export function getNodeHeight(node: StackMapNode): number {
+  const prominence = getNodeProminence(node)
+  if (prominence === 'primary') return 58
+  if (prominence === 'secondary') return 46
+  return 36
+}
+
 export function truncate(str: string, maxLen: number = 22): string {
   if (str.length <= maxLen) return str
   return str.slice(0, maxLen - 1) + '…'
@@ -69,5 +109,8 @@ export function useGraph() {
     CATEGORY_ICONS,
     truncate,
     formatResourceType,
+    getNodeWidth,
+    getNodeHeight,
+    getNodeProminence,
   }
 }

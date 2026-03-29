@@ -120,7 +120,7 @@ const sliderRef = ref<SVGElement>()
 
 const categories = computed(() => {
   const counts: Record<string, number> = {}
-  for (const n of store.nodes) {
+  for (const n of store.graphNodes) {
     counts[n.category] = (counts[n.category] || 0) + 1
   }
   return Object.entries(counts)

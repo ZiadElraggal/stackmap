@@ -1,11 +1,12 @@
-import * as d3 from 'd3'
+import dagre from '@dagrejs/dagre'
+import { getNodeHeight, getNodeWidth } from '~/composables/useGraph'
 import type { StackMapNode, StackMapEdge, StackMapGroup, NodePosition } from '~/stores/graph'
 
 const TIER_Y: Record<string, number> = {
   frontend: 0,
-  api: 350,
-  backend: 750,
-  data: 1150,
+  api: 250,
+  backend: 500,
+  data: 750,
 }
 
 const TIER_ORDER: Record<string, number> = {
@@ -15,60 +16,14 @@ const TIER_ORDER: Record<string, number> = {
   data: 3,
 }
 
-const CATEGORY_CLUSTER_ORDER: Record<string, number> = {
-  cdn: 0,
-  dns: 1,
-  integration: 2,
-  network: 3,
-  compute: 4,
-  serverless: 4,
-  container: 5,
-  security: 6,
-  monitoring: 7,
-  queue: 8,
-  storage: 9,
-  database: 10,
-  other: 11,
-}
-
-interface SimNode extends d3.SimulationNodeDatum {
-  id: string
-  tier: string
-  weight: number
-  category: string
-}
+const LAYOUT_EDGE_TYPES = new Set(['triggers', 'writes_to', 'reads_from', 'routes_to'])
+const TIER_LIST = ['frontend', 'api', 'backend', 'data']
 
 export function useLayout() {
-  function cloudfrontPreset(
-    nodes: StackMapNode[],
-    edges: StackMapEdge[]
-  ): Record<string, NodePosition> {
-    const byType = (t: string) => nodes.filter(n => n.resource_type === t)
-    const distributions = byType('aws_cloudfront_distribution')
-    const buckets = byType('aws_s3_bucket')
-    if (distributions.length !== 1 || buckets.length < 1) return {}
-
-    const cf = distributions[0]
-    const s3 = buckets[0]
-    const cert = byType('aws_acm_certificate')[0]
-    const oac = byType('aws_cloudfront_origin_access_control')[0]
-    const role = byType('aws_iam_role')[0]
-
-    const hasCfToS3 = edges.some(e => e.source === cf.id && e.target === s3.id)
-    if (!hasCfToS3) return {}
-
-    const positions: Record<string, NodePosition> = {
-      [cf.id]: { x: 900, y: 180 },
-      [s3.id]: { x: 900, y: 1100 },
-    }
-
-    if (oac) positions[oac.id] = { x: 1120, y: 560 }
-    if (cert) positions[cert.id] = { x: 680, y: 560 }
-    if (role) positions[role.id] = { x: 360, y: 750 }
-
-    return positions
-  }
-
+  /**
+   * Hybrid layout: dagre computes optimal X positions (minimizing edge crossings),
+   * then we override Y positions with our fixed tier system.
+   */
   function computeLayout(
     nodes: StackMapNode[],
     edges: StackMapEdge[],
@@ -76,94 +31,128 @@ export function useLayout() {
   ): Record<string, NodePosition> {
     if (nodes.length === 0) return {}
 
-    const preset = cloudfrontPreset(nodes, edges)
-    const spread = Math.max(1800, nodes.length * 34)
-    const tierStartX = 180
-    const tierWidth = Math.max(1400, spread)
-
+    // Group nodes by tier for fallback
     const byTier = new Map<string, StackMapNode[]>()
     for (const node of nodes) {
       const tier = node.position_hint?.tier || 'backend'
       if (!byTier.has(tier)) byTier.set(tier, [])
-      byTier.get(tier)?.push(node)
+      byTier.get(tier)!.push(node)
     }
 
-    const initial = new Map<string, NodePosition>()
+    // Build dagre graph with just real nodes and edges
+    const g = new dagre.graphlib.Graph()
+    g.setGraph({
+      rankdir: 'TB',
+      nodesep: 70,
+      ranksep: 180,
+      edgesep: 25,
+      marginx: 40,
+      marginy: 40,
+      ranker: 'network-simplex',
+    })
+    g.setDefaultEdgeLabel(() => ({}))
 
-    for (const [tier, tierNodes] of byTier.entries()) {
-      const sorted = [...tierNodes].sort((a, b) => a.name.localeCompare(b.name))
-      const spacing = sorted.length > 1 ? tierWidth / (sorted.length - 1) : tierWidth / 2
-      sorted.forEach((node, idx) => {
-        if (preset[node.id]) {
-          initial.set(node.id, preset[node.id])
-          return
-        }
-        initial.set(node.id, {
-          x: tierStartX + idx * spacing,
-          y: TIER_Y[tier] ?? 750,
-        })
+    const nodeIdSet = new Set<string>()
+    for (const node of nodes) {
+      nodeIdSet.add(node.id)
+      g.setNode(node.id, {
+        width: getNodeWidth(node),
+        height: getNodeHeight(node),
       })
     }
 
-    const categoryBuckets: Record<string, string[]> = {}
-    for (const node of nodes) {
-      const tier = node.position_hint?.tier || 'backend'
-      if (!categoryBuckets[tier]) categoryBuckets[tier] = []
-      if (!categoryBuckets[tier].includes(node.category)) {
-        categoryBuckets[tier].push(node.category)
+    let edgeCount = 0
+    for (const edge of edges) {
+      if (!LAYOUT_EDGE_TYPES.has(edge.edge_type)) continue
+      if (!nodeIdSet.has(edge.source) || !nodeIdSet.has(edge.target)) continue
+      g.setEdge(edge.source, edge.target, {
+        weight: edge.edge_type === 'triggers' ? 3 : 2,
+        minlen: 1,
+      })
+      edgeCount++
+    }
+
+    let positions: Record<string, NodePosition> = {}
+
+    if (edgeCount > 0) {
+      try {
+        dagre.layout(g)
+
+        // Take X from dagre, Y from our tier system
+        for (const node of nodes) {
+          const dagreNode = g.node(node.id)
+          if (dagreNode && Number.isFinite(dagreNode.x)) {
+            const tier = node.position_hint?.tier || 'backend'
+            positions[node.id] = {
+              x: dagreNode.x,
+              y: TIER_Y[tier] ?? TIER_Y.backend,
+            }
+          }
+        }
+      } catch (_e) {
+        // dagre failed, fall through to fallback
+        positions = {}
       }
     }
 
-    for (const tier of Object.keys(categoryBuckets)) {
-      categoryBuckets[tier] = categoryBuckets[tier].sort(
-        (a, b) => (CATEGORY_CLUSTER_ORDER[a] ?? 99) - (CATEGORY_CLUSTER_ORDER[b] ?? 99)
-      )
-    }
-
-    const simNodes: SimNode[] = nodes.map(n => {
-      const p = initial.get(n.id) || { x: Math.random() * spread, y: TIER_Y.backend }
-      return {
-        id: n.id,
-        tier: n.position_hint?.tier || 'backend',
-        weight: n.position_hint?.weight || 2,
-        category: n.category,
-        x: p.x,
-        y: p.y,
+    // Fallback: simple horizontal spacing per tier
+    if (Object.keys(positions).length < nodes.length) {
+      const startX = 200
+      const rowGap = 160
+      for (const tier of TIER_LIST) {
+        const tierNodes = (byTier.get(tier) || []).sort((a, b) => a.name.localeCompare(b.name))
+        const tierWidth = tierNodes.length * rowGap
+        tierNodes.forEach((node, idx) => {
+          if (!positions[node.id]) {
+            positions[node.id] = {
+              x: startX + idx * rowGap - tierWidth / 2 + rowGap / 2,
+              y: TIER_Y[tier] ?? TIER_Y.backend,
+            }
+          }
+        })
       }
-    })
-
-    const nodeIdSet = new Set(nodes.map(n => n.id))
-    const simLinks = edges
-      .filter(e => nodeIdSet.has(e.source) && nodeIdSet.has(e.target))
-      .map(e => ({ source: e.source, target: e.target }))
-
-    const simulation = d3.forceSimulation<SimNode>(simNodes)
-      .force('x', d3.forceX<SimNode>(d => {
-        if (preset[d.id]) return preset[d.id].x
-        const tierCats = categoryBuckets[d.tier] || ['other']
-        const catIndex = Math.max(0, tierCats.indexOf(d.category))
-        const segment = tierWidth / Math.max(1, tierCats.length)
-        return tierStartX + segment * catIndex + segment / 2
-      }).strength(0.15))
-      .force('y', d3.forceY<SimNode>(d => preset[d.id]?.y ?? (TIER_Y[d.tier] ?? 750)).strength(0.85))
-      .force('charge', d3.forceManyBody<SimNode>().strength(-600).distanceMax(900))
-      .force(
-        'link',
-        d3.forceLink<SimNode, d3.SimulationLinkDatum<SimNode>>(simLinks)
-          .id(d => d.id)
-          .distance(200)
-          .strength(0.2)
-      )
-      .force('collide', d3.forceCollide<SimNode>(100))
-      .stop()
-
-    for (let i = 0; i < 400; i++) {
-      simulation.tick()
     }
 
-    const positions: Record<string, NodePosition> = {}
-    for (const node of simNodes) {
-      positions[node.id] = { x: node.x!, y: node.y! }
+    // De-overlap pass: since we override Y, nodes dagre put on different ranks
+    // may now share the same Y. Spread them out if they overlap.
+    const nodeById = new Map(nodes.map(n => [n.id, n]))
+    const MIN_GAP = 30 // minimum px gap between node edges
+
+    for (const tier of TIER_LIST) {
+      const tierNodes = (byTier.get(tier) || [])
+        .filter(n => positions[n.id])
+        .sort((a, b) => positions[a.id].x - positions[b.id].x)
+
+      for (let i = 1; i < tierNodes.length; i++) {
+        const prev = tierNodes[i - 1]
+        const curr = tierNodes[i]
+        const prevRight = positions[prev.id].x + getNodeWidth(prev) / 2
+        const currLeft = positions[curr.id].x - getNodeWidth(curr) / 2
+        const overlap = prevRight + MIN_GAP - currLeft
+        if (overlap > 0) {
+          // Push current node right
+          positions[curr.id].x += overlap
+        }
+      }
+    }
+
+    // Center-align tiers: shift each tier so its center aligns with the overall center
+    const allX = Object.values(positions).map(p => p.x)
+    if (allX.length > 0) {
+      const globalCenterX = (Math.min(...allX) + Math.max(...allX)) / 2
+
+      for (const tier of TIER_LIST) {
+        const tierNodeIds = (byTier.get(tier) || []).map(n => n.id).filter(id => positions[id])
+        if (tierNodeIds.length === 0) continue
+
+        const tierXs = tierNodeIds.map(id => positions[id].x)
+        const tierCenterX = (Math.min(...tierXs) + Math.max(...tierXs)) / 2
+        const shift = globalCenterX - tierCenterX
+
+        for (const id of tierNodeIds) {
+          positions[id].x += shift
+        }
+      }
     }
 
     return positions
