@@ -15,21 +15,7 @@ const TIER_ORDER: Record<string, number> = {
   data: 3,
 }
 
-const CATEGORY_CLUSTER_ORDER: Record<string, number> = {
-  cdn: 0,
-  dns: 1,
-  integration: 2,
-  network: 3,
-  compute: 4,
-  serverless: 4,
-  container: 5,
-  security: 6,
-  monitoring: 7,
-  queue: 8,
-  storage: 9,
-  database: 10,
-  other: 11,
-}
+const PRIMARY_FLOW_EDGE_TYPES = new Set(['triggers', 'reads_from', 'writes_to', 'routes_to', 'contains'])
 
 interface SimNode extends d3.SimulationNodeDatum {
   id: string
@@ -39,6 +25,38 @@ interface SimNode extends d3.SimulationNodeDatum {
 }
 
 export function useLayout() {
+  function buildFlowClusters(nodes: StackMapNode[], edges: StackMapEdge[]): Map<string, number> {
+    const nodeIds = new Set(nodes.map(n => n.id))
+    const adjacency = new Map<string, Set<string>>()
+    for (const node of nodes) adjacency.set(node.id, new Set())
+
+    for (const edge of edges) {
+      if (!PRIMARY_FLOW_EDGE_TYPES.has(edge.edge_type)) continue
+      if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) continue
+      adjacency.get(edge.source)?.add(edge.target)
+      adjacency.get(edge.target)?.add(edge.source)
+    }
+
+    let clusterIdx = 0
+    const clusterByNode = new Map<string, number>()
+
+    for (const node of nodes) {
+      if (clusterByNode.has(node.id)) continue
+      const stack = [node.id]
+      clusterByNode.set(node.id, clusterIdx)
+      while (stack.length) {
+        const cur = stack.pop()!
+        for (const next of adjacency.get(cur) || []) {
+          if (clusterByNode.has(next)) continue
+          clusterByNode.set(next, clusterIdx)
+          stack.push(next)
+        }
+      }
+      clusterIdx += 1
+    }
+
+    return clusterByNode
+  }
   function cloudfrontPreset(
     nodes: StackMapNode[],
     edges: StackMapEdge[]
@@ -105,19 +123,18 @@ export function useLayout() {
       })
     }
 
-    const categoryBuckets: Record<string, string[]> = {}
+    const clusterByNode = buildFlowClusters(nodes, edges)
+    const clustersByTier = new Map<string, number[]>()
     for (const node of nodes) {
       const tier = node.position_hint?.tier || 'backend'
-      if (!categoryBuckets[tier]) categoryBuckets[tier] = []
-      if (!categoryBuckets[tier].includes(node.category)) {
-        categoryBuckets[tier].push(node.category)
-      }
+      const cluster = clusterByNode.get(node.id) ?? 0
+      if (!clustersByTier.has(tier)) clustersByTier.set(tier, [])
+      const list = clustersByTier.get(tier)!
+      if (!list.includes(cluster)) list.push(cluster)
     }
-
-    for (const tier of Object.keys(categoryBuckets)) {
-      categoryBuckets[tier] = categoryBuckets[tier].sort(
-        (a, b) => (CATEGORY_CLUSTER_ORDER[a] ?? 99) - (CATEGORY_CLUSTER_ORDER[b] ?? 99)
-      )
+    for (const [tier, list] of clustersByTier.entries()) {
+      list.sort((a, b) => a - b)
+      clustersByTier.set(tier, list)
     }
 
     const simNodes: SimNode[] = nodes.map(n => {
@@ -140,10 +157,11 @@ export function useLayout() {
     const simulation = d3.forceSimulation<SimNode>(simNodes)
       .force('x', d3.forceX<SimNode>(d => {
         if (preset[d.id]) return preset[d.id].x
-        const tierCats = categoryBuckets[d.tier] || ['other']
-        const catIndex = Math.max(0, tierCats.indexOf(d.category))
-        const segment = tierWidth / Math.max(1, tierCats.length)
-        return tierStartX + segment * catIndex + segment / 2
+        const clusterId = clusterByNode.get(d.id) ?? 0
+        const tierClusters = clustersByTier.get(d.tier) || [0]
+        const clusterIndex = Math.max(0, tierClusters.indexOf(clusterId))
+        const segment = tierWidth / Math.max(1, tierClusters.length)
+        return tierStartX + segment * clusterIndex + segment / 2
       }).strength(0.15))
       .force('y', d3.forceY<SimNode>(d => preset[d.id]?.y ?? (TIER_Y[d.tier] ?? 750)).strength(0.85))
       .force('charge', d3.forceManyBody<SimNode>().strength(-600).distanceMax(900))
