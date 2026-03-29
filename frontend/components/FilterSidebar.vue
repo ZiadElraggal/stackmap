@@ -14,6 +14,27 @@
     </button>
 
     <div v-if="!collapsed" class="flex-1 overflow-y-auto p-3 space-y-4">
+      <!-- View mode -->
+      <div>
+        <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">View</h3>
+        <div class="inline-flex rounded border border-white/10 overflow-hidden text-xs">
+          <button
+            class="px-2 py-1 transition"
+            :class="store.viewMode === 'architecture' ? 'bg-blue-500/20 text-blue-400' : 'bg-transparent text-gray-400 hover:bg-white/5'"
+            @click="store.setViewMode('architecture')"
+          >
+            Architecture
+          </button>
+          <button
+            class="px-2 py-1 transition border-l border-white/10"
+            :class="store.viewMode === 'raw' ? 'bg-blue-500/20 text-blue-400' : 'bg-transparent text-gray-400 hover:bg-white/5'"
+            @click="store.setViewMode('raw')"
+          >
+            Terraform raw
+          </button>
+        </div>
+      </div>
+
       <!-- Category filters -->
       <div>
         <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">Categories</h3>
