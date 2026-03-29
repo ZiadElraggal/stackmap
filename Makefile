@@ -1,7 +1,17 @@
-.PHONY: install test lint format frontend-build sync-webapp-assets package-build package build-package phase1-check phase2-check phase3-check phase4-check demo-check
+.PHONY: install-dev brew-install brew-upgrade brew-uninstall test lint format frontend-build sync-webapp-assets package-build package build-package phase1-check phase2-check phase3-check phase4-check demo-check
 
-install:
+install-dev:
 	pip install -e ".[dev]"
+
+brew-install:
+	brew tap ziadelraggal/homebrew-stackmap
+	brew install ziadelraggal/homebrew-stackmap/stackmap
+
+brew-upgrade:
+	brew upgrade stackmap
+
+brew-uninstall:
+	brew uninstall stackmap || true
 
 test:
 	pytest || test $$? -eq 5
