@@ -1,4 +1,4 @@
-.PHONY: install test lint format frontend-build sync-webapp-assets package-build phase4-check
+.PHONY: install test lint format frontend-build sync-webapp-assets package-build package build-package phase4-check
 
 install:
 	pip install -e ".[dev]"
@@ -21,6 +21,11 @@ sync-webapp-assets:
 
 package-build: frontend-build sync-webapp-assets
 	python3 -m build
+
+# Convenience aliases for packaging
+package: package-build
+
+build-package: package-build
 
 ## Run a full check of the 4th phase of the stackmap development process, including frontend build, linting, type checking, testing, and scanning.
 phase4-check:

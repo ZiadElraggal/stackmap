@@ -78,13 +78,13 @@ const edgeColor = computed(() => EDGE_COLORS[props.edge.edge_type] || '#64748b')
 
 const strokeWidth = computed(() => {
   const base: Record<string, number> = {
-    triggers: 1.5,
-    reads_from: 1.5,
-    writes_to: 1.5,
-    routes_to: 1.2,
-    references: 1,
-    contains: 0.8,
-    authenticates: 1.2,
+    triggers: 2.1,
+    reads_from: 1.9,
+    writes_to: 1.9,
+    routes_to: 1.6,
+    references: 0.9,
+    contains: 1,
+    authenticates: 0.9,
   }
   const extra = isConnectedToHovered.value ? 0.5 : 0
   return (base[props.edge.edge_type] ?? 1.2) + extra
@@ -121,11 +121,14 @@ const computedOpacity = computed(() => {
   }
   if (store.selectedNodeId) {
     if (isConnectedToSelected.value) return 0.9
-    return 0.15
+    return 0.08
   }
-  if (props.edge.edge_type === 'references') return 0.4
-  if (props.edge.edge_type === 'contains') return 0.25
-  return 0.35
+  if (props.edge.edge_type === 'triggers') return 0.95
+  if (props.edge.edge_type === 'writes_to' || props.edge.edge_type === 'reads_from') return 0.78
+  if (props.edge.edge_type === 'routes_to') return 0.62
+  if (props.edge.edge_type === 'contains') return 0.3
+  if (props.edge.edge_type === 'references' || props.edge.edge_type === 'authenticates') return 0.09
+  return 0.3
 })
 
 const pathD = computed(() => {
