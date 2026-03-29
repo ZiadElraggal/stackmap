@@ -1,68 +1,95 @@
 <template>
   <g
     :transform="`translate(${x}, ${y})`"
-    :class="['graph-node', { dimmed: isDimmed, selected: isSelected }]"
-    :opacity="isDimmed ? 0.15 : 1"
+    :class="['graph-node', { dimmed: isDimmed, selected: isSelected, entering: !entered }]"
+    :style="{
+      '--node-color': categoryColor,
+      '--entry-delay': `${entryDelay}ms`,
+    }"
+    :opacity="isDimmed ? 0.12 : 1"
     @click.stop="onClick"
     @mouseenter="onHover"
     @mouseleave="onLeave"
-    style="cursor: pointer"
   >
-    <!-- Node background -->
     <rect
       :width="nodeWidth"
       :height="nodeHeight"
       :x="-nodeWidth / 2"
       :y="-nodeHeight / 2"
-      :rx="8"
-      :ry="8"
-      :fill="bgColor"
-      :stroke="isSelected ? categoryColor : 'rgba(255,255,255,0.08)'"
-      :stroke-width="isSelected ? 2.5 : 1"
-      class="node-rect"
+      :rx="12"
+      :ry="12"
+      :fill="`${categoryColor}0F`"
+      stroke="rgba(255,255,255,0.06)"
+      stroke-width="1"
+      class="outer-shell"
     />
 
-    <!-- Selection glow -->
     <rect
-      v-if="isSelected"
-      :width="nodeWidth + 6"
-      :height="nodeHeight + 6"
-      :x="-(nodeWidth + 6) / 2"
-      :y="-(nodeHeight + 6) / 2"
+      :width="nodeWidth - 8"
+      :height="nodeHeight - 8"
+      :x="-(nodeWidth - 8) / 2 + 4"
+      :y="-(nodeHeight - 8) / 2 + 4"
       :rx="10"
       :ry="10"
-      fill="none"
-      :stroke="categoryColor"
-      stroke-width="1"
-      opacity="0.4"
+      fill="#13131f"
+      class="inner-shell"
     />
 
-    <!-- Category icon -->
-    <text
-      :x="-nodeWidth / 2 + 14"
-      y="1"
+    <rect
+      :width="3"
+      :height="nodeHeight - 10"
+      :x="-nodeWidth / 2 + 5"
+      :y="-nodeHeight / 2 + 5"
+      :rx="2"
+      :ry="2"
       :fill="categoryColor"
-      font-size="14"
-      text-anchor="middle"
-      dominant-baseline="central"
-    >{{ icon }}</text>
+      class="accent-bar"
+    />
 
-    <!-- Node name -->
+    <rect
+      v-if="isSelected"
+      :width="nodeWidth + 8"
+      :height="nodeHeight + 8"
+      :x="-(nodeWidth + 8) / 2"
+      :y="-(nodeHeight + 8) / 2"
+      :rx="16"
+      :ry="16"
+      fill="none"
+      :stroke="categoryColor"
+      stroke-width="1.5"
+      opacity="0.25"
+      class="selection-ring"
+    />
+
+    <svg
+      :x="-nodeWidth / 2 + 13"
+      :y="-9"
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      :style="{ color: categoryColor }"
+      class="icon"
+    >
+      <g v-html="iconPath" />
+    </svg>
+
     <text
-      :x="-nodeWidth / 2 + 28"
-      y="-3"
+      :x="-nodeWidth / 2 + 40"
+      y="-4"
       fill="#e5e7eb"
-      font-size="11"
+      font-size="12"
+      font-weight="500"
       font-family="'JetBrains Mono', 'SF Mono', monospace"
       dominant-baseline="central"
+      class="node-name"
     >{{ displayName }}</text>
 
-    <!-- Resource type subtitle -->
     <text
-      :x="-nodeWidth / 2 + 28"
-      y="12"
+      :x="-nodeWidth / 2 + 40"
+      y="13"
       fill="#6b7280"
-      font-size="9"
+      font-size="10"
+      font-weight="400"
       font-family="'JetBrains Mono', 'SF Mono', monospace"
       dominant-baseline="central"
     >{{ shortType }}</text>
@@ -72,32 +99,32 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useGraphStore, type StackMapNode } from '~/stores/graph'
-import { CATEGORY_COLORS, CATEGORY_ICONS, truncate } from '~/composables/useGraph'
+import { CATEGORY_COLORS, CATEGORY_ICONS, formatResourceType, truncate } from '~/composables/useGraph'
 
-const props = defineProps<{
-  node: StackMapNode
-  x: number
-  y: number
-}>()
+const props = withDefaults(
+  defineProps<{
+    node: StackMapNode
+    x: number
+    y: number
+    entryDelay?: number
+  }>(),
+  {
+    entryDelay: 0,
+  }
+)
 
 const store = useGraphStore()
+const entered = ref(false)
 
 const categoryColor = computed(() => CATEGORY_COLORS[props.node.category] || '#9ca3af')
-const bgColor = computed(() => '#1a1a2e')
-const icon = computed(() => CATEGORY_ICONS[props.node.category] || '○')
-const displayName = computed(() => truncate(props.node.name, 20))
-const shortType = computed(() => {
-  const t = props.node.resource_type
-  return t.replace('aws_', '').replace(/_/g, ' ')
-})
+const iconPath = computed(() => CATEGORY_ICONS[props.node.category] || CATEGORY_ICONS.other)
+const displayName = computed(() => truncate(props.node.name, 24))
+const shortType = computed(() => formatResourceType(props.node.resource_type))
 
-const nodeWidth = computed(() => {
-  const w = props.node.position_hint?.weight || 2
-  return Math.max(140, 120 + w * 8)
-})
-const nodeHeight = computed(() => 36)
+const nodeWidth = computed(() => Math.max(180, Math.min(260, props.node.name.length * 8 + 70)))
+const nodeHeight = computed(() => 52)
 
 const isSelected = computed(() => store.selectedNodeId === props.node.id)
 const isDimmed = computed(() => {
@@ -117,16 +144,55 @@ function onHover() {
 function onLeave() {
   store.hoverNode(null)
 }
+
+onMounted(() => {
+  requestAnimationFrame(() => {
+    entered.value = true
+  })
+})
 </script>
 
 <style scoped>
 .graph-node {
-  transition: opacity 0.3s ease;
+  cursor: pointer;
+  transition: opacity 200ms ease-out;
 }
-.node-rect {
-  transition: stroke 0.2s ease, stroke-width 0.2s ease;
+
+.graph-node.entering {
+  opacity: 0;
+  animation: node-enter 300ms ease-out forwards;
+  animation-delay: var(--entry-delay);
 }
-.graph-node:hover .node-rect {
-  filter: brightness(1.2);
+
+@keyframes node-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.outer-shell,
+.inner-shell,
+.accent-bar,
+.selection-ring {
+  transition: all 200ms ease-out;
+}
+
+.graph-node:hover .outer-shell {
+  stroke: color-mix(in srgb, var(--node-color) 30%, transparent);
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--node-color) 20%, transparent));
+}
+
+.graph-node.selected .outer-shell {
+  stroke: color-mix(in srgb, var(--node-color) 80%, transparent);
+  stroke-width: 2;
+}
+
+.graph-node .node-name,
+.graph-node .icon,
+.graph-node .selection-ring {
+  pointer-events: none;
 }
 </style>
