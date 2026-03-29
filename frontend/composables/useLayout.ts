@@ -15,12 +15,60 @@ interface SimNode extends d3.SimulationNodeDatum {
 }
 
 export function useLayout() {
+  function cloudfrontPreset(
+    nodes: StackMapNode[],
+    edges: StackMapEdge[]
+  ): Record<string, NodePosition> {
+    const byType = (t: string) => nodes.filter(n => n.resource_type === t)
+    const distributions = byType('aws_cloudfront_distribution')
+    const buckets = byType('aws_s3_bucket')
+    const certs = byType('aws_acm_certificate')
+    const oacs = byType('aws_cloudfront_origin_access_control')
+    const roles = byType('aws_iam_role')
+    const rolePolicies = byType('aws_iam_role_policy')
+
+    if (distributions.length !== 1 || buckets.length < 1) return {}
+
+    const cf = distributions[0]
+    const s3 = buckets[0]
+    const cert = certs[0]
+    const oac = oacs[0]
+    const role = roles[0]
+    const rolePolicy = rolePolicies[0]
+
+    const positions: Record<string, NodePosition> = {
+      [cf.id]: { x: 900, y: 180 },
+      [s3.id]: { x: 900, y: 720 },
+    }
+
+    if (oac) positions[oac.id] = { x: 1120, y: 420 }
+    if (cert) positions[cert.id] = { x: 680, y: 420 }
+    if (role) positions[role.id] = { x: 400, y: 420 }
+    if (rolePolicy) positions[rolePolicy.id] = { x: 220, y: 420 }
+
+    // Place remaining nodes near center lanes so force sim can settle faster
+    for (const node of nodes) {
+      if (positions[node.id]) continue
+      const tier = node.position_hint?.tier || 'backend'
+      positions[node.id] = {
+        x: tier === 'frontend' ? 900 : tier === 'data' ? 900 : 600,
+        y: TIER_Y[tier] ?? 600,
+      }
+    }
+
+    // Guard: only use preset if CF routes toward S3 in this graph
+    const hasCfToS3 = edges.some(e => e.source === cf.id && e.target === s3.id)
+    return hasCfToS3 ? positions : {}
+  }
+
   function computeLayout(
     nodes: StackMapNode[],
     edges: StackMapEdge[],
     groups: StackMapGroup[]
   ): Record<string, NodePosition> {
     if (nodes.length === 0) return {}
+
+    const preset = cloudfrontPreset(nodes, edges)
 
     // Spread initial positions wider based on node count
     const spread = Math.max(1000, nodes.length * 20)
@@ -29,8 +77,8 @@ export function useLayout() {
       id: n.id,
       tier: n.position_hint?.tier || 'backend',
       weight: n.position_hint?.weight || 2,
-      x: Math.random() * spread,
-      y: TIER_Y[n.position_hint?.tier || 'backend'] || 600,
+      x: preset[n.id]?.x ?? Math.random() * spread,
+      y: preset[n.id]?.y ?? (TIER_Y[n.position_hint?.tier || 'backend'] || 600),
     }))
 
     const nodeIdSet = new Set(nodes.map(n => n.id))
@@ -39,7 +87,7 @@ export function useLayout() {
       .map(e => ({ source: e.source, target: e.target }))
 
     const simulation = d3.forceSimulation<SimNode>(simNodes)
-      .force('x', d3.forceX<SimNode>(spread / 2).strength(0.03))
+      .force('x', d3.forceX<SimNode>(d => preset[d.id]?.x ?? spread / 2).strength(0.08))
       .force('y', d3.forceY<SimNode>(d => TIER_Y[d.tier] ?? 600).strength(0.7))
       .force('charge', d3.forceManyBody<SimNode>().strength(-500).distanceMax(600))
       .force(
