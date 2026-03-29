@@ -46,6 +46,32 @@ const HELPER_RESOURCE_TYPES = new Set([
   'aws_lambda_permission',
   'aws_sns_topic_subscription',
   'aws_cloudfront_origin_access_control',
+  'aws_api_gateway_deployment',
+  'aws_api_gateway_stage',
+  'aws_api_gateway_method',
+  'aws_api_gateway_resource',
+  'aws_api_gateway_integration',
+  'aws_lb_listener',
+  'aws_lb_listener_rule',
+  'aws_lb_target_group',
+  'aws_db_subnet_group',
+  'aws_elasticache_subnet_group',
+  'aws_s3_bucket_policy',
+  'aws_s3_bucket_versioning',
+  'aws_s3_bucket_server_side_encryption_configuration',
+  'aws_route_table',
+  'aws_route_table_association',
+  'aws_eip',
+  'aws_flow_log',
+  'aws_security_group',
+  'aws_acm_certificate',
+  'aws_s3_bucket_public_access_block',
+  'aws_s3_bucket_website_configuration',
+  'aws_s3_bucket_cors_configuration',
+  'aws_s3_bucket_lifecycle_configuration',
+  'aws_s3_bucket_notification',
+  'aws_nat_gateway',
+  'aws_internet_gateway',
 ])
 
 const PRIMARY_CATEGORY_PRIORITY: Record<string, number> = {
@@ -171,7 +197,8 @@ export const useGraphStore = defineStore('graph', {
     graphNodes(state): StackMapNode[] {
       if (state.viewMode === 'raw') return state.nodes
       const parentMap = this.helperParentMap
-      return state.nodes.filter(n => !parentMap.has(n.id))
+      // Hide ALL helper nodes: those with parents (remapped) AND orphans (dropped)
+      return state.nodes.filter(n => !parentMap.has(n.id) && !isHelperNode(n))
     },
 
     graphEdges(state): StackMapEdge[] {
@@ -179,7 +206,7 @@ export const useGraphStore = defineStore('graph', {
 
       const parentMap = this.helperParentMap
       const dedup = new Set<string>()
-      const remapped: StackMapEdge[] = []
+      let remapped: StackMapEdge[] = []
 
       for (const edge of state.edges) {
         const source = parentMap.get(edge.source) || edge.source
@@ -196,6 +223,10 @@ export const useGraphStore = defineStore('graph', {
           source,
           target,
         })
+      }
+
+      if (state.viewMode === 'architecture') {
+        remapped = remapped.filter(e => !['references', 'authenticates', 'contains'].includes(e.edge_type))
       }
 
       return remapped
