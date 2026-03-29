@@ -25,6 +25,20 @@
       <rect width="100%" height="100%" fill="#0a0a0f" @click="store.selectNode(null)" />
 
       <g ref="zoomGroupRef">
+        <g>
+          <rect
+            v-for="band in tierBands"
+            :key="`tier-band-${band.name}`"
+            :x="graphBounds.minX - 260"
+            :y="band.yStart"
+            :width="graphBounds.width + 520"
+            :height="band.yEnd - band.yStart"
+            :fill="band.fill"
+            stroke="rgba(255,255,255,0.03)"
+            stroke-width="1"
+          />
+        </g>
+
         <rect
           :x="graphBounds.minX - 500"
           :y="graphBounds.minY - 500"
@@ -132,7 +146,7 @@
       </div>
       <span>{{ store.visibleNodes.length }}/{{ store.nodes.length }} resources</span>
       <span>{{ store.visibleEdges.length }} connections</span>
-      <span class="text-gray-600">{{ store.viewMode === 'architecture' ? 'architecture view' : 'terraform raw view' }}</span>
+      <span class="text-gray-600">{{ store.viewMode === 'architecture' ? 'architecture view' : 'raw view' }}</span>
       <span v-if="store.groups.length > 0">{{ store.groups.length }} groups</span>
       <span v-if="store.metadata.terraform_version">Terraform v{{ store.metadata.terraform_version }}</span>
       <span>{{ Math.round(zoomScale * 100) }}%</span>
@@ -142,7 +156,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, reactive, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import * as d3 from 'd3'
 import { useGraphStore } from '~/stores/graph'
 import { useLayout } from '~/composables/useLayout'
@@ -201,6 +215,18 @@ const tierLabels = computed(() => {
   ]
 })
 
+const tierBands = computed(() => {
+  const midFa = (TIER_Y.frontend + TIER_Y.api) / 2
+  const midAb = (TIER_Y.api + TIER_Y.backend) / 2
+  const midBd = (TIER_Y.backend + TIER_Y.data) / 2
+  return [
+    { name: 'frontend', yStart: TIER_Y.frontend - 220, yEnd: midFa, fill: 'rgba(34,211,238,0.03)' },
+    { name: 'api', yStart: midFa, yEnd: midAb, fill: 'rgba(59,130,246,0.025)' },
+    { name: 'backend', yStart: midAb, yEnd: midBd, fill: 'rgba(99,102,241,0.02)' },
+    { name: 'data', yStart: midBd, yEnd: TIER_Y.data + 220, fill: 'rgba(16,185,129,0.02)' },
+  ]
+})
+
 function edgeColor(edgeType: string): string {
   return EDGE_COLORS[edgeType] || '#64748b'
 }
@@ -239,7 +265,11 @@ onUnmounted(() => {
 })
 
 watch(
-  () => [store.viewMode, store.nodes.length, store.edges.length],
+  () => [
+    store.viewMode,
+    store.visibleNodes.map(n => n.id).join('|'),
+    store.visibleEdges.map(e => e.id).join('|'),
+  ],
   () => {
     if (!store.loaded) return
     recomputeLayout()
