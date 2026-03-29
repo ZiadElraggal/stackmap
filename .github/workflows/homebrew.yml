@@ -1,0 +1,38 @@
+name: Homebrew
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Formula/**"
+      - "stackmap/**"
+      - "pyproject.toml"
+      - ".github/workflows/homebrew.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "Formula/**"
+      - "stackmap/**"
+      - "pyproject.toml"
+      - ".github/workflows/homebrew.yml"
+
+jobs:
+  brew-install-test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create temporary local tap
+        run: |
+          brew tap-new stackmap/local
+          TAP_DIR="$(brew --repository)/Library/Taps/stackmap/homebrew-local"
+          mkdir -p "${TAP_DIR}/Formula"
+          cp Formula/stackmap.rb "${TAP_DIR}/Formula/stackmap.rb"
+
+      - name: Install StackMap formula (HEAD)
+        run: brew install --HEAD stackmap/local/stackmap
+
+      - name: Smoke test
+        run: |
+          stackmap --help
+          stackmap version
