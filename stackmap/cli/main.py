@@ -45,10 +45,7 @@ def _detect_source_type(source_path: str) -> str:
     path = Path(source_path)
     if path.suffix == ".tfstate" or "terraform" in path.name.lower():
         return "terraform"
-    # Try reading the file to detect format
     try:
-        import json
-
         data = json.loads(path.read_text())
         if "terraform_version" in data:
             return "terraform"
@@ -173,15 +170,12 @@ def _watch_source_loop(
             if fallback_html:
                 from stackmap.export import export_ir_to_html
 
-                export_ir_to_html(
-                    ir,
-                    static_dir / "index.html",
-                )
+                export_ir_to_html(ir, static_dir / "index.html")
             console.print(
                 f"[green]✓[/green] Reloaded graph from {source_path.name} "
                 f"(v{version}, {len(ir.nodes)} resources)"
             )
-        except Exception as exc:  # pragma: no cover - runtime safety path
+        except Exception as exc:  # pragma: no cover
             console.print(f"[yellow]Watch parse error:[/yellow] {exc}")
 
 
@@ -235,7 +229,6 @@ def scan(
         console.print(f"[red]Error:[/red] Format '{format}' not supported. Use 'json' or 'html'.")
         raise typer.Exit(1)
 
-    # Summary table
     table = Table(title="StackMap Scan Results", show_header=False)
     table.add_column("Metric", style="bold")
     table.add_column("Value", style="cyan")
@@ -330,7 +323,7 @@ def serve(
         from fastapi import FastAPI
         from fastapi.responses import JSONResponse
         from fastapi.staticfiles import StaticFiles
-    except Exception as exc:  # pragma: no cover - environment dependency path
+    except Exception as exc:  # pragma: no cover
         console.print(
             "[red]Error:[/red] Missing serve dependencies. "
             "Install `fastapi` and `uvicorn`."

@@ -12,7 +12,7 @@
           :id="`arrow-${edgeType}`"
           :key="`marker-${edgeType}`"
           viewBox="0 0 6 5"
-          refX="5.6"
+          refX="8"
           refY="2.5"
           markerWidth="6"
           markerHeight="5"
@@ -25,6 +25,36 @@
       <rect width="100%" height="100%" fill="#0a0a0f" @click="store.selectNode(null)" />
 
       <g ref="zoomGroupRef">
+        <g>
+          <rect
+            v-for="band in tierBands"
+            :key="`tier-band-${band.name}`"
+            :x="graphBounds.minX - 260"
+            :y="band.yStart"
+            :width="graphBounds.width + 520"
+            :height="band.yEnd - band.yStart"
+            :fill="band.fill"
+            :fill-opacity="tierBandOpacity(band.name)"
+            :stroke="band.stroke"
+            :stroke-opacity="tierBorderOpacity(band.name)"
+            stroke-width="1.2"
+          />
+        </g>
+
+        <g>
+          <line
+            v-for="divider in tierDividers"
+            :key="`tier-divider-${divider.name}`"
+            :x1="graphBounds.minX - 250"
+            :x2="graphBounds.minX + graphBounds.width + 250"
+            :y1="divider.y"
+            :y2="divider.y"
+            :stroke="divider.stroke"
+            :stroke-opacity="tierDividerOpacity(divider.name)"
+            stroke-width="1"
+          />
+        </g>
+
         <rect
           :x="graphBounds.minX - 500"
           :y="graphBounds.minY - 500"
@@ -34,16 +64,63 @@
           @click="store.selectNode(null)"
         />
 
-        <g v-for="tier in tierLabels" :key="`tier-${tier.name}`" :transform="`translate(${tier.x}, ${tier.y}) rotate(-90)`">
+        <g v-for="band in tierBands" :key="`tier-${band.name}`">
+          <rect
+            :x="graphBounds.minX - 226"
+            :y="band.yStart + 12"
+            rx="8"
+            ry="8"
+            width="118"
+            height="24"
+            :fill="band.chipFill"
+            :fill-opacity="tierChipOpacity(band.name)"
+            :stroke="band.chipStroke"
+            :stroke-opacity="tierChipOpacity(band.name)"
+            stroke-width="1"
+          />
           <text
-            text-anchor="middle"
-            fill="rgba(255,255,255,0.08)"
+            :x="graphBounds.minX - 216"
+            :y="band.yStart + 28"
+            :fill="band.chipAccent"
             font-size="10"
+            text-anchor="start"
+            font-weight="700"
+            letter-spacing="1.5"
+            font-family="'JetBrains Mono', monospace"
+          >{{ band.icon }}</text>
+          <text
+            :x="graphBounds.minX - 200"
+            :y="band.yStart + 28"
+            fill="rgba(229,231,235,0.95)"
+            font-size="10"
+            text-anchor="start"
+            font-weight="600"
+            letter-spacing="1.3"
+            font-family="'JetBrains Mono', monospace"
+          >{{ band.name.toUpperCase() }}</text>
+          <text
+            :x="graphBounds.minX - 60"
+            :y="band.labelY"
+            fill="rgba(255,255,255,0.1)"
+            font-size="11"
+            font-weight="600"
             letter-spacing="3"
-            font-family="'JetBrains Mono', 'SF Mono', monospace"
-          >
-            {{ tier.name.toUpperCase() }}
-          </text>
+            text-anchor="end"
+            dominant-baseline="central"
+            font-family="'JetBrains Mono', monospace"
+          >{{ band.name.toUpperCase() }}</text>
+        </g>
+
+        <g v-for="(band, idx) in tierBands" :key="`flow-arrow-${band.name}`">
+          <text
+            v-if="idx < tierBands.length - 1"
+            :x="graphBounds.minX + graphBounds.width / 2"
+            :y="band.yEnd + 10"
+            fill="rgba(255,255,255,0.06)"
+            font-size="16"
+            text-anchor="middle"
+            dominant-baseline="central"
+          >↓</text>
         </g>
 
         <GroupBoundary
@@ -57,10 +134,10 @@
           v-for="(edge, idx) in store.visibleEdges"
           :key="edge.id"
           :edge="edge"
-          :x1="edgePos(edge.source).x"
-          :y1="edgePos(edge.source).y"
-          :x2="edgePos(edge.target).x"
-          :y2="edgePos(edge.target).y"
+          :x1="edgeSourcePos(edge).x"
+          :y1="edgeSourcePos(edge).y"
+          :x2="edgeTargetPos(edge).x"
+          :y2="edgeTargetPos(edge).y"
           :zoom-scale="zoomScale"
           :entry-delay="edgeEntryBaseDelay + idx * 4"
         />
@@ -132,24 +209,35 @@
       </div>
       <span>{{ store.visibleNodes.length }}/{{ store.nodes.length }} resources</span>
       <span>{{ store.visibleEdges.length }} connections</span>
-      <span class="text-gray-600">{{ store.viewMode === 'architecture' ? 'architecture view' : 'terraform raw view' }}</span>
+      <span class="text-gray-600">{{ store.viewMode === 'architecture' ? 'architecture view' : 'raw view' }}</span>
       <span v-if="store.groups.length > 0">{{ store.groups.length }} groups</span>
       <span v-if="store.metadata.terraform_version">Terraform v{{ store.metadata.terraform_version }}</span>
       <span>{{ Math.round(zoomScale * 100) }}%</span>
+      <div class="flex items-center gap-1 rounded border border-white/10 bg-white/[0.03] px-1.5 py-0.5">
+        <div
+          v-for="lane in architectureStrip"
+          :key="`strip-${lane.name}`"
+          class="flex items-center gap-1 rounded px-1 py-[1px]"
+          :style="{ backgroundColor: lane.bg }"
+        >
+          <span class="text-[8px] uppercase tracking-wide" :style="{ color: lane.accent }">{{ lane.short }}</span>
+          <span class="text-[9px] text-gray-300">{{ lane.count }}</span>
+        </div>
+      </div>
       <span class="ml-auto text-gray-600">scroll to zoom · drag to pan · ⌘K command palette</span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, reactive, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import * as d3 from 'd3'
-import { useGraphStore } from '~/stores/graph'
+import { useGraphStore, type StackMapEdge, type StackMapNode } from '~/stores/graph'
 import { useLayout } from '~/composables/useLayout'
-import { EDGE_COLORS } from '~/composables/useGraph'
+import { EDGE_COLORS, getNodeHeight } from '~/composables/useGraph'
 
 const store = useGraphStore()
-const { computeLayout, sortByTier, TIER_Y } = useLayout()
+const { computeLayout, sortByTier } = useLayout()
 
 const svgRef = ref<SVGSVGElement>()
 const zoomGroupRef = ref<SVGGElement>()
@@ -163,16 +251,10 @@ const zoomScale = ref(1)
 let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null
 let svgSelection: d3.Selection<SVGSVGElement, unknown, null, undefined> | null = null
 
-const orderedVisibleNodes = computed(() => {
-  const nodes = sortByTier(store.visibleNodes)
-  return nodes
-})
-
+const orderedVisibleNodes = computed(() => sortByTier(store.visibleNodes))
+const visibleNodeMap = computed(() => new Map(store.visibleNodes.map(n => [n.id, n])))
 const edgeEntryBaseDelay = computed(() => orderedVisibleNodes.value.length * 15 + 200)
-
-const edgeTypesInGraph = computed(() => {
-  return [...new Set(store.visibleEdges.map(edge => edge.edge_type))]
-})
+const edgeTypesInGraph = computed(() => [...new Set(store.visibleEdges.map(edge => edge.edge_type))])
 
 const graphBounds = computed(() => {
   const points = Object.values(store.positions)
@@ -191,22 +273,155 @@ const graphBounds = computed(() => {
   }
 })
 
-const tierLabels = computed(() => {
-  const minX = graphBounds.value.minX - 120
-  return [
-    { name: 'frontend', x: minX, y: TIER_Y.frontend },
-    { name: 'api', x: minX, y: TIER_Y.api },
-    { name: 'backend', x: minX, y: TIER_Y.backend },
-    { name: 'data', x: minX, y: TIER_Y.data },
-  ]
+const tierBands = computed(() => {
+  const tierNodes: Record<string, number[]> = {}
+  for (const node of store.visibleNodes) {
+    const tier = node.position_hint?.tier || 'backend'
+    const pos = store.positions[node.id]
+    if (!pos) continue
+    if (!tierNodes[tier]) tierNodes[tier] = []
+    tierNodes[tier].push(pos.y)
+  }
+
+  const bands: Array<{
+    name: string
+    yStart: number
+    yEnd: number
+    fill: string
+    stroke: string
+    chipFill: string
+    chipStroke: string
+    chipAccent: string
+    labelY: number
+    icon: string
+  }> = []
+  const tierOrder = ['frontend', 'api', 'backend', 'data']
+  const tierColors: Record<string, { fill: string; stroke: string; icon: string }> = {
+    frontend: { fill: 'rgba(34,211,238,0.09)', stroke: 'rgba(34,211,238,0.32)', icon: '◈' },
+    api: { fill: 'rgba(59,130,246,0.085)', stroke: 'rgba(59,130,246,0.3)', icon: '◎' },
+    backend: { fill: 'rgba(99,102,241,0.08)', stroke: 'rgba(129,140,248,0.28)', icon: '▣' },
+    data: { fill: 'rgba(16,185,129,0.09)', stroke: 'rgba(52,211,153,0.3)', icon: '◉' },
+  }
+
+  for (const tier of tierOrder) {
+    const ys = tierNodes[tier]
+    if (!ys || ys.length === 0) continue
+    const minY = Math.min(...ys)
+    const maxY = Math.max(...ys)
+    const padding = 80
+    const c = tierColors[tier] || { fill: 'rgba(255,255,255,0.05)', stroke: 'rgba(255,255,255,0.2)', icon: '•' }
+    bands.push({
+      name: tier,
+      yStart: minY - padding,
+      yEnd: maxY + padding,
+      fill: c.fill,
+      stroke: c.stroke,
+      chipFill: c.fill,
+      chipStroke: c.stroke,
+      chipAccent: c.stroke,
+      labelY: (minY + maxY) / 2,
+      icon: c.icon,
+    })
+  }
+
+  return bands
 })
+
+const tierDividers = computed(() => {
+  const dividers: Array<{ name: string; y: number; stroke: string }> = []
+  for (let i = 0; i < tierBands.value.length - 1; i++) {
+    const current = tierBands.value[i]
+    const next = tierBands.value[i + 1]
+    dividers.push({
+      name: `${current.name}-${next.name}`,
+      y: (current.yEnd + next.yStart) / 2,
+      stroke: 'rgba(255,255,255,0.18)',
+    })
+  }
+  return dividers
+})
+
+const hoveredTier = computed(() => {
+  if (!store.hoveredNodeId) return null
+  const node = store.graphNodes.find(n => n.id === store.hoveredNodeId) || store.nodes.find(n => n.id === store.hoveredNodeId)
+  return node?.position_hint?.tier || null
+})
+
+const architectureStrip = computed(() => {
+  const order = ['frontend', 'api', 'backend', 'data']
+  const names: Record<string, string> = { frontend: 'FE', api: 'API', backend: 'BE', data: 'DATA' }
+  const accents: Record<string, string> = {
+    frontend: '#67e8f9',
+    api: '#60a5fa',
+    backend: '#818cf8',
+    data: '#34d399',
+  }
+  const backgrounds: Record<string, string> = {
+    frontend: 'rgba(34,211,238,0.16)',
+    api: 'rgba(59,130,246,0.16)',
+    backend: 'rgba(99,102,241,0.16)',
+    data: 'rgba(16,185,129,0.16)',
+  }
+  const counts: Record<string, number> = { frontend: 0, api: 0, backend: 0, data: 0 }
+  for (const node of store.visibleNodes) {
+    const tier = node.position_hint?.tier || 'backend'
+    if (tier in counts) counts[tier] += 1
+  }
+  return order.map(name => ({
+    name,
+    short: names[name],
+    count: counts[name] || 0,
+    accent: accents[name],
+    bg: backgrounds[name],
+  }))
+})
+
+function tierBandOpacity(bandName: string): number {
+  if (!hoveredTier.value) return 0.65
+  return hoveredTier.value === bandName ? 0.95 : 0.28
+}
+
+function tierBorderOpacity(bandName: string): number {
+  if (!hoveredTier.value) return 0.45
+  return hoveredTier.value === bandName ? 0.9 : 0.2
+}
+
+function tierDividerOpacity(dividerName: string): number {
+  if (!hoveredTier.value) return 0.22
+  return dividerName.includes(hoveredTier.value) ? 0.45 : 0.15
+}
+
+function tierChipOpacity(bandName: string): number {
+  if (!hoveredTier.value) return 0.9
+  return hoveredTier.value === bandName ? 1 : 0.45
+}
 
 function edgeColor(edgeType: string): string {
   return EDGE_COLORS[edgeType] || '#64748b'
 }
 
-function edgePos(nodeId: string) {
-  return store.positions[nodeId] ?? { x: 0, y: 0 }
+function edgeSourcePos(edge: StackMapEdge) {
+  const pos = store.positions[edge.source]
+  if (!pos) return { x: 0, y: 0 }
+  const node = visibleNodeMap.value.get(edge.source)
+  if (!node) return pos
+  const h = getNodeHeight(node)
+  const targetPos = store.positions[edge.target]
+  if (!targetPos) return pos
+  const dy = targetPos.y - pos.y
+  return { x: pos.x, y: pos.y + (dy > 0 ? h / 2 : -h / 2) }
+}
+
+function edgeTargetPos(edge: StackMapEdge) {
+  const pos = store.positions[edge.target]
+  if (!pos) return { x: 0, y: 0 }
+  const node = visibleNodeMap.value.get(edge.target)
+  if (!node) return pos
+  const h = getNodeHeight(node)
+  const sourcePos = store.positions[edge.source]
+  if (!sourcePos) return pos
+  const dy = sourcePos.y - pos.y
+  return { x: pos.x, y: pos.y + (dy > 0 ? h / 2 : -h / 2) }
 }
 
 onMounted(async () => {
@@ -239,7 +454,11 @@ onUnmounted(() => {
 })
 
 watch(
-  () => [store.viewMode, store.nodes.length, store.edges.length],
+  () => [
+    store.viewMode,
+    store.visibleNodes.map(n => n.id).join('|'),
+    store.visibleEdges.map(e => e.id).join('|'),
+  ],
   () => {
     if (!store.loaded) return
     recomputeLayout()
@@ -291,25 +510,31 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
+const SIDEBAR_WIDTH = 256
+const DETAIL_PANEL_WIDTH = 0 // Detail panel overlaps, accounted only when open
+
 function fitToViewport() {
   if (!svgSelection || !zoomBehavior) return
 
   const positions = Object.values(store.positions)
   if (!positions.length) return
 
-  const padding = 140
+  const padding = 120
   const minX = Math.min(...positions.map(p => p.x)) - padding
   const maxX = Math.max(...positions.map(p => p.x)) + padding
   const minY = Math.min(...positions.map(p => p.y)) - padding
   const maxY = Math.max(...positions.map(p => p.y)) + padding
 
-  const width = svgRef.value?.clientWidth || 1000
-  const height = svgRef.value?.clientHeight || 800
+  const totalWidth = svgRef.value?.clientWidth || 1000
+  const height = (svgRef.value?.clientHeight || 800) - 40 // subtract status bar
+  // Account for sidebar taking space on the left
+  const availableWidth = totalWidth - SIDEBAR_WIDTH
+  const offsetX = SIDEBAR_WIDTH
 
   const graphWidth = Math.max(1, maxX - minX)
   const graphHeight = Math.max(1, maxY - minY)
-  const scale = Math.min(width / graphWidth, height / graphHeight, 1.45)
-  const tx = width / 2 - (minX + graphWidth / 2) * scale
+  const scale = Math.min(availableWidth / graphWidth, height / graphHeight, 1.45)
+  const tx = offsetX + availableWidth / 2 - (minX + graphWidth / 2) * scale
   const ty = height / 2 - (minY + graphHeight / 2) * scale
 
   svgSelection.transition().duration(500).call(zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(scale))

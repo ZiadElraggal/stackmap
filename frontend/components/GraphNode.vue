@@ -1,7 +1,7 @@
 <template>
   <g
     :transform="`translate(${x}, ${y})`"
-    :class="['graph-node', { dimmed: isDimmed, selected: isSelected, entering: !entered }]"
+    :class="['graph-node', prominence, { dimmed: isDimmed, selected: isSelected, entering: !entered }]"
     :style="{
       '--node-color': categoryColor,
       '--entry-delay': `${entryDelay}ms`,
@@ -27,8 +27,8 @@
     <rect
       :width="nodeWidth - 8"
       :height="nodeHeight - 8"
-      :x="-(nodeWidth - 8) / 2 + 4"
-      :y="-(nodeHeight - 8) / 2 + 4"
+      :x="-(nodeWidth - 8) / 2"
+      :y="-(nodeHeight - 8) / 2"
       :rx="10"
       :ry="10"
       fill="#13131f"
@@ -36,7 +36,7 @@
     />
 
     <rect
-      :width="3"
+      :width="accentBarWidth"
       :height="nodeHeight - 10"
       :x="-nodeWidth / 2 + 5"
       :y="-nodeHeight / 2 + 5"
@@ -62,10 +62,10 @@
     />
 
     <svg
-      :x="-nodeWidth / 2 + 13"
-      :y="-9"
-      width="18"
-      height="18"
+      :x="-nodeWidth / 2 + 10"
+      :y="-iconSize / 2"
+      :width="iconSize"
+      :height="iconSize"
       viewBox="0 0 24 24"
       :style="{ color: categoryColor }"
       class="icon"
@@ -74,10 +74,10 @@
     </svg>
 
     <text
-      :x="-nodeWidth / 2 + 40"
-      y="-4"
+      :x="-nodeWidth / 2 + 16 + iconSize"
+      :y="typeFontSize > 0 ? -7 : 0"
       fill="#e5e7eb"
-      font-size="12"
+      :font-size="nameFontSize"
       font-weight="500"
       font-family="'JetBrains Mono', 'SF Mono', monospace"
       dominant-baseline="central"
@@ -85,10 +85,11 @@
     >{{ displayName }}</text>
 
     <text
-      :x="-nodeWidth / 2 + 40"
-      y="13"
+      v-if="typeFontSize > 0"
+      :x="-nodeWidth / 2 + 16 + iconSize"
+      y="11"
       fill="#6b7280"
-      font-size="10"
+      :font-size="typeFontSize"
       font-weight="400"
       font-family="'JetBrains Mono', 'SF Mono', monospace"
       dominant-baseline="central"
@@ -101,7 +102,15 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useGraphStore, type StackMapNode } from '~/stores/graph'
-import { CATEGORY_COLORS, CATEGORY_ICONS, formatResourceType, truncate } from '~/composables/useGraph'
+import {
+  CATEGORY_COLORS,
+  CATEGORY_ICONS,
+  formatResourceType,
+  getNodeHeight,
+  getNodeProminence,
+  getNodeWidth,
+  truncate,
+} from '~/composables/useGraph'
 
 const props = withDefaults(
   defineProps<{
@@ -120,11 +129,36 @@ const entered = ref(false)
 
 const categoryColor = computed(() => CATEGORY_COLORS[props.node.category] || '#9ca3af')
 const iconPath = computed(() => CATEGORY_ICONS[props.node.category] || CATEGORY_ICONS.other)
-const displayName = computed(() => truncate(props.node.name, 24))
+const displayName = computed(() => truncate(props.node.name, 28))
 const shortType = computed(() => formatResourceType(props.node.resource_type))
 
-const nodeWidth = computed(() => Math.max(180, Math.min(260, props.node.name.length * 8 + 70)))
-const nodeHeight = computed(() => 52)
+const prominence = computed(() => getNodeProminence(props.node))
+const nodeWidth = computed(() => getNodeWidth(props.node))
+const nodeHeight = computed(() => getNodeHeight(props.node))
+
+const nameFontSize = computed(() => {
+  if (prominence.value === 'primary') return 13
+  if (prominence.value === 'secondary') return 11
+  return 9.5
+})
+
+const typeFontSize = computed(() => {
+  if (prominence.value === 'primary') return 10
+  if (prominence.value === 'secondary') return 8.5
+  return 0
+})
+
+const iconSize = computed(() => {
+  if (prominence.value === 'primary') return 20
+  if (prominence.value === 'secondary') return 16
+  return 13
+})
+
+const accentBarWidth = computed(() => {
+  if (prominence.value === 'primary') return 4
+  if (prominence.value === 'secondary') return 3
+  return 2
+})
 
 const isSelected = computed(() => store.selectedNodeId === props.node.id)
 const isDimmed = computed(() => {
@@ -181,13 +215,19 @@ onMounted(() => {
 }
 
 .graph-node:hover .outer-shell {
-  stroke: color-mix(in srgb, var(--node-color) 30%, transparent);
-  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--node-color) 20%, transparent));
+  stroke: color-mix(in srgb, var(--node-color) 40%, transparent);
+  stroke-width: 2;
+  filter: drop-shadow(0 0 16px color-mix(in srgb, var(--node-color) 25%, transparent));
+}
+
+.graph-node:hover .accent-bar {
+  filter: drop-shadow(0 0 6px var(--node-color));
 }
 
 .graph-node.selected .outer-shell {
   stroke: color-mix(in srgb, var(--node-color) 80%, transparent);
   stroke-width: 2;
+  filter: drop-shadow(0 0 20px color-mix(in srgb, var(--node-color) 30%, transparent));
 }
 
 .graph-node .node-name,
