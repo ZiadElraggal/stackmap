@@ -1,0 +1,76 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Transform": "AWS::Serverless-2016-10-31",
+  "Description": "Simple SAM app for StackMap tests (JSON)",
+  "Resources": {
+    "AppApi": {
+      "Type": "AWS::Serverless::Api",
+      "Properties": {
+        "Name": "test-api",
+        "StageName": "prod"
+      }
+    },
+    "AppRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "test-sam-role",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        }
+      }
+    },
+    "AppFn": {
+      "Type": "AWS::Serverless::Function",
+      "Properties": {
+        "FunctionName": "test-sam-function",
+        "Runtime": "python3.12",
+        "Handler": "app.handler",
+        "Role": {
+          "Fn::GetAtt": "AppRole.Arn"
+        },
+        "CodeUri": "src/",
+        "Events": {
+          "GetRoot": {
+            "Type": "Api",
+            "Properties": {
+              "RestApiId": {
+                "Ref": "AppApi"
+              },
+              "Path": "/",
+              "Method": "get"
+            }
+          }
+        }
+      }
+    },
+    "JobsStateMachine": {
+      "Type": "AWS::Serverless::StateMachine",
+      "Properties": {
+        "Name": "test-sam-sfn",
+        "Definition": {
+          "Comment": "Simple state machine",
+          "StartAt": "InvokeFn",
+          "States": {
+            "InvokeFn": {
+              "Type": "Task",
+              "Resource": {
+                "Fn::GetAtt": "AppFn.Arn"
+              },
+              "End": true
+            }
+          }
+        }
+      }
+    }
+  }
+}
+

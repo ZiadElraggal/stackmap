@@ -51,14 +51,19 @@ def _detect_source_type(source_path: str) -> str:
         try:
             raw = path.read_text()
             if path.suffix.lower() in {".yaml", ".yml"}:
-                # YAML is CloudFormation/SAM in our current support scope.
+                if "AWS::Serverless-2016-10-31" in raw:
+                    return "sam"
                 return "cloudformation"
             data = json.loads(raw)
             if isinstance(data, dict) and (
                 "AWSTemplateFormatVersion" in data
                 or "Resources" in data
-                or data.get("Transform") == "AWS::Serverless-2016-10-31"
             ):
+                transform = data.get("Transform")
+                if transform == "AWS::Serverless-2016-10-31" or (
+                    isinstance(transform, list) and "AWS::Serverless-2016-10-31" in transform
+                ):
+                    return "sam"
                 return "cloudformation"
         except Exception:
             pass
@@ -70,7 +75,8 @@ def _detect_source_type(source_path: str) -> str:
         pass
     raise typer.BadParameter(
         f"Cannot auto-detect source type for {source_path}. "
-        "Supported formats: Terraform state (.tfstate), CloudFormation template (.json/.yaml/.yml)"
+        "Supported formats: Terraform state (.tfstate), CloudFormation template (.json/.yaml/.yml), "
+        "SAM template (.json/.yaml/.yml with AWS::Serverless transform)"
     )
 
 
@@ -83,6 +89,10 @@ def _build_parser(source_type: str) -> BaseParser:
         from stackmap.parsers.cloudformation import CloudFormationParser
 
         return CloudFormationParser()
+    if source_type == "sam":
+        from stackmap.parsers.sam import SamParser
+
+        return SamParser()
     raise typer.BadParameter(f"Unsupported source type: {source_type}")
 
 
