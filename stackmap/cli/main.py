@@ -5,8 +5,11 @@ import tempfile
 import threading
 import time
 import webbrowser
+from functools import partial
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import typer
 from rich.console import Console
@@ -236,6 +239,51 @@ def _watch_source_loop(
             )
         except Exception as exc:  # pragma: no cover
             console.print(f"[yellow]Watch parse error:[/yellow] {exc}")
+
+
+class _StackMapRequestHandler(SimpleHTTPRequestHandler):
+    def __init__(
+        self,
+        *args: Any,
+        directory: str,
+        state: _LiveGraphState,
+        source_type: str,
+        **kwargs: Any,
+    ) -> None:
+        self._state = state
+        self._source_type = source_type
+        super().__init__(*args, directory=directory, **kwargs)
+
+    def _send_json(self, payload: dict[str, Any]) -> None:
+        body = json.dumps(payload).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self) -> None:  # noqa: N802
+        path = urlparse(self.path).path
+        if path == "/api/graph":
+            _, ir_data = self._state.snapshot()
+            self._send_json(ir_data)
+            return
+        if path == "/api/version":
+            version, _ = self._state.snapshot()
+            self._send_json({"version": version})
+            return
+        if path == "/api/health":
+            self._send_json({"status": "ok", "source_type": self._source_type})
+            return
+
+        if path not in {"/", ""}:
+            requested = Path(self.directory) / path.lstrip("/")
+            if not requested.exists():
+                self.path = "/index.html"
+        super().do_GET()
+
+    def log_message(self, format: str, *args: Any) -> None:  # noqa: A003
+        return
 
 
 @app.command()
@@ -500,35 +548,17 @@ def serve(
     _, snapshot = state.snapshot()
     _write_graph_json(public_dir / "sample-data.json", snapshot)
 
+    handler_cls = partial(
+        _StackMapRequestHandler,
+        directory=str(public_dir),
+        state=state,
+        source_type=source_type,
+    )
     try:
-        import uvicorn
-        from fastapi import FastAPI
-        from fastapi.responses import JSONResponse
-        from fastapi.staticfiles import StaticFiles
-    except Exception as exc:  # pragma: no cover
-        console.print(
-            "[red]Error:[/red] Missing serve dependencies. "
-            "Install `fastapi` and `uvicorn`."
-        )
+        server = ThreadingHTTPServer((host, port), handler_cls)
+    except OSError as exc:
+        console.print(f"[red]Error:[/red] Could not start server on {host}:{port}: {exc}")
         raise typer.Exit(1) from exc
-
-    app_server = FastAPI(title="stackmap-local")
-
-    @app_server.get("/api/graph")
-    def api_graph() -> JSONResponse:
-        _, ir_data = state.snapshot()
-        return JSONResponse(ir_data)
-
-    @app_server.get("/api/version")
-    def api_version() -> dict[str, int]:
-        version, _ = state.snapshot()
-        return {"version": version}
-
-    @app_server.get("/api/health")
-    def api_health() -> dict[str, str]:
-        return {"status": "ok", "source_type": source_type}
-
-    app_server.mount("/", StaticFiles(directory=str(public_dir), html=True), name="static")
 
     stop_event = threading.Event()
     watcher: threading.Thread | None = None
@@ -563,9 +593,12 @@ def serve(
         threading.Timer(0.7, lambda: webbrowser.open(url)).start()
 
     try:
-        uvicorn.run(app_server, host=host, port=port, log_level="warning")
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
     finally:
         stop_event.set()
+        server.server_close()
         if watcher is not None and watcher.is_alive():
             watcher.join(timeout=1.0)
         if temp_dir and temp_dir.exists():
