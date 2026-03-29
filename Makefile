@@ -20,7 +20,8 @@ sync-webapp-assets:
 	python3 -m stackmap.webapp.build_assets --clean
 
 package-build: frontend-build sync-webapp-assets
-	python3 -m build
+	python3 -m pip install --upgrade build setuptools wheel
+	python3 -m build --no-isolation
 
 # Convenience aliases for packaging
 package: package-build
