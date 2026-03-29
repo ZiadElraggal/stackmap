@@ -119,3 +119,14 @@ Resources:
     ir = CloudFormationParser().parse(str(yml_path))
     assert len(ir.nodes) == 1
     assert ir.nodes[0].resource_type == "AWS::S3::Bucket"
+
+
+def test_real_world_yaml_fixture_has_helper_reduction_signal() -> None:
+    if cfn.yaml is None:
+        return
+
+    ir = CloudFormationParser().parse(str(FIXTURES / "cf.yaml"))
+    helper_nodes = [n for n in ir.nodes if n.position_hint.get("is_helper")]
+    assert len(ir.nodes) >= 20
+    assert len(helper_nodes) >= 8
+    assert any(n.resource_type == "AWS::S3::BucketPolicy" for n in helper_nodes)
