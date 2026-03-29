@@ -31,6 +31,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--dest",
+        "--target",
         type=Path,
         default=Path("stackmap/webapp/static"),
         help="Destination package asset directory (default: stackmap/webapp/static)",
