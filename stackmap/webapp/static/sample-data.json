@@ -1,0 +1,1188 @@
+{
+  "metadata": {
+    "source_type": "terraform",
+    "terraform_version": "1.7.2",
+    "total_resources": 28
+  },
+  "nodes": [
+    {
+      "id": "aws_api_gateway_rest_api.main",
+      "name": "stackmap-demo-api",
+      "resource_type": "aws_api_gateway_rest_api",
+      "provider": "aws",
+      "category": "integration",
+      "properties": {
+        "id": "abc123def4",
+        "name": "stackmap-demo-api",
+        "description": "REST API for stackmap demo event-driven pipeline",
+        "arn": "arn:aws:apigateway:us-east-1::/restapis/abc123def4",
+        "root_resource_id": "r0root1abc",
+        "execution_arn": "arn:aws:execute-api:us-east-1:123456789012:abc123def4",
+        "endpoint_configuration": [
+          {
+            "types": [
+              "REGIONAL"
+            ],
+            "vpc_endpoint_ids": []
+          }
+        ],
+        "tags": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        },
+        "tags_all": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        }
+      },
+      "tags": {
+        "Environment": "production",
+        "Project": "stackmap-demo"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 5
+      }
+    },
+    {
+      "id": "aws_api_gateway_deployment.main",
+      "name": "deploy-abc123",
+      "resource_type": "aws_api_gateway_deployment",
+      "provider": "aws",
+      "category": "integration",
+      "properties": {
+        "id": "deploy-abc123",
+        "rest_api_id": "abc123def4",
+        "invoke_url": "https://abc123def4.execute-api.us-east-1.amazonaws.com/",
+        "execution_arn": "arn:aws:execute-api:us-east-1:123456789012:abc123def4/",
+        "created_date": "2024-11-15T10:30:00Z"
+      },
+      "tags": {},
+      "position_hint": {
+        "tier": "api",
+        "weight": 2
+      }
+    },
+    {
+      "id": "aws_api_gateway_stage.prod",
+      "name": "ags-abc123-prod",
+      "resource_type": "aws_api_gateway_stage",
+      "provider": "aws",
+      "category": "integration",
+      "properties": {
+        "id": "ags-abc123-prod",
+        "arn": "arn:aws:apigateway:us-east-1::/restapis/abc123def4/stages/prod",
+        "rest_api_id": "abc123def4",
+        "deployment_id": "deploy-abc123",
+        "stage_name": "prod",
+        "invoke_url": "https://abc123def4.execute-api.us-east-1.amazonaws.com/prod",
+        "execution_arn": "arn:aws:execute-api:us-east-1:123456789012:abc123def4/prod",
+        "tags": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        },
+        "tags_all": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        }
+      },
+      "tags": {
+        "Environment": "production",
+        "Project": "stackmap-demo"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2
+      }
+    },
+    {
+      "id": "aws_lambda_function.ingest_handler",
+      "name": "ingest-handler",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "ingest-handler",
+        "function_name": "ingest-handler",
+        "arn": "arn:aws:lambda:us-east-1:123456789012:function:ingest-handler",
+        "invoke_arn": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:123456789012:function:ingest-handler/invocations",
+        "qualified_arn": "arn:aws:lambda:us-east-1:123456789012:function:ingest-handler:$LATEST",
+        "handler": "index.handler",
+        "runtime": "nodejs18.x",
+        "role": "arn:aws:iam::123456789012:role/ingest-handler-role",
+        "memory_size": 256,
+        "timeout": 30,
+        "source_code_hash": "dGhpcyBpcyBhIHRlc3QgaGFzaA==",
+        "source_code_size": 4520,
+        "last_modified": "2024-11-15T10:25:00.000+0000",
+        "environment": [
+          {
+            "variables": {
+              "SQS_QUEUE_URL": "https://sqs.us-east-1.amazonaws.com/123456789012/processing-queue",
+              "DYNAMODB_TABLE": "events-table",
+              "ENVIRONMENT": "production"
+            }
+          }
+        ],
+        "tracing_config": [
+          {
+            "mode": "Active"
+          }
+        ],
+        "tags": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        },
+        "tags_all": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        }
+      },
+      "tags": {
+        "Environment": "production",
+        "Project": "stackmap-demo"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5
+      }
+    },
+    {
+      "id": "aws_lambda_function.process_worker",
+      "name": "process-worker",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "process-worker",
+        "function_name": "process-worker",
+        "arn": "arn:aws:lambda:us-east-1:123456789012:function:process-worker",
+        "invoke_arn": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:123456789012:function:process-worker/invocations",
+        "qualified_arn": "arn:aws:lambda:us-east-1:123456789012:function:process-worker:$LATEST",
+        "handler": "index.handler",
+        "runtime": "python3.11",
+        "role": "arn:aws:iam::123456789012:role/process-worker-role",
+        "memory_size": 512,
+        "timeout": 120,
+        "source_code_hash": "cHJvY2Vzcy13b3JrZXItaGFzaA==",
+        "source_code_size": 8192,
+        "last_modified": "2024-11-15T10:26:00.000+0000",
+        "environment": [
+          {
+            "variables": {
+              "S3_BUCKET": "stackmap-demo-data",
+              "SQS_QUEUE_URL": "https://sqs.us-east-1.amazonaws.com/123456789012/processing-queue",
+              "SNS_TOPIC_ARN": "arn:aws:sns:us-east-1:123456789012:alerts-topic",
+              "ENVIRONMENT": "production"
+            }
+          }
+        ],
+        "tracing_config": [
+          {
+            "mode": "Active"
+          }
+        ],
+        "tags": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        },
+        "tags_all": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        }
+      },
+      "tags": {
+        "Environment": "production",
+        "Project": "stackmap-demo"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5
+      }
+    },
+    {
+      "id": "aws_lambda_function.store_writer",
+      "name": "store-writer",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "store-writer",
+        "function_name": "store-writer",
+        "arn": "arn:aws:lambda:us-east-1:123456789012:function:store-writer",
+        "invoke_arn": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:123456789012:function:store-writer/invocations",
+        "qualified_arn": "arn:aws:lambda:us-east-1:123456789012:function:store-writer:$LATEST",
+        "handler": "index.handler",
+        "runtime": "python3.11",
+        "role": "arn:aws:iam::123456789012:role/store-writer-role",
+        "memory_size": 256,
+        "timeout": 60,
+        "source_code_hash": "c3RvcmUtd3JpdGVyLWhhc2g=",
+        "source_code_size": 5120,
+        "last_modified": "2024-11-15T10:27:00.000+0000",
+        "environment": [
+          {
+            "variables": {
+              "DYNAMODB_TABLE": "events-table",
+              "S3_BUCKET": "stackmap-demo-data",
+              "ENVIRONMENT": "production"
+            }
+          }
+        ],
+        "tracing_config": [
+          {
+            "mode": "Active"
+          }
+        ],
+        "tags": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        },
+        "tags_all": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        }
+      },
+      "tags": {
+        "Environment": "production",
+        "Project": "stackmap-demo"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5
+      }
+    },
+    {
+      "id": "aws_iam_role.ingest_handler",
+      "name": "ingest-handler-role",
+      "resource_type": "aws_iam_role",
+      "provider": "aws",
+      "category": "security",
+      "properties": {
+        "id": "ingest-handler-role",
+        "name": "ingest-handler-role",
+        "arn": "arn:aws:iam::123456789012:role/ingest-handler-role",
+        "assume_role_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}",
+        "create_date": "2024-11-15T10:20:00Z",
+        "unique_id": "AROA1234567890INGEST",
+        "path": "/",
+        "max_session_duration": 3600,
+        "tags": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        },
+        "tags_all": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        }
+      },
+      "tags": {
+        "Environment": "production",
+        "Project": "stackmap-demo"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 2
+      }
+    },
+    {
+      "id": "aws_iam_role.process_worker",
+      "name": "process-worker-role",
+      "resource_type": "aws_iam_role",
+      "provider": "aws",
+      "category": "security",
+      "properties": {
+        "id": "process-worker-role",
+        "name": "process-worker-role",
+        "arn": "arn:aws:iam::123456789012:role/process-worker-role",
+        "assume_role_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}",
+        "create_date": "2024-11-15T10:20:01Z",
+        "unique_id": "AROA1234567890PROCESS",
+        "path": "/",
+        "max_session_duration": 3600,
+        "tags": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        },
+        "tags_all": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        }
+      },
+      "tags": {
+        "Environment": "production",
+        "Project": "stackmap-demo"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 2
+      }
+    },
+    {
+      "id": "aws_iam_role.store_writer",
+      "name": "store-writer-role",
+      "resource_type": "aws_iam_role",
+      "provider": "aws",
+      "category": "security",
+      "properties": {
+        "id": "store-writer-role",
+        "name": "store-writer-role",
+        "arn": "arn:aws:iam::123456789012:role/store-writer-role",
+        "assume_role_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}",
+        "create_date": "2024-11-15T10:20:02Z",
+        "unique_id": "AROA1234567890STORE",
+        "path": "/",
+        "max_session_duration": 3600,
+        "tags": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        },
+        "tags_all": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        }
+      },
+      "tags": {
+        "Environment": "production",
+        "Project": "stackmap-demo"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 2
+      }
+    },
+    {
+      "id": "aws_iam_role.step_functions",
+      "name": "data-pipeline-sfn-role",
+      "resource_type": "aws_iam_role",
+      "provider": "aws",
+      "category": "security",
+      "properties": {
+        "id": "data-pipeline-sfn-role",
+        "name": "data-pipeline-sfn-role",
+        "arn": "arn:aws:iam::123456789012:role/data-pipeline-sfn-role",
+        "assume_role_policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"states.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}",
+        "create_date": "2024-11-15T10:20:03Z",
+        "unique_id": "AROA1234567890STEPFN",
+        "path": "/",
+        "max_session_duration": 3600,
+        "tags": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        },
+        "tags_all": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        }
+      },
+      "tags": {
+        "Environment": "production",
+        "Project": "stackmap-demo"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 2
+      }
+    },
+    {
+      "id": "aws_iam_role_policy.ingest_handler",
+      "name": "ingest-handler-policy",
+      "resource_type": "aws_iam_role_policy",
+      "provider": "aws",
+      "category": "security",
+      "properties": {
+        "id": "ingest-handler-role:ingest-handler-policy",
+        "name": "ingest-handler-policy",
+        "role": "ingest-handler-role",
+        "policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"dynamodb:PutItem\",\"dynamodb:GetItem\",\"dynamodb:Query\"],\"Resource\":\"arn:aws:dynamodb:us-east-1:123456789012:table/events-table\"},{\"Effect\":\"Allow\",\"Action\":[\"sqs:SendMessage\",\"sqs:GetQueueAttributes\"],\"Resource\":\"arn:aws:sqs:us-east-1:123456789012:processing-queue\"},{\"Effect\":\"Allow\",\"Action\":[\"logs:CreateLogGroup\",\"logs:CreateLogStream\",\"logs:PutLogEvents\"],\"Resource\":\"arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/ingest-handler:*\"}]}"
+      },
+      "tags": {},
+      "position_hint": {
+        "tier": "backend",
+        "weight": 1
+      }
+    },
+    {
+      "id": "aws_iam_role_policy.process_worker",
+      "name": "process-worker-policy",
+      "resource_type": "aws_iam_role_policy",
+      "provider": "aws",
+      "category": "security",
+      "properties": {
+        "id": "process-worker-role:process-worker-policy",
+        "name": "process-worker-policy",
+        "role": "process-worker-role",
+        "policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"s3:GetObject\",\"s3:PutObject\",\"s3:ListBucket\"],\"Resource\":[\"arn:aws:s3:::stackmap-demo-data\",\"arn:aws:s3:::stackmap-demo-data/*\"]},{\"Effect\":\"Allow\",\"Action\":[\"sqs:ReceiveMessage\",\"sqs:DeleteMessage\",\"sqs:GetQueueAttributes\"],\"Resource\":\"arn:aws:sqs:us-east-1:123456789012:processing-queue\"},{\"Effect\":\"Allow\",\"Action\":[\"sns:Publish\"],\"Resource\":\"arn:aws:sns:us-east-1:123456789012:alerts-topic\"},{\"Effect\":\"Allow\",\"Action\":[\"logs:CreateLogGroup\",\"logs:CreateLogStream\",\"logs:PutLogEvents\"],\"Resource\":\"arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/process-worker:*\"}]}"
+      },
+      "tags": {},
+      "position_hint": {
+        "tier": "backend",
+        "weight": 1
+      }
+    },
+    {
+      "id": "aws_iam_role_policy.store_writer",
+      "name": "store-writer-policy",
+      "resource_type": "aws_iam_role_policy",
+      "provider": "aws",
+      "category": "security",
+      "properties": {
+        "id": "store-writer-role:store-writer-policy",
+        "name": "store-writer-policy",
+        "role": "store-writer-role",
+        "policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"dynamodb:PutItem\",\"dynamodb:UpdateItem\",\"dynamodb:BatchWriteItem\"],\"Resource\":\"arn:aws:dynamodb:us-east-1:123456789012:table/events-table\"},{\"Effect\":\"Allow\",\"Action\":[\"s3:PutObject\",\"s3:GetObject\"],\"Resource\":[\"arn:aws:s3:::stackmap-demo-data\",\"arn:aws:s3:::stackmap-demo-data/*\"]},{\"Effect\":\"Allow\",\"Action\":[\"logs:CreateLogGroup\",\"logs:CreateLogStream\",\"logs:PutLogEvents\"],\"Resource\":\"arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/store-writer:*\"}]}"
+      },
+      "tags": {},
+      "position_hint": {
+        "tier": "backend",
+        "weight": 1
+      }
+    },
+    {
+      "id": "aws_iam_role_policy.step_functions",
+      "name": "step-functions-invoke-policy",
+      "resource_type": "aws_iam_role_policy",
+      "provider": "aws",
+      "category": "security",
+      "properties": {
+        "id": "data-pipeline-sfn-role:step-functions-invoke-policy",
+        "name": "step-functions-invoke-policy",
+        "role": "data-pipeline-sfn-role",
+        "policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"lambda:InvokeFunction\"],\"Resource\":[\"arn:aws:lambda:us-east-1:123456789012:function:ingest-handler\",\"arn:aws:lambda:us-east-1:123456789012:function:process-worker\",\"arn:aws:lambda:us-east-1:123456789012:function:store-writer\"]}]}"
+      },
+      "tags": {},
+      "position_hint": {
+        "tier": "backend",
+        "weight": 1
+      }
+    },
+    {
+      "id": "aws_cloudwatch_log_group.ingest_handler",
+      "name": "/aws/lambda/ingest-handler",
+      "resource_type": "aws_cloudwatch_log_group",
+      "provider": "aws",
+      "category": "monitoring",
+      "properties": {
+        "id": "/aws/lambda/ingest-handler",
+        "name": "/aws/lambda/ingest-handler",
+        "arn": "arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/ingest-handler:*",
+        "retention_in_days": 14,
+        "tags": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        },
+        "tags_all": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        }
+      },
+      "tags": {
+        "Environment": "production",
+        "Project": "stackmap-demo"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 1
+      }
+    },
+    {
+      "id": "aws_cloudwatch_log_group.process_worker",
+      "name": "/aws/lambda/process-worker",
+      "resource_type": "aws_cloudwatch_log_group",
+      "provider": "aws",
+      "category": "monitoring",
+      "properties": {
+        "id": "/aws/lambda/process-worker",
+        "name": "/aws/lambda/process-worker",
+        "arn": "arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/process-worker:*",
+        "retention_in_days": 14,
+        "tags": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        },
+        "tags_all": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        }
+      },
+      "tags": {
+        "Environment": "production",
+        "Project": "stackmap-demo"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 1
+      }
+    },
+    {
+      "id": "aws_cloudwatch_log_group.store_writer",
+      "name": "/aws/lambda/store-writer",
+      "resource_type": "aws_cloudwatch_log_group",
+      "provider": "aws",
+      "category": "monitoring",
+      "properties": {
+        "id": "/aws/lambda/store-writer",
+        "name": "/aws/lambda/store-writer",
+        "arn": "arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/store-writer:*",
+        "retention_in_days": 14,
+        "tags": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        },
+        "tags_all": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        }
+      },
+      "tags": {
+        "Environment": "production",
+        "Project": "stackmap-demo"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 1
+      }
+    },
+    {
+      "id": "aws_sfn_state_machine.data_pipeline",
+      "name": "data-pipeline",
+      "resource_type": "aws_sfn_state_machine",
+      "provider": "aws",
+      "category": "integration",
+      "properties": {
+        "id": "arn:aws:states:us-east-1:123456789012:stateMachine:data-pipeline",
+        "name": "data-pipeline",
+        "arn": "arn:aws:states:us-east-1:123456789012:stateMachine:data-pipeline",
+        "role_arn": "arn:aws:iam::123456789012:role/data-pipeline-sfn-role",
+        "status": "ACTIVE",
+        "type": "STANDARD",
+        "creation_date": "2024-11-15T10:30:00Z",
+        "definition": "{\"Comment\":\"Data processing pipeline: ingest, process, store\",\"StartAt\":\"IngestData\",\"States\":{\"IngestData\":{\"Type\":\"Task\",\"Resource\":\"arn:aws:lambda:us-east-1:123456789012:function:ingest-handler\",\"Comment\":\"Ingest raw data and validate schema\",\"ResultPath\":\"$.ingestResult\",\"Next\":\"ProcessData\",\"Retry\":[{\"ErrorEquals\":[\"States.TaskFailed\"],\"IntervalSeconds\":5,\"MaxAttempts\":3,\"BackoffRate\":2.0}],\"Catch\":[{\"ErrorEquals\":[\"States.ALL\"],\"Next\":\"PipelineFailed\",\"ResultPath\":\"$.error\"}]},\"ProcessData\":{\"Type\":\"Task\",\"Resource\":\"arn:aws:lambda:us-east-1:123456789012:function:process-worker\",\"Comment\":\"Transform and enrich the ingested data\",\"InputPath\":\"$\",\"ResultPath\":\"$.processResult\",\"Next\":\"StoreData\",\"Retry\":[{\"ErrorEquals\":[\"States.TaskFailed\"],\"IntervalSeconds\":10,\"MaxAttempts\":2,\"BackoffRate\":2.0}],\"Catch\":[{\"ErrorEquals\":[\"States.ALL\"],\"Next\":\"PipelineFailed\",\"ResultPath\":\"$.error\"}]},\"StoreData\":{\"Type\":\"Task\",\"Resource\":\"arn:aws:lambda:us-east-1:123456789012:function:store-writer\",\"Comment\":\"Persist processed data to DynamoDB and S3\",\"InputPath\":\"$\",\"ResultPath\":\"$.storeResult\",\"Next\":\"PipelineSucceeded\",\"Retry\":[{\"ErrorEquals\":[\"States.TaskFailed\"],\"IntervalSeconds\":5,\"MaxAttempts\":3,\"BackoffRate\":2.0}],\"Catch\":[{\"ErrorEquals\":[\"States.ALL\"],\"Next\":\"PipelineFailed\",\"ResultPath\":\"$.error\"}]},\"PipelineSucceeded\":{\"Type\":\"Succeed\"},\"PipelineFailed\":{\"Type\":\"Fail\",\"Error\":\"PipelineError\",\"Cause\":\"One or more pipeline stages failed\"}}}",
+        "logging_configuration": [
+          {
+            "include_execution_data": true,
+            "level": "ERROR",
+            "log_destination": ""
+          }
+        ],
+        "tags": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        },
+        "tags_all": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        }
+      },
+      "tags": {
+        "Environment": "production",
+        "Project": "stackmap-demo"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 5
+      }
+    },
+    {
+      "id": "aws_dynamodb_table.events",
+      "name": "events-table",
+      "resource_type": "aws_dynamodb_table",
+      "provider": "aws",
+      "category": "database",
+      "properties": {
+        "id": "events-table",
+        "name": "events-table",
+        "arn": "arn:aws:dynamodb:us-east-1:123456789012:table/events-table",
+        "billing_mode": "PAY_PER_REQUEST",
+        "hash_key": "eventId",
+        "range_key": "timestamp",
+        "stream_enabled": true,
+        "stream_arn": "arn:aws:dynamodb:us-east-1:123456789012:table/events-table/stream/2024-11-15T10:28:00.000",
+        "stream_view_type": "NEW_AND_OLD_IMAGES",
+        "attribute": [
+          {
+            "name": "eventId",
+            "type": "S"
+          },
+          {
+            "name": "timestamp",
+            "type": "S"
+          }
+        ],
+        "global_secondary_index": [],
+        "local_secondary_index": [],
+        "point_in_time_recovery": [
+          {
+            "enabled": true
+          }
+        ],
+        "ttl": [
+          {
+            "attribute_name": "expiresAt",
+            "enabled": true
+          }
+        ],
+        "tags": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        },
+        "tags_all": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        }
+      },
+      "tags": {
+        "Environment": "production",
+        "Project": "stackmap-demo"
+      },
+      "position_hint": {
+        "tier": "data",
+        "weight": 5
+      }
+    },
+    {
+      "id": "aws_s3_bucket.data",
+      "name": "stackmap-demo-data",
+      "resource_type": "aws_s3_bucket",
+      "provider": "aws",
+      "category": "storage",
+      "properties": {
+        "id": "stackmap-demo-data",
+        "bucket": "stackmap-demo-data",
+        "arn": "arn:aws:s3:::stackmap-demo-data",
+        "bucket_domain_name": "stackmap-demo-data.s3.amazonaws.com",
+        "bucket_regional_domain_name": "stackmap-demo-data.s3.us-east-1.amazonaws.com",
+        "region": "us-east-1",
+        "acl": "private",
+        "versioning": [
+          {
+            "enabled": true,
+            "mfa_delete": false
+          }
+        ],
+        "server_side_encryption_configuration": [
+          {
+            "rule": [
+              {
+                "apply_server_side_encryption_by_default": [
+                  {
+                    "sse_algorithm": "aws:kms",
+                    "kms_master_key_id": ""
+                  }
+                ],
+                "bucket_key_enabled": true
+              }
+            ]
+          }
+        ],
+        "tags": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        },
+        "tags_all": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        }
+      },
+      "tags": {
+        "Environment": "production",
+        "Project": "stackmap-demo"
+      },
+      "position_hint": {
+        "tier": "data",
+        "weight": 4
+      }
+    },
+    {
+      "id": "aws_sqs_queue.processing",
+      "name": "processing-queue",
+      "resource_type": "aws_sqs_queue",
+      "provider": "aws",
+      "category": "queue",
+      "properties": {
+        "id": "https://sqs.us-east-1.amazonaws.com/123456789012/processing-queue",
+        "name": "processing-queue",
+        "arn": "arn:aws:sqs:us-east-1:123456789012:processing-queue",
+        "url": "https://sqs.us-east-1.amazonaws.com/123456789012/processing-queue",
+        "delay_seconds": 0,
+        "max_message_size": 262144,
+        "message_retention_seconds": 345600,
+        "receive_wait_time_seconds": 10,
+        "visibility_timeout_seconds": 180,
+        "redrive_policy": "{\"deadLetterTargetArn\":\"arn:aws:sqs:us-east-1:123456789012:processing-queue-dlq\",\"maxReceiveCount\":3}",
+        "tags": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        },
+        "tags_all": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        }
+      },
+      "tags": {
+        "Environment": "production",
+        "Project": "stackmap-demo"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 4
+      }
+    },
+    {
+      "id": "aws_sns_topic.alerts",
+      "name": "alerts-topic",
+      "resource_type": "aws_sns_topic",
+      "provider": "aws",
+      "category": "queue",
+      "properties": {
+        "id": "arn:aws:sns:us-east-1:123456789012:alerts-topic",
+        "name": "alerts-topic",
+        "arn": "arn:aws:sns:us-east-1:123456789012:alerts-topic",
+        "display_name": "Pipeline Alerts",
+        "policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"default\",\"Effect\":\"Allow\",\"Principal\":{\"AWS\":\"*\"},\"Action\":[\"sns:Publish\"],\"Resource\":\"arn:aws:sns:us-east-1:123456789012:alerts-topic\",\"Condition\":{\"StringEquals\":{\"AWS:SourceOwner\":\"123456789012\"}}}]}",
+        "tags": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        },
+        "tags_all": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        }
+      },
+      "tags": {
+        "Environment": "production",
+        "Project": "stackmap-demo"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 4
+      }
+    },
+    {
+      "id": "aws_sns_topic_subscription.alerts_to_process_worker",
+      "name": "arn:aws:sns:us-east-1:123456789012:alerts-topic:a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "resource_type": "aws_sns_topic_subscription",
+      "provider": "aws",
+      "category": "queue",
+      "properties": {
+        "id": "arn:aws:sns:us-east-1:123456789012:alerts-topic:a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "arn": "arn:aws:sns:us-east-1:123456789012:alerts-topic:a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "topic_arn": "arn:aws:sns:us-east-1:123456789012:alerts-topic",
+        "protocol": "lambda",
+        "endpoint": "arn:aws:lambda:us-east-1:123456789012:function:process-worker",
+        "confirmation_was_authenticated": true,
+        "pending_confirmation": false,
+        "raw_message_delivery": false
+      },
+      "tags": {},
+      "position_hint": {
+        "tier": "backend",
+        "weight": 2
+      }
+    },
+    {
+      "id": "aws_cloudfront_distribution.main",
+      "name": "d1234abcdef8.cloudfront.net",
+      "resource_type": "aws_cloudfront_distribution",
+      "provider": "aws",
+      "category": "cdn",
+      "properties": {
+        "id": "E1A2B3C4D5F6G7",
+        "arn": "arn:aws:cloudfront::123456789012:distribution/E1A2B3C4D5F6G7",
+        "domain_name": "d1234abcdef8.cloudfront.net",
+        "status": "Deployed",
+        "enabled": true,
+        "is_ipv6_enabled": true,
+        "default_root_object": "index.html",
+        "aliases": [
+          "demo.stackmap.example.com"
+        ],
+        "origin": [
+          {
+            "domain_name": "stackmap-demo-data.s3.us-east-1.amazonaws.com",
+            "origin_id": "S3-stackmap-demo-data",
+            "origin_path": "",
+            "s3_origin_config": [
+              {
+                "origin_access_identity": "origin-access-identity/cloudfront/E2F3G4H5I6J7K8"
+              }
+            ],
+            "custom_origin_config": [],
+            "custom_header": []
+          }
+        ],
+        "default_cache_behavior": [
+          {
+            "allowed_methods": [
+              "GET",
+              "HEAD",
+              "OPTIONS"
+            ],
+            "cached_methods": [
+              "GET",
+              "HEAD"
+            ],
+            "target_origin_id": "S3-stackmap-demo-data",
+            "viewer_protocol_policy": "redirect-to-https",
+            "compress": true,
+            "min_ttl": 0,
+            "default_ttl": 3600,
+            "max_ttl": 86400,
+            "forwarded_values": [
+              {
+                "query_string": false,
+                "cookies": [
+                  {
+                    "forward": "none"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "viewer_certificate": [
+          {
+            "cloudfront_default_certificate": true,
+            "acm_certificate_arn": "",
+            "minimum_protocol_version": "TLSv1.2_2021",
+            "ssl_support_method": ""
+          }
+        ],
+        "restrictions": [
+          {
+            "geo_restriction": [
+              {
+                "restriction_type": "none",
+                "locations": []
+              }
+            ]
+          }
+        ],
+        "price_class": "PriceClass_100",
+        "hosted_zone_id": "Z2FDTNDATAQYW2",
+        "etag": "E3ABCD12345",
+        "last_modified_time": "2024-11-15T10:35:00Z",
+        "tags": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        },
+        "tags_all": {
+          "Environment": "production",
+          "Project": "stackmap-demo"
+        }
+      },
+      "tags": {
+        "Environment": "production",
+        "Project": "stackmap-demo"
+      },
+      "position_hint": {
+        "tier": "frontend",
+        "weight": 5
+      }
+    },
+    {
+      "id": "aws_route53_record.demo",
+      "name": "demo.stackmap.example.com",
+      "resource_type": "aws_route53_record",
+      "provider": "aws",
+      "category": "dns",
+      "properties": {
+        "id": "Z0123456789ABCDEFGHIJ_demo.stackmap.example.com_A",
+        "name": "demo.stackmap.example.com",
+        "zone_id": "Z0123456789ABCDEFGHIJ",
+        "type": "A",
+        "fqdn": "demo.stackmap.example.com",
+        "alias": [
+          {
+            "name": "d1234abcdef8.cloudfront.net",
+            "zone_id": "Z2FDTNDATAQYW2",
+            "evaluate_target_health": false
+          }
+        ],
+        "ttl": 0,
+        "records": []
+      },
+      "tags": {},
+      "position_hint": {
+        "tier": "frontend",
+        "weight": 2
+      }
+    },
+    {
+      "id": "aws_lambda_permission.api_gateway_ingest",
+      "name": "ingest-handler",
+      "resource_type": "aws_lambda_permission",
+      "provider": "aws",
+      "category": "security",
+      "properties": {
+        "id": "AllowAPIGatewayInvoke-ingest",
+        "action": "lambda:InvokeFunction",
+        "function_name": "ingest-handler",
+        "principal": "apigateway.amazonaws.com",
+        "source_arn": "arn:aws:execute-api:us-east-1:123456789012:abc123def4/*/POST/ingest",
+        "statement_id": "AllowAPIGatewayInvoke-ingest",
+        "qualifier": ""
+      },
+      "tags": {},
+      "position_hint": {
+        "tier": "backend",
+        "weight": 1
+      }
+    },
+    {
+      "id": "aws_lambda_permission.api_gateway_store",
+      "name": "store-writer",
+      "resource_type": "aws_lambda_permission",
+      "provider": "aws",
+      "category": "security",
+      "properties": {
+        "id": "AllowAPIGatewayInvoke-store",
+        "action": "lambda:InvokeFunction",
+        "function_name": "store-writer",
+        "principal": "apigateway.amazonaws.com",
+        "source_arn": "arn:aws:execute-api:us-east-1:123456789012:abc123def4/*/GET/data",
+        "statement_id": "AllowAPIGatewayInvoke-store",
+        "qualifier": ""
+      },
+      "tags": {},
+      "position_hint": {
+        "tier": "backend",
+        "weight": 1
+      }
+    },
+    {
+      "id": "aws_lambda_permission.sns_process_worker",
+      "name": "process-worker",
+      "resource_type": "aws_lambda_permission",
+      "provider": "aws",
+      "category": "security",
+      "properties": {
+        "id": "AllowSNSInvoke-process-worker",
+        "action": "lambda:InvokeFunction",
+        "function_name": "process-worker",
+        "principal": "sns.amazonaws.com",
+        "source_arn": "arn:aws:sns:us-east-1:123456789012:alerts-topic",
+        "statement_id": "AllowSNSInvoke-process-worker",
+        "qualifier": ""
+      },
+      "tags": {},
+      "position_hint": {
+        "tier": "backend",
+        "weight": 1
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "aws_api_gateway_deployment.main->aws_api_gateway_rest_api.main",
+      "source": "aws_api_gateway_deployment.main",
+      "target": "aws_api_gateway_rest_api.main",
+      "edge_type": "references",
+      "label": "deploys"
+    },
+    {
+      "id": "aws_api_gateway_stage.prod->aws_api_gateway_rest_api.main",
+      "source": "aws_api_gateway_stage.prod",
+      "target": "aws_api_gateway_rest_api.main",
+      "edge_type": "references",
+      "label": "stage of"
+    },
+    {
+      "id": "aws_lambda_function.ingest_handler->aws_iam_role.ingest_handler",
+      "source": "aws_lambda_function.ingest_handler",
+      "target": "aws_iam_role.ingest_handler",
+      "edge_type": "authenticates",
+      "label": "assumes role"
+    },
+    {
+      "id": "aws_lambda_function.process_worker->aws_iam_role.process_worker",
+      "source": "aws_lambda_function.process_worker",
+      "target": "aws_iam_role.process_worker",
+      "edge_type": "authenticates",
+      "label": "assumes role"
+    },
+    {
+      "id": "aws_lambda_function.store_writer->aws_iam_role.store_writer",
+      "source": "aws_lambda_function.store_writer",
+      "target": "aws_iam_role.store_writer",
+      "edge_type": "authenticates",
+      "label": "assumes role"
+    },
+    {
+      "id": "aws_iam_role_policy.ingest_handler->aws_iam_role.ingest_handler",
+      "source": "aws_iam_role_policy.ingest_handler",
+      "target": "aws_iam_role.ingest_handler",
+      "edge_type": "references",
+      "label": "policy of"
+    },
+    {
+      "id": "aws_iam_role_policy.process_worker->aws_iam_role.process_worker",
+      "source": "aws_iam_role_policy.process_worker",
+      "target": "aws_iam_role.process_worker",
+      "edge_type": "references",
+      "label": "policy of"
+    },
+    {
+      "id": "aws_iam_role_policy.store_writer->aws_iam_role.store_writer",
+      "source": "aws_iam_role_policy.store_writer",
+      "target": "aws_iam_role.store_writer",
+      "edge_type": "references",
+      "label": "policy of"
+    },
+    {
+      "id": "aws_iam_role_policy.step_functions->aws_iam_role.step_functions",
+      "source": "aws_iam_role_policy.step_functions",
+      "target": "aws_iam_role.step_functions",
+      "edge_type": "references",
+      "label": "policy of"
+    },
+    {
+      "id": "aws_lambda_function.ingest_handler->aws_cloudwatch_log_group.ingest_handler",
+      "source": "aws_lambda_function.ingest_handler",
+      "target": "aws_cloudwatch_log_group.ingest_handler",
+      "edge_type": "references",
+      "label": "logs to"
+    },
+    {
+      "id": "aws_lambda_function.process_worker->aws_cloudwatch_log_group.process_worker",
+      "source": "aws_lambda_function.process_worker",
+      "target": "aws_cloudwatch_log_group.process_worker",
+      "edge_type": "references",
+      "label": "logs to"
+    },
+    {
+      "id": "aws_lambda_function.store_writer->aws_cloudwatch_log_group.store_writer",
+      "source": "aws_lambda_function.store_writer",
+      "target": "aws_cloudwatch_log_group.store_writer",
+      "edge_type": "references",
+      "label": "logs to"
+    },
+    {
+      "id": "aws_sfn_state_machine.data_pipeline->aws_iam_role.step_functions",
+      "source": "aws_sfn_state_machine.data_pipeline",
+      "target": "aws_iam_role.step_functions",
+      "edge_type": "authenticates",
+      "label": "assumes role"
+    },
+    {
+      "id": "aws_sns_topic_subscription.alerts_to_process_worker->aws_sns_topic.alerts",
+      "source": "aws_sns_topic_subscription.alerts_to_process_worker",
+      "target": "aws_sns_topic.alerts",
+      "edge_type": "references",
+      "label": "subscribes to"
+    },
+    {
+      "id": "aws_sns_topic_subscription.alerts_to_process_worker->aws_lambda_function.process_worker",
+      "source": "aws_sns_topic_subscription.alerts_to_process_worker",
+      "target": "aws_lambda_function.process_worker",
+      "edge_type": "triggers",
+      "label": "triggers"
+    },
+    {
+      "id": "aws_cloudfront_distribution.main->aws_s3_bucket.data",
+      "source": "aws_cloudfront_distribution.main",
+      "target": "aws_s3_bucket.data",
+      "edge_type": "routes_to",
+      "label": "routes to origin"
+    },
+    {
+      "id": "aws_route53_record.demo->aws_cloudfront_distribution.main",
+      "source": "aws_route53_record.demo",
+      "target": "aws_cloudfront_distribution.main",
+      "edge_type": "routes_to",
+      "label": "routes to"
+    },
+    {
+      "id": "aws_api_gateway_rest_api.main->aws_lambda_function.ingest_handler",
+      "source": "aws_api_gateway_rest_api.main",
+      "target": "aws_lambda_function.ingest_handler",
+      "edge_type": "triggers",
+      "label": "triggers"
+    },
+    {
+      "id": "aws_api_gateway_rest_api.main->aws_lambda_function.store_writer",
+      "source": "aws_api_gateway_rest_api.main",
+      "target": "aws_lambda_function.store_writer",
+      "edge_type": "triggers",
+      "label": "triggers"
+    },
+    {
+      "id": "aws_sns_topic.alerts->aws_lambda_function.process_worker",
+      "source": "aws_sns_topic.alerts",
+      "target": "aws_lambda_function.process_worker",
+      "edge_type": "triggers",
+      "label": "triggers"
+    },
+    {
+      "id": "aws_sfn_state_machine.data_pipeline->aws_lambda_function.ingest_handler",
+      "source": "aws_sfn_state_machine.data_pipeline",
+      "target": "aws_lambda_function.ingest_handler",
+      "edge_type": "triggers",
+      "label": "invokes"
+    },
+    {
+      "id": "aws_sfn_state_machine.data_pipeline->aws_lambda_function.process_worker",
+      "source": "aws_sfn_state_machine.data_pipeline",
+      "target": "aws_lambda_function.process_worker",
+      "edge_type": "triggers",
+      "label": "invokes"
+    },
+    {
+      "id": "aws_sfn_state_machine.data_pipeline->aws_lambda_function.store_writer",
+      "source": "aws_sfn_state_machine.data_pipeline",
+      "target": "aws_lambda_function.store_writer",
+      "edge_type": "triggers",
+      "label": "invokes"
+    },
+    {
+      "id": "aws_lambda_function.ingest_handler->aws_dynamodb_table.events",
+      "source": "aws_lambda_function.ingest_handler",
+      "target": "aws_dynamodb_table.events",
+      "edge_type": "writes_to",
+      "label": "dynamodb"
+    },
+    {
+      "id": "aws_lambda_function.ingest_handler->aws_sqs_queue.processing",
+      "source": "aws_lambda_function.ingest_handler",
+      "target": "aws_sqs_queue.processing",
+      "edge_type": "writes_to",
+      "label": "sqs"
+    },
+    {
+      "id": "aws_lambda_function.process_worker->aws_s3_bucket.data",
+      "source": "aws_lambda_function.process_worker",
+      "target": "aws_s3_bucket.data",
+      "edge_type": "writes_to",
+      "label": "s3"
+    },
+    {
+      "id": "aws_lambda_function.process_worker->aws_sqs_queue.processing",
+      "source": "aws_lambda_function.process_worker",
+      "target": "aws_sqs_queue.processing",
+      "edge_type": "reads_from",
+      "label": "sqs"
+    },
+    {
+      "id": "aws_lambda_function.process_worker->aws_sns_topic.alerts",
+      "source": "aws_lambda_function.process_worker",
+      "target": "aws_sns_topic.alerts",
+      "edge_type": "writes_to",
+      "label": "sns"
+    },
+    {
+      "id": "aws_lambda_function.store_writer->aws_dynamodb_table.events",
+      "source": "aws_lambda_function.store_writer",
+      "target": "aws_dynamodb_table.events",
+      "edge_type": "writes_to",
+      "label": "dynamodb"
+    },
+    {
+      "id": "aws_lambda_function.store_writer->aws_s3_bucket.data",
+      "source": "aws_lambda_function.store_writer",
+      "target": "aws_s3_bucket.data",
+      "edge_type": "writes_to",
+      "label": "s3"
+    }
+  ],
+  "groups": []
+}

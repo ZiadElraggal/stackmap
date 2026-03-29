@@ -87,6 +87,16 @@ def test_complex_fixture_vpc_nodes() -> None:
     assert len(ecs_nodes) == 2
 
 
+def test_helper_resources_marked_for_logical_view() -> None:
+    parser = TerraformParser()
+    ir = parser.parse(str(FIXTURES / "medium-step-functions.tfstate"))
+
+    helper_policies = [n for n in ir.nodes if n.resource_type == "aws_iam_role_policy"]
+    assert len(helper_policies) >= 1
+    assert all(n.position_hint.get("is_helper") is True for n in helper_policies)
+    assert all(isinstance(n.position_hint.get("logical_parent"), str) for n in helper_policies)
+
+
 def test_position_hints() -> None:
     parser = TerraformParser()
     ir = parser.parse(str(FIXTURES / "simple-lambda-api.tfstate"))
