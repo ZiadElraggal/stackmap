@@ -34,7 +34,23 @@
             :width="graphBounds.width + 520"
             :height="band.yEnd - band.yStart"
             :fill="band.fill"
-            stroke="rgba(255,255,255,0.03)"
+            :fill-opacity="tierBandOpacity(band.name)"
+            :stroke="band.stroke"
+            :stroke-opacity="tierBorderOpacity(band.name)"
+            stroke-width="1.2"
+          />
+        </g>
+
+        <g>
+          <line
+            v-for="divider in tierDividers"
+            :key="`tier-divider-${divider.name}`"
+            :x1="graphBounds.minX - 250"
+            :x2="graphBounds.minX + graphBounds.width + 250"
+            :y1="divider.y"
+            :y2="divider.y"
+            :stroke="divider.stroke"
+            :stroke-opacity="tierDividerOpacity(divider.name)"
             stroke-width="1"
           />
         </g>
@@ -49,6 +65,39 @@
         />
 
         <g v-for="band in tierBands" :key="`tier-${band.name}`">
+          <rect
+            :x="graphBounds.minX - 226"
+            :y="band.yStart + 12"
+            rx="8"
+            ry="8"
+            width="118"
+            height="24"
+            :fill="band.chipFill"
+            :fill-opacity="tierChipOpacity(band.name)"
+            :stroke="band.chipStroke"
+            :stroke-opacity="tierChipOpacity(band.name)"
+            stroke-width="1"
+          />
+          <text
+            :x="graphBounds.minX - 216"
+            :y="band.yStart + 28"
+            :fill="band.chipAccent"
+            font-size="10"
+            text-anchor="start"
+            font-weight="700"
+            letter-spacing="1.5"
+            font-family="'JetBrains Mono', monospace"
+          >{{ band.icon }}</text>
+          <text
+            :x="graphBounds.minX - 200"
+            :y="band.yStart + 28"
+            fill="rgba(229,231,235,0.95)"
+            font-size="10"
+            text-anchor="start"
+            font-weight="600"
+            letter-spacing="1.3"
+            font-family="'JetBrains Mono', monospace"
+          >{{ band.name.toUpperCase() }}</text>
           <text
             :x="graphBounds.minX - 60"
             :y="band.labelY"
@@ -164,6 +213,17 @@
       <span v-if="store.groups.length > 0">{{ store.groups.length }} groups</span>
       <span v-if="store.metadata.terraform_version">Terraform v{{ store.metadata.terraform_version }}</span>
       <span>{{ Math.round(zoomScale * 100) }}%</span>
+      <div class="flex items-center gap-1 rounded border border-white/10 bg-white/[0.03] px-1.5 py-0.5">
+        <div
+          v-for="lane in architectureStrip"
+          :key="`strip-${lane.name}`"
+          class="flex items-center gap-1 rounded px-1 py-[1px]"
+          :style="{ backgroundColor: lane.bg }"
+        >
+          <span class="text-[8px] uppercase tracking-wide" :style="{ color: lane.accent }">{{ lane.short }}</span>
+          <span class="text-[9px] text-gray-300">{{ lane.count }}</span>
+        </div>
+      </div>
       <span class="ml-auto text-gray-600">scroll to zoom · drag to pan · ⌘K command palette</span>
     </div>
   </div>
@@ -223,13 +283,24 @@ const tierBands = computed(() => {
     tierNodes[tier].push(pos.y)
   }
 
-  const bands: Array<{ name: string; yStart: number; yEnd: number; fill: string; labelY: number }> = []
+  const bands: Array<{
+    name: string
+    yStart: number
+    yEnd: number
+    fill: string
+    stroke: string
+    chipFill: string
+    chipStroke: string
+    chipAccent: string
+    labelY: number
+    icon: string
+  }> = []
   const tierOrder = ['frontend', 'api', 'backend', 'data']
-  const tierColors: Record<string, string> = {
-    frontend: 'rgba(34,211,238,0.025)',
-    api: 'rgba(59,130,246,0.02)',
-    backend: 'rgba(99,102,241,0.015)',
-    data: 'rgba(16,185,129,0.02)',
+  const tierColors: Record<string, { fill: string; stroke: string; icon: string }> = {
+    frontend: { fill: 'rgba(34,211,238,0.09)', stroke: 'rgba(34,211,238,0.32)', icon: '◈' },
+    api: { fill: 'rgba(59,130,246,0.085)', stroke: 'rgba(59,130,246,0.3)', icon: '◎' },
+    backend: { fill: 'rgba(99,102,241,0.08)', stroke: 'rgba(129,140,248,0.28)', icon: '▣' },
+    data: { fill: 'rgba(16,185,129,0.09)', stroke: 'rgba(52,211,153,0.3)', icon: '◉' },
   }
 
   for (const tier of tierOrder) {
@@ -238,17 +309,92 @@ const tierBands = computed(() => {
     const minY = Math.min(...ys)
     const maxY = Math.max(...ys)
     const padding = 80
+    const c = tierColors[tier] || { fill: 'rgba(255,255,255,0.05)', stroke: 'rgba(255,255,255,0.2)', icon: '•' }
     bands.push({
       name: tier,
       yStart: minY - padding,
       yEnd: maxY + padding,
-      fill: tierColors[tier] || 'transparent',
+      fill: c.fill,
+      stroke: c.stroke,
+      chipFill: c.fill,
+      chipStroke: c.stroke,
+      chipAccent: c.stroke,
       labelY: (minY + maxY) / 2,
+      icon: c.icon,
     })
   }
 
   return bands
 })
+
+const tierDividers = computed(() => {
+  const dividers: Array<{ name: string; y: number; stroke: string }> = []
+  for (let i = 0; i < tierBands.value.length - 1; i++) {
+    const current = tierBands.value[i]
+    const next = tierBands.value[i + 1]
+    dividers.push({
+      name: `${current.name}-${next.name}`,
+      y: (current.yEnd + next.yStart) / 2,
+      stroke: 'rgba(255,255,255,0.18)',
+    })
+  }
+  return dividers
+})
+
+const hoveredTier = computed(() => {
+  if (!store.hoveredNodeId) return null
+  const node = store.graphNodes.find(n => n.id === store.hoveredNodeId) || store.nodes.find(n => n.id === store.hoveredNodeId)
+  return node?.position_hint?.tier || null
+})
+
+const architectureStrip = computed(() => {
+  const order = ['frontend', 'api', 'backend', 'data']
+  const names: Record<string, string> = { frontend: 'FE', api: 'API', backend: 'BE', data: 'DATA' }
+  const accents: Record<string, string> = {
+    frontend: '#67e8f9',
+    api: '#60a5fa',
+    backend: '#818cf8',
+    data: '#34d399',
+  }
+  const backgrounds: Record<string, string> = {
+    frontend: 'rgba(34,211,238,0.16)',
+    api: 'rgba(59,130,246,0.16)',
+    backend: 'rgba(99,102,241,0.16)',
+    data: 'rgba(16,185,129,0.16)',
+  }
+  const counts: Record<string, number> = { frontend: 0, api: 0, backend: 0, data: 0 }
+  for (const node of store.visibleNodes) {
+    const tier = node.position_hint?.tier || 'backend'
+    if (tier in counts) counts[tier] += 1
+  }
+  return order.map(name => ({
+    name,
+    short: names[name],
+    count: counts[name] || 0,
+    accent: accents[name],
+    bg: backgrounds[name],
+  }))
+})
+
+function tierBandOpacity(bandName: string): number {
+  if (!hoveredTier.value) return 0.65
+  return hoveredTier.value === bandName ? 0.95 : 0.28
+}
+
+function tierBorderOpacity(bandName: string): number {
+  if (!hoveredTier.value) return 0.45
+  return hoveredTier.value === bandName ? 0.9 : 0.2
+}
+
+function tierDividerOpacity(dividerName: string): number {
+  if (!hoveredTier.value) return 0.22
+  return dividerName.includes(hoveredTier.value) ? 0.45 : 0.15
+}
+
+function tierChipOpacity(bandName: string): number {
+  if (!hoveredTier.value) return 0.9
+  return hoveredTier.value === bandName ? 1 : 0.45
+}
 
 function edgeColor(edgeType: string): string {
   return EDGE_COLORS[edgeType] || '#64748b'
