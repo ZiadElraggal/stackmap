@@ -77,6 +77,27 @@ def test_scan_cloudformation_json_writes_output(tmp_path: Path) -> None:
     assert out.exists()
 
 
+def test_scan_sam_writes_output(tmp_path: Path) -> None:
+    out = tmp_path / "out-sam.json"
+    result = runner.invoke(
+        app,
+        [
+            "scan",
+            "--source",
+            str(FIXTURES / "sam-simple.json"),
+            "--format",
+            "json",
+            "--output",
+            str(out),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert out.exists()
+    assert "Source type" in result.output
+    assert "sam" in result.output.lower()
+
+
 def test_scan_invalid_format_fails_fast(tmp_path: Path) -> None:
     out = tmp_path / "out.invalid"
     result = runner.invoke(
@@ -118,3 +139,126 @@ def test_scan_parse_error_is_clean(monkeypatch, tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "PyYAML is not installed" in result.output
+
+
+def test_scan_repo_json_merges_multiple_source_types(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    (repo_root / "simple.tfstate").write_text((FIXTURES / "simple-lambda-api.tfstate").read_text())
+    (repo_root / "cfn.json").write_text((FIXTURES / "cloudformation-simple.json").read_text())
+    (repo_root / "sam.json").write_text((FIXTURES / "sam-simple.json").read_text())
+
+    out = tmp_path / "repo-out.json"
+    result = runner.invoke(
+        app,
+        [
+            "scan-repo",
+            "--root",
+            str(repo_root),
+            "--no-sam-build",
+            "--no-terraform-pull-missing",
+            "--format",
+            "json",
+            "--output",
+            str(out),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert out.exists()
+
+    import json
+
+    data = json.loads(out.read_text())
+    assert data["metadata"]["source_type"] == "repo"
+    discovered = data["metadata"]["discovered_sources"]
+    discovered_types = {entry["type"] for entry in discovered}
+    assert {"terraform", "cloudformation", "sam"}.issubset(discovered_types)
+    assert len(data["nodes"]) > 0
+
+
+def test_scan_repo_include_filter_excludes_other_types(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    (repo_root / "simple.tfstate").write_text((FIXTURES / "simple-lambda-api.tfstate").read_text())
+    (repo_root / "cfn.json").write_text((FIXTURES / "cloudformation-simple.json").read_text())
+
+    out = tmp_path / "repo-out-filtered.json"
+    result = runner.invoke(
+        app,
+        [
+            "scan-repo",
+            "--root",
+            str(repo_root),
+            "--include",
+            "cloudformation",
+            "--no-sam-build",
+            "--no-terraform-pull-missing",
+            "--format",
+            "json",
+            "--output",
+            str(out),
+        ],
+    )
+
+    assert result.exit_code == 0
+
+    import json
+
+    data = json.loads(out.read_text())
+    discovered = data["metadata"]["discovered_sources"]
+    discovered_types = {entry["type"] for entry in discovered}
+    assert discovered_types == {"cloudformation"}
+
+
+def test_scan_repo_invalid_include_type_fails(tmp_path: Path) -> None:
+    out = tmp_path / "repo-out.json"
+    result = runner.invoke(
+        app,
+        [
+            "scan-repo",
+            "--root",
+            str(tmp_path),
+            "--include",
+            "kubernetes",
+            "--format",
+            "json",
+            "--output",
+            str(out),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Unsupported include type(s)" in result.output
+
+
+def test_scan_accepts_stackmap_ir_json(tmp_path: Path) -> None:
+    import json
+
+    stackmap_ir = {
+        "metadata": {"source_type": "repo"},
+        "nodes": [],
+        "edges": [],
+        "groups": [],
+    }
+    source = tmp_path / "stackmap-ir.json"
+    source.write_text(json.dumps(stackmap_ir))
+
+    out = tmp_path / "reserialized.json"
+    result = runner.invoke(
+        app,
+        [
+            "scan",
+            "--source",
+            str(source),
+            "--format",
+            "json",
+            "--output",
+            str(out),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert out.exists()
+    assert "Source type" in result.output
+    assert "repo" in result.output.lower()

@@ -1,0 +1,175 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Transform": "AWS::Serverless-2016-10-31",
+  "Description": "Complex SAM serverless app fixture for StackMap",
+  "Resources": {
+    "PublicHttpApi": {
+      "Type": "AWS::Serverless::HttpApi",
+      "Properties": {
+        "StageName": "prod"
+      }
+    },
+    "ApiAuthorizer": {
+      "Type": "AWS::ApiGatewayV2::Authorizer",
+      "Properties": {
+        "ApiId": { "Ref": "PublicHttpApi" },
+        "AuthorizerType": "JWT",
+        "IdentitySource": ["$request.header.Authorization"],
+        "Name": "jwt-auth"
+      }
+    },
+    "GetOrdersIntegration": {
+      "Type": "AWS::ApiGatewayV2::Integration",
+      "Properties": {
+        "ApiId": { "Ref": "PublicHttpApi" },
+        "IntegrationType": "AWS_PROXY",
+        "IntegrationUri": { "Fn::GetAtt": "OrdersFunction.Arn" },
+        "PayloadFormatVersion": "2.0"
+      }
+    },
+    "GetOrdersRoute": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": { "Ref": "PublicHttpApi" },
+        "RouteKey": "GET /orders",
+        "AuthorizationType": "JWT",
+        "AuthorizerId": { "Ref": "ApiAuthorizer" },
+        "Target": { "Fn::Sub": "integrations/${GetOrdersIntegration}" }
+      }
+    },
+    "ApiStage": {
+      "Type": "AWS::ApiGatewayV2::Stage",
+      "Properties": {
+        "ApiId": { "Ref": "PublicHttpApi" },
+        "StageName": "prod",
+        "AutoDeploy": true
+      }
+    },
+    "OrdersTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": "stackmap-orders",
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          { "AttributeName": "orderId", "AttributeType": "S" }
+        ],
+        "KeySchema": [
+          { "AttributeName": "orderId", "KeyType": "HASH" }
+        ]
+      }
+    },
+    "AuditQueue": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "QueueName": "stackmap-audit-events"
+      }
+    },
+    "OrdersRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "stackmap-orders-role",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": { "Service": "lambda.amazonaws.com" },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "OrdersAppAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query"],
+                  "Resource": { "Fn::GetAtt": "OrdersTable.Arn" }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": ["sqs:SendMessage"],
+                  "Resource": { "Fn::GetAtt": "AuditQueue.Arn" }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "SharedLayer": {
+      "Type": "AWS::Serverless::LayerVersion",
+      "Properties": {
+        "LayerName": "stackmap-shared-layer",
+        "CompatibleRuntimes": ["python3.12"],
+        "ContentUri": "layer/"
+      }
+    },
+    "OrdersFunction": {
+      "Type": "AWS::Serverless::Function",
+      "Properties": {
+        "FunctionName": "stackmap-orders-api",
+        "Handler": "orders.handler",
+        "Runtime": "python3.12",
+        "CodeUri": "src/orders/",
+        "Role": { "Fn::GetAtt": "OrdersRole.Arn" },
+        "Layers": [{ "Ref": "SharedLayer" }],
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": { "Ref": "OrdersTable" },
+            "AUDIT_QUEUE_URL": { "Ref": "AuditQueue" }
+          }
+        },
+        "Events": {
+          "ListOrders": {
+            "Type": "HttpApi",
+            "Properties": {
+              "ApiId": { "Ref": "PublicHttpApi" },
+              "Path": "/orders",
+              "Method": "GET"
+            }
+          }
+        }
+      }
+    },
+    "WorkerFunction": {
+      "Type": "AWS::Serverless::Function",
+      "Properties": {
+        "FunctionName": "stackmap-orders-worker",
+        "Handler": "worker.handler",
+        "Runtime": "python3.12",
+        "CodeUri": "src/worker/",
+        "Role": { "Fn::GetAtt": "OrdersRole.Arn" },
+        "Layers": [{ "Ref": "SharedLayer" }],
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": { "Ref": "OrdersTable" }
+          }
+        },
+        "Events": {
+          "OrdersQueueEvent": {
+            "Type": "SQS",
+            "Properties": {
+              "Queue": { "Fn::GetAtt": "AuditQueue.Arn" },
+              "BatchSize": 10
+            }
+          }
+        }
+      }
+    },
+    "OrdersStateMachine": {
+      "Type": "AWS::Serverless::StateMachine",
+      "Properties": {
+        "Name": "stackmap-orders-flow",
+        "Role": { "Fn::GetAtt": "OrdersRole.Arn" },
+        "Definition": {
+          "Fn::Sub": "{\n  \"Comment\": \"Order workflow\",\n  \"StartAt\": \"ProcessOrder\",\n  \"States\": {\n    \"ProcessOrder\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"${WorkerFunction.Arn}\",\n      \"End\": true\n    }\n  }\n}"
+        }
+      }
+    }
+  }
+}
+
