@@ -1,11 +1,20 @@
 export default defineNuxtConfig({
-  compatibilityDate: '2025-03-01',
-  devtools: { enabled: true },
+  compatibilityDate: '2023-01-01',
+  devtools: { enabled: false },
   modules: [
     '@pinia/nuxt',
-    '@nuxtjs/tailwindcss',
   ],
-  ssr: false,
+  css: ['~/assets/css/tailwind.css'],
+  ssr: true,
+  nitro: {
+    preset: 'static',
+  },
+  postcss: {
+    plugins: {
+      tailwindcss: {},
+      autoprefixer: {},
+    },
+  },
   app: {
     head: {
       title: 'StackMap',

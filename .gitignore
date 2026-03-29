@@ -46,3 +46,4 @@ stackmap-output.html
 *.tfstate.backup
 
 .claude
+/.tmp-pkg-venv

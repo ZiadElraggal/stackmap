@@ -36,6 +36,7 @@ RESOURCE_CATEGORY_MAP: dict[str, ResourceCategory] = {
     "aws_s3_bucket_policy": ResourceCategory.STORAGE,
     "aws_s3_bucket_versioning": ResourceCategory.STORAGE,
     "aws_s3_bucket_server_side_encryption_configuration": ResourceCategory.STORAGE,
+    "aws_s3_bucket_public_access_block": ResourceCategory.STORAGE,
     # Database
     "aws_dynamodb_table": ResourceCategory.DATABASE,
     "aws_rds_cluster": ResourceCategory.DATABASE,
@@ -391,6 +392,7 @@ _SECONDARY_RESOURCE_TYPES = {
     "aws_s3_bucket_policy",
     "aws_s3_bucket_versioning",
     "aws_s3_bucket_server_side_encryption_configuration",
+    "aws_s3_bucket_public_access_block",
     "aws_sns_topic_subscription",
     "aws_db_subnet_group",
     "aws_elasticache_subnet_group",
@@ -542,6 +544,45 @@ class TerraformParser(BaseParser):
                                         )
                                     )
 
+                            # CloudFront Origin Access Control linkage
+                            oac_id = origin.get("origin_access_control_id", "")
+                            oac_target = _lookup_target(oac_id, id_index, arn_index)
+                            if oac_target and oac_target != node.id:
+                                edge_key = (node.id, oac_target, EdgeType.REFERENCES.value)
+                                if edge_key not in edge_set:
+                                    edge_set.add(edge_key)
+                                    edges.append(
+                                        StackMapEdge(
+                                            id=f"{node.id}->{oac_target}",
+                                            source=node.id,
+                                            target=oac_target,
+                                            edge_type=EdgeType.REFERENCES,
+                                            label="uses oac",
+                                        )
+                                    )
+
+                # CloudFront viewer certificate linkage to ACM certificate
+                viewer_cert = attrs.get("viewer_certificate", [])
+                if isinstance(viewer_cert, list):
+                    for cert in viewer_cert:
+                        if not isinstance(cert, dict):
+                            continue
+                        cert_arn = cert.get("acm_certificate_arn", "")
+                        cert_target = _lookup_target(cert_arn, id_index, arn_index)
+                        if cert_target and cert_target != node.id:
+                            edge_key = (node.id, cert_target, EdgeType.REFERENCES.value)
+                            if edge_key not in edge_set:
+                                edge_set.add(edge_key)
+                                edges.append(
+                                    StackMapEdge(
+                                        id=f"{node.id}->{cert_target}",
+                                        source=node.id,
+                                        target=cert_target,
+                                        edge_type=EdgeType.REFERENCES,
+                                        label="uses tls cert",
+                                    )
+                                )
+
             # Special: Route53 → alias targets (CloudFront, ALB)
             if node.resource_type == "aws_route53_record":
                 aliases = attrs.get("alias", [])
@@ -584,9 +625,47 @@ class TerraformParser(BaseParser):
                                 )
                             )
 
+            # Special: S3 bucket policy can reference CloudFront distribution SourceArn
+            if node.resource_type == "aws_s3_bucket_policy":
+                bucket_name = attrs.get("bucket", "")
+                bucket_target = _lookup_target(bucket_name, id_index, arn_index)
+                policy_str = attrs.get("policy", "")
+                if bucket_target and isinstance(policy_str, str) and policy_str:
+                    try:
+                        policy = json.loads(policy_str)
+                    except (json.JSONDecodeError, TypeError):
+                        policy = {}
+                    for statement in policy.get("Statement", []):
+                        if not isinstance(statement, dict):
+                            continue
+                        condition = statement.get("Condition", {})
+                        if not isinstance(condition, dict):
+                            continue
+                        string_equals = condition.get("StringEquals", {})
+                        if not isinstance(string_equals, dict):
+                            continue
+                        source_arn = string_equals.get("AWS:SourceArn", "")
+                        cf_target = _lookup_target(source_arn, id_index, arn_index)
+                        if cf_target and cf_target != bucket_target:
+                            edge_key = (cf_target, bucket_target, EdgeType.ROUTES_TO.value)
+                            if edge_key not in edge_set:
+                                edge_set.add(edge_key)
+                                edges.append(
+                                    StackMapEdge(
+                                        id=f"{cf_target}->{bucket_target}",
+                                        source=cf_target,
+                                        target=bucket_target,
+                                        edge_type=EdgeType.ROUTES_TO,
+                                        label="serves from bucket",
+                                    )
+                                )
+
         # Pass 3: Parse embedded definitions (Step Functions ASL, IAM policies)
         self._parse_step_function_definitions(nodes, edges, edge_set, arn_index, node_map)
         self._parse_iam_policies(nodes, edges, edge_set, arn_index, id_index, node_map)
+
+        # Pass 3.5: mark helper resources for architecture-mode collapse
+        self._mark_logical_helpers(nodes, id_index, arn_index)
 
         # Pass 4: Extract groups (VPCs, subnets)
         groups = self._extract_groups(nodes, id_index)
@@ -596,6 +675,7 @@ class TerraformParser(BaseParser):
                 "source_type": "terraform",
                 "terraform_version": tf_version,
                 "total_resources": len(nodes),
+                "has_logical_helpers": True,
             },
             nodes=nodes,
             edges=edges,
@@ -821,6 +901,42 @@ class TerraformParser(BaseParser):
                 )
 
         return groups
+
+    def _mark_logical_helpers(
+        self,
+        nodes: list[StackMapNode],
+        id_index: dict[str, str],
+        arn_index: dict[str, str],
+    ) -> None:
+        """Mark helper resources so UI can collapse them into logical parents."""
+        node_by_id = {n.id: n for n in nodes}
+
+        def _assign(node: StackMapNode, parent_id: str | None) -> None:
+            node.position_hint["is_helper"] = True
+            if parent_id and parent_id in node_by_id:
+                node.position_hint["logical_parent"] = parent_id
+                node.position_hint["weight"] = max(1, int(node.position_hint.get("weight", 2)) - 1)
+
+        for node in nodes:
+            attrs = node.properties
+            parent_id: str | None = None
+
+            if node.resource_type in {
+                "aws_s3_bucket_policy",
+                "aws_s3_bucket_versioning",
+                "aws_s3_bucket_server_side_encryption_configuration",
+                "aws_s3_bucket_public_access_block",
+            }:
+                bucket_name = attrs.get("bucket", "")
+                parent_id = _lookup_target(bucket_name, id_index, arn_index)
+                _assign(node, parent_id)
+                continue
+
+            if node.resource_type in {"aws_iam_role_policy", "aws_iam_role_policy_attachment"}:
+                role_name = attrs.get("role", "")
+                parent_id = _lookup_target(role_name, id_index, arn_index)
+                _assign(node, parent_id)
+                continue
 
 
 def _lookup_target(
