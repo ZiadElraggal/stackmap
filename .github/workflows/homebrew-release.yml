@@ -23,6 +23,7 @@ jobs:
           URL="https://github.com/${REPOSITORY}/archive/refs/tags/${TAG_NAME}.tar.gz"
           curl -L "$URL" -o /tmp/stackmap-release.tar.gz
           SHA256="$(sha256sum /tmp/stackmap-release.tar.gz | awk '{print $1}')"
+          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
 
@@ -32,6 +33,7 @@ jobs:
         run: |
           python3 scripts/render_homebrew_formula.py \
             --version "${{ steps.release.outputs.version }}" \
+            --tag "${{ steps.release.outputs.tag_name }}" \
             --sha256 "${{ steps.release.outputs.sha256 }}" \
             --repository "${REPOSITORY}" \
             --output /tmp/stackmap.rb
