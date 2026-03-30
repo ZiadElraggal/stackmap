@@ -2,11 +2,18 @@ import dagre from '@dagrejs/dagre'
 import { getNodeHeight, getNodeWidth } from '~/composables/useGraph'
 import type { StackMapNode, StackMapEdge, StackMapGroup, NodePosition } from '~/stores/graph'
 
-const TIER_Y: Record<string, number> = {
+const BASE_TIER_Y: Record<string, number> = {
   frontend: 0,
   api: 250,
   backend: 500,
   data: 750,
+}
+
+function getTierY(nodeCount: number): Record<string, number> {
+  if (nodeCount > 60) {
+    return { frontend: 0, api: 320, backend: 640, data: 960 }
+  }
+  return BASE_TIER_Y
 }
 
 const TIER_ORDER: Record<string, number> = {
@@ -18,6 +25,17 @@ const TIER_ORDER: Record<string, number> = {
 
 const LAYOUT_EDGE_TYPES = new Set(['triggers', 'writes_to', 'reads_from', 'routes_to'])
 const TIER_LIST = ['frontend', 'api', 'backend', 'data']
+
+// For large graphs, increase spacing to prevent visual clutter
+function getLayoutParams(nodeCount: number) {
+  if (nodeCount > 80) {
+    return { nodesep: 100, ranksep: 220, edgesep: 35, marginx: 60, marginy: 60, minGap: 50 }
+  }
+  if (nodeCount > 40) {
+    return { nodesep: 85, ranksep: 200, edgesep: 30, marginx: 50, marginy: 50, minGap: 40 }
+  }
+  return { nodesep: 70, ranksep: 180, edgesep: 25, marginx: 40, marginy: 40, minGap: 30 }
+}
 
 export function useLayout() {
   /**
@@ -31,6 +49,8 @@ export function useLayout() {
   ): Record<string, NodePosition> {
     if (nodes.length === 0) return {}
 
+    const TIER_Y = getTierY(nodes.length)
+
     // Group nodes by tier for fallback
     const byTier = new Map<string, StackMapNode[]>()
     for (const node of nodes) {
@@ -40,14 +60,15 @@ export function useLayout() {
     }
 
     // Build dagre graph with just real nodes and edges
+    const params = getLayoutParams(nodes.length)
     const g = new dagre.graphlib.Graph()
     g.setGraph({
       rankdir: 'TB',
-      nodesep: 70,
-      ranksep: 180,
-      edgesep: 25,
-      marginx: 40,
-      marginy: 40,
+      nodesep: params.nodesep,
+      ranksep: params.ranksep,
+      edgesep: params.edgesep,
+      marginx: params.marginx,
+      marginy: params.marginy,
       ranker: 'network-simplex',
     })
     g.setDefaultEdgeLabel(() => ({}))
@@ -98,7 +119,7 @@ export function useLayout() {
     // Fallback: simple horizontal spacing per tier
     if (Object.keys(positions).length < nodes.length) {
       const startX = 200
-      const rowGap = 160
+      const rowGap = nodes.length > 60 ? 200 : 160
       for (const tier of TIER_LIST) {
         const tierNodes = (byTier.get(tier) || []).sort((a, b) => a.name.localeCompare(b.name))
         const tierWidth = tierNodes.length * rowGap
@@ -115,8 +136,7 @@ export function useLayout() {
 
     // De-overlap pass: since we override Y, nodes dagre put on different ranks
     // may now share the same Y. Spread them out if they overlap.
-    const nodeById = new Map(nodes.map(n => [n.id, n]))
-    const MIN_GAP = 30 // minimum px gap between node edges
+    const MIN_GAP = params.minGap
 
     for (const tier of TIER_LIST) {
       const tierNodes = (byTier.get(tier) || [])
@@ -191,5 +211,5 @@ export function useLayout() {
     })
   }
 
-  return { computeLayout, computeGroupBounds, sortByTier, TIER_Y }
+  return { computeLayout, computeGroupBounds, sortByTier, TIER_Y: BASE_TIER_Y }
 }
