@@ -172,7 +172,7 @@ def _scan_repository_sources(
     if terraform_pull_missing and (include_types is None or "terraform" in include_types):
         if missing_tfstate_dirs:
             should_pull = typer.confirm(
-                f"Found {len(missing_tfstate_dirs)} Terraform directories without state files. "
+                f"Found {len(missing_tfstate_dirs)} Terraform directories without usable local state. "
                 "Pull remote state using `terraform state pull`?",
                 default=True,
             )
@@ -405,9 +405,9 @@ def scan_repo(
         help="Run `sam build` for discovered SAM templates before parsing.",
     ),
     terraform_pull_missing: bool = typer.Option(
-        False,
+        True,
         "--terraform-pull-missing/--no-terraform-pull-missing",
-        help="When Terraform *.tf exists without state, offer `terraform state pull`.",
+        help="When Terraform *.tf exists without usable local state, offer `terraform state pull`.",
     ),
     output: str = typer.Option("stackmap-repo-output.json", help="Output file path"),
     format: str = typer.Option("json", help="Output format: json or html"),

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -56,9 +57,26 @@ def _candidate_source_files(root: Path, max_depth: int) -> list[Path]:
     candidates: list[Path] = []
     for path in _walk_files(root, max_depth):
         suffix = path.suffix.lower()
-        if suffix in {".tfstate", ".yaml", ".yml", ".json", ".template", ".cfn"}:
+        if (
+            suffix in {".tfstate", ".yaml", ".yml", ".json", ".template", ".cfn"}
+            or path.name.endswith(".tfstate.backup")
+        ):
             candidates.append(path)
     return sorted(candidates)
+
+
+def _is_terraform_state_path(path: Path) -> bool:
+    return path.suffix.lower() == ".tfstate" or path.name.endswith(".tfstate.backup")
+
+
+def _has_parseable_terraform_state(path: Path) -> bool:
+    try:
+        data = json.loads(path.read_text())
+    except Exception:
+        return False
+    return isinstance(data, dict) and (
+        "terraform_version" in data or "resources" in data or "outputs" in data
+    )
 
 
 def _find_terraform_dirs_missing_state(root: Path, max_depth: int) -> list[Path]:
@@ -68,7 +86,7 @@ def _find_terraform_dirs_missing_state(root: Path, max_depth: int) -> list[Path]
         suffix = p.suffix.lower()
         if suffix == ".tf":
             dirs_with_tf.add(p.parent)
-        if suffix == ".tfstate" or p.name == "terraform.tfstate":
+        if _is_terraform_state_path(p) and _has_parseable_terraform_state(p):
             dirs_with_state.add(p.parent)
     return sorted(d for d in dirs_with_tf if d not in dirs_with_state)
 

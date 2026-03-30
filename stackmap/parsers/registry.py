@@ -36,7 +36,10 @@ def detect_source_type(source_path: str | Path) -> str:
                 raise typer.BadParameter(
                     "YAML CloudFormation template detected but PyYAML is not installed."
                 )
-            data = yaml.safe_load(path.read_text())
+            from stackmap.parsers.cloudformation import _build_cfn_yaml_loader
+
+            loader = _build_cfn_yaml_loader()
+            data = yaml.load(path.read_text(), Loader=loader)
             if not isinstance(data, dict):
                 raise ValueError("not a mapping")
             if "AWSTemplateFormatVersion" in data or "Resources" in data:
