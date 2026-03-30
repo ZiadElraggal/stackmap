@@ -81,6 +81,46 @@ RESOURCE_CATEGORY_MAP: dict[str, ResourceCategory] = {
     "aws_sqs_queue": ResourceCategory.QUEUE,
     "aws_sns_topic": ResourceCategory.QUEUE,
     "aws_sns_topic_subscription": ResourceCategory.QUEUE,
+    # EventBridge
+    "aws_cloudwatch_event_rule": ResourceCategory.INTEGRATION,
+    "aws_cloudwatch_event_target": ResourceCategory.INTEGRATION,
+    "aws_scheduler_schedule": ResourceCategory.INTEGRATION,
+    # Kinesis
+    "aws_kinesis_stream": ResourceCategory.QUEUE,
+    "aws_kinesis_firehose_delivery_stream": ResourceCategory.QUEUE,
+    # Secrets & Config
+    "aws_secretsmanager_secret": ResourceCategory.SECURITY,
+    "aws_secretsmanager_secret_version": ResourceCategory.SECURITY,
+    "aws_ssm_parameter": ResourceCategory.SECURITY,
+    # Cognito
+    "aws_cognito_user_pool": ResourceCategory.SECURITY,
+    "aws_cognito_user_pool_client": ResourceCategory.SECURITY,
+    "aws_cognito_identity_pool": ResourceCategory.SECURITY,
+    # WAF
+    "aws_wafv2_web_acl": ResourceCategory.SECURITY,
+    "aws_wafv2_web_acl_association": ResourceCategory.SECURITY,
+    # ElastiCache (replication)
+    "aws_elasticache_replication_group": ResourceCategory.DATABASE,
+    # ACM
+    "aws_acm_certificate": ResourceCategory.SECURITY,
+    "aws_acm_certificate_validation": ResourceCategory.SECURITY,
+    # Step Functions
+    "aws_sfn_state_machine": ResourceCategory.INTEGRATION,
+    # AppSync
+    "aws_appsync_graphql_api": ResourceCategory.INTEGRATION,
+    "aws_appsync_datasource": ResourceCategory.INTEGRATION,
+    "aws_appsync_resolver": ResourceCategory.INTEGRATION,
+    # ECR
+    "aws_ecr_repository": ResourceCategory.CONTAINER,
+    "aws_ecr_lifecycle_policy": ResourceCategory.CONTAINER,
+    # S3 extras
+    "aws_s3_bucket_website_configuration": ResourceCategory.STORAGE,
+    "aws_s3_bucket_cors_configuration": ResourceCategory.STORAGE,
+    "aws_s3_bucket_lifecycle_configuration": ResourceCategory.STORAGE,
+    "aws_s3_bucket_notification": ResourceCategory.STORAGE,
+    # SES
+    "aws_ses_domain_identity": ResourceCategory.INTEGRATION,
+    "aws_ses_email_identity": ResourceCategory.INTEGRATION,
 }
 
 # Tier assignments for layout hints
@@ -126,6 +166,19 @@ WEIGHT_MAP: dict[str, int] = {
     "aws_lambda_permission": 1,
     "aws_route_table": 1,
     "aws_route_table_association": 1,
+    "aws_apigatewayv2_api": 5,
+    "aws_kinesis_stream": 4,
+    "aws_kinesis_firehose_delivery_stream": 4,
+    "aws_cloudwatch_event_rule": 3,
+    "aws_secretsmanager_secret": 3,
+    "aws_cognito_user_pool": 4,
+    "aws_wafv2_web_acl": 3,
+    "aws_elasticache_replication_group": 5,
+    "aws_appsync_graphql_api": 5,
+    "aws_ecr_repository": 3,
+    "aws_route53_zone": 3,
+    "aws_route53_record": 2,
+    "aws_acm_certificate": 2,
 }
 
 # Attribute names to try for human-readable name, in priority order
@@ -435,6 +488,131 @@ RELATIONSHIP_RULES: list[tuple[str, str, EdgeType, str, str | None]] = [
         "peers to",
         "aws_vpc",
     ),
+    # EventBridge Rule → Target
+    (
+        "aws_cloudwatch_event_target",
+        "rule",
+        EdgeType.REFERENCES,
+        "target of",
+        "aws_cloudwatch_event_rule",
+    ),
+    (
+        "aws_cloudwatch_event_target",
+        "arn",
+        EdgeType.TRIGGERS,
+        "triggers",
+        None,
+    ),
+    # Kinesis → Lambda (event source mapping handled via lambda_permission)
+    (
+        "aws_kinesis_firehose_delivery_stream",
+        "kinesis_source_configuration.0.kinesis_stream_arn",
+        EdgeType.READS_FROM,
+        "reads from",
+        "aws_kinesis_stream",
+    ),
+    # Cognito User Pool Client → User Pool
+    (
+        "aws_cognito_user_pool_client",
+        "user_pool_id",
+        EdgeType.REFERENCES,
+        "client of",
+        "aws_cognito_user_pool",
+    ),
+    # Cognito Identity Pool → User Pool
+    (
+        "aws_cognito_identity_pool",
+        "cognito_identity_providers.*.client_id",
+        EdgeType.REFERENCES,
+        "federated with",
+        None,
+    ),
+    # WAF → ALB association
+    (
+        "aws_wafv2_web_acl_association",
+        "web_acl_arn",
+        EdgeType.REFERENCES,
+        "uses acl",
+        "aws_wafv2_web_acl",
+    ),
+    (
+        "aws_wafv2_web_acl_association",
+        "resource_arn",
+        EdgeType.REFERENCES,
+        "protects",
+        None,
+    ),
+    # ElastiCache Replication Group → Subnet Group
+    (
+        "aws_elasticache_replication_group",
+        "subnet_group_name",
+        EdgeType.REFERENCES,
+        "in subnet group",
+        None,
+    ),
+    # AppSync → Data Sources
+    (
+        "aws_appsync_datasource",
+        "api_id",
+        EdgeType.REFERENCES,
+        "data source of",
+        "aws_appsync_graphql_api",
+    ),
+    # Secrets Manager Secret Version → Secret
+    (
+        "aws_secretsmanager_secret_version",
+        "secret_id",
+        EdgeType.REFERENCES,
+        "version of",
+        "aws_secretsmanager_secret",
+    ),
+    # S3 Notification → Lambda / SQS / SNS
+    (
+        "aws_s3_bucket_notification",
+        "lambda_function.*.lambda_function_arn",
+        EdgeType.TRIGGERS,
+        "notifies",
+        "aws_lambda_function",
+    ),
+    (
+        "aws_s3_bucket_notification",
+        "queue.*.queue_arn",
+        EdgeType.TRIGGERS,
+        "notifies",
+        "aws_sqs_queue",
+    ),
+    (
+        "aws_s3_bucket_notification",
+        "topic.*.topic_arn",
+        EdgeType.TRIGGERS,
+        "notifies",
+        "aws_sns_topic",
+    ),
+    # SQS Queue → DLQ
+    (
+        "aws_sqs_queue",
+        "redrive_policy",
+        EdgeType.REFERENCES,
+        "dead letter queue",
+        None,
+    ),
+    # APIGateway V2 → Lambda integration
+    (
+        "aws_apigatewayv2_api",
+        "target",
+        EdgeType.TRIGGERS,
+        "triggers",
+        None,
+    ),
+    # ECR → ECS (resolved via task definition image)
+    # ECS Task Definition → ECR (handled via IAM or image attribute)
+    (
+        "aws_ecs_task_definition",
+        "container_definitions",
+        EdgeType.REFERENCES,
+        "pulls from",
+        None,
+    ),
 ]
 
 
@@ -455,6 +633,18 @@ _SECONDARY_RESOURCE_TYPES = {
     "aws_db_subnet_group",
     "aws_elasticache_subnet_group",
     "aws_flow_log",
+    "aws_cloudwatch_event_target",
+    "aws_secretsmanager_secret_version",
+    "aws_cognito_user_pool_client",
+    "aws_wafv2_web_acl_association",
+    "aws_acm_certificate_validation",
+    "aws_s3_bucket_website_configuration",
+    "aws_s3_bucket_cors_configuration",
+    "aws_s3_bucket_lifecycle_configuration",
+    "aws_s3_bucket_notification",
+    "aws_ecr_lifecycle_policy",
+    "aws_appsync_resolver",
+    "aws_appsync_datasource",
 }
 
 
@@ -894,16 +1084,13 @@ class TerraformParser(BaseParser):
                 # Direct vpc_id reference
                 if attrs.get("vpc_id") == vpc_id:
                     children.append(node.id)
-                # Subnet references to this VPC
-                elif node.resource_type == "aws_subnet" and attrs.get("vpc_id") == vpc_id:
-                    children.append(node.id)
 
             groups.append(
                 StackMapGroup(
                     id=f"group:{vpc_node.id}",
                     name=vpc_node.name,
                     group_type="vpc",
-                    children=children,
+                    children=sorted(set(children)),
                     parent=None,
                 )
             )
@@ -953,7 +1140,7 @@ class TerraformParser(BaseParser):
                         id=f"group:{subnet_node.id}",
                         name=subnet_node.name,
                         group_type="subnet",
-                        children=children,
+                        children=sorted(set(children)),
                         parent=parent_group,
                     )
                 )
@@ -1043,6 +1230,65 @@ class TerraformParser(BaseParser):
                 _assign(node, parent_id)
                 continue
 
+            if node.resource_type in {
+                "aws_s3_bucket_website_configuration",
+                "aws_s3_bucket_cors_configuration",
+                "aws_s3_bucket_lifecycle_configuration",
+                "aws_s3_bucket_notification",
+            }:
+                bucket_name = attrs.get("bucket", "")
+                parent_id = _lookup_target(bucket_name, id_index, arn_index)
+                _assign(node, parent_id)
+                continue
+
+            if node.resource_type == "aws_secretsmanager_secret_version":
+                secret_id = attrs.get("secret_id", "")
+                parent_id = _lookup_target(secret_id, id_index, arn_index)
+                _assign(node, parent_id)
+                continue
+
+            if node.resource_type == "aws_cognito_user_pool_client":
+                pool_id = attrs.get("user_pool_id", "")
+                parent_id = _lookup_target(pool_id, id_index, arn_index)
+                _assign(node, parent_id)
+                continue
+
+            if node.resource_type == "aws_wafv2_web_acl_association":
+                acl_arn = attrs.get("web_acl_arn", "")
+                parent_id = _lookup_target(acl_arn, id_index, arn_index)
+                _assign(node, parent_id)
+                continue
+
+            if node.resource_type == "aws_acm_certificate_validation":
+                cert_arn = attrs.get("certificate_arn", "")
+                parent_id = _lookup_target(cert_arn, id_index, arn_index)
+                _assign(node, parent_id)
+                continue
+
+            if node.resource_type == "aws_cloudwatch_event_target":
+                rule_name = attrs.get("rule", "")
+                parent_id = _lookup_target(rule_name, id_index, arn_index)
+                _assign(node, parent_id)
+                continue
+
+            if node.resource_type == "aws_ecr_lifecycle_policy":
+                repo = attrs.get("repository", "")
+                parent_id = _lookup_target(repo, id_index, arn_index)
+                _assign(node, parent_id)
+                continue
+
+            if node.resource_type == "aws_appsync_datasource":
+                api_id = attrs.get("api_id", "")
+                parent_id = _lookup_target(api_id, id_index, arn_index)
+                _assign(node, parent_id)
+                continue
+
+            if node.resource_type == "aws_appsync_resolver":
+                api_id = attrs.get("api_id", "")
+                parent_id = _lookup_target(api_id, id_index, arn_index)
+                _assign(node, parent_id)
+                continue
+
 
 def _lookup_target(
     value: str, id_index: dict[str, str], arn_index: dict[str, str]
@@ -1063,19 +1309,25 @@ def _lookup_target_prefix(
     # arn:aws:execute-api:region:account:api-id/stage/method/path
     # We want to match the API Gateway REST API which has ARN:
     # arn:aws:execute-api:region:account:api-id
-    if not value:
+    if not value or not value.startswith("arn:"):
         return None
+
+    # Exact prefix matching: longer ARN must start with shorter ARN
+    # followed by a separator (/ or :) or be equal
+    best_match: str | None = None
+    best_len = 0
     for arn, node_id in arn_index.items():
-        if value.startswith(arn) or arn.startswith(value):
-            return node_id
-    # Try matching just the resource ID portion
-    parts = value.split(":")
-    if len(parts) >= 6:
-        resource_part = parts[5].split("/")[0]
-        for arn, node_id in arn_index.items():
-            if resource_part and resource_part in arn:
-                return node_id
-    return None
+        if value.startswith(arn) and len(arn) > best_len:
+            # Ensure the match is at a boundary (end, or followed by / or :)
+            if len(value) == len(arn) or value[len(arn)] in ("/", ":"):
+                best_match = node_id
+                best_len = len(arn)
+        elif arn.startswith(value) and len(value) > best_len:
+            if len(arn) == len(value) or arn[len(value)] in ("/", ":"):
+                best_match = node_id
+                best_len = len(value)
+
+    return best_match
 
 
 def _lookup_origin_target(

@@ -72,6 +72,51 @@ const HELPER_RESOURCE_TYPES = new Set([
   'aws_s3_bucket_notification',
   'aws_nat_gateway',
   'aws_internet_gateway',
+  // New helper types
+  'aws_cloudwatch_event_target',
+  'aws_secretsmanager_secret_version',
+  'aws_cognito_user_pool_client',
+  'aws_cognito_identity_pool',
+  'aws_wafv2_web_acl_association',
+  'aws_acm_certificate_validation',
+  'aws_s3_bucket_website_configuration',
+  'aws_s3_bucket_cors_configuration',
+  'aws_s3_bucket_lifecycle_configuration',
+  'aws_s3_bucket_notification',
+  'aws_ecr_lifecycle_policy',
+  'aws_appsync_datasource',
+  'aws_appsync_resolver',
+  // CloudFormation helper equivalents
+  'AWS::ApiGateway::Deployment',
+  'AWS::ApiGateway::Stage',
+  'AWS::ApiGateway::Method',
+  'AWS::ApiGateway::Resource',
+  'AWS::ApiGateway::Integration',
+  'AWS::ApiGatewayV2::Integration',
+  'AWS::ApiGatewayV2::Route',
+  'AWS::ApiGatewayV2::Stage',
+  'AWS::ApiGatewayV2::Authorizer',
+  'AWS::Lambda::Permission',
+  'AWS::Lambda::LayerVersion',
+  'AWS::Logs::LogGroup',
+  'AWS::CloudWatch::Dashboard',
+  'AWS::IAM::Policy',
+  'AWS::IAM::ManagedPolicy',
+  'AWS::S3::BucketPolicy',
+  'AWS::ElasticLoadBalancingV2::Listener',
+  'AWS::ElasticLoadBalancingV2::ListenerRule',
+  'AWS::ElasticLoadBalancingV2::TargetGroup',
+  'AWS::EC2::RouteTable',
+  'AWS::EC2::SubnetRouteTableAssociation',
+  'AWS::EC2::EIP',
+  'AWS::EC2::NatGateway',
+  'AWS::Serverless::LayerVersion',
+  'AWS::WAFv2::WebACLAssociation',
+  'AWS::CertificateManager::Certificate',
+  'AWS::ElastiCache::SubnetGroup',
+  'AWS::AppSync::DataSource',
+  'AWS::AppSync::Resolver',
+  'AWS::ECR::Repository',
 ])
 
 const PRIMARY_CATEGORY_PRIORITY: Record<string, number> = {
@@ -107,6 +152,12 @@ const REFERENCE_TYPE_ALLOWLIST = new Set([
   'aws_route_table_association->aws_subnet',
   'aws_api_gateway_stage->aws_api_gateway_deployment',
   'aws_route53_record->aws_route53_zone',
+  'aws_cognito_user_pool_client->aws_cognito_user_pool',
+  'aws_wafv2_web_acl_association->aws_wafv2_web_acl',
+  'aws_elasticache_replication_group->aws_elasticache_subnet_group',
+  'aws_appsync_datasource->aws_appsync_graphql_api',
+  'aws_kinesis_firehose_delivery_stream->aws_kinesis_stream',
+  'aws_cloudwatch_event_target->aws_cloudwatch_event_rule',
 ])
 
 function shouldKeepReferenceEdge(
@@ -283,17 +334,23 @@ export const useGraphStore = defineStore('graph', {
     },
 
     connectedNodeIds(): (nodeId: string) => Set<string> {
-      return (nodeId: string) => {
-        const connected = new Set<string>()
-        for (const edge of this.graphEdges) {
-          if (edge.source === nodeId) connected.add(edge.target)
-          if (edge.target === nodeId) connected.add(edge.source)
-        }
-        return connected
+      const adj = this.graphAdjacency
+      return (nodeId: string) => adj.get(nodeId) ?? new Set()
+    },
+
+    graphAdjacency(): Map<string, Set<string>> {
+      const adj = new Map<string, Set<string>>()
+      for (const edge of this.graphEdges) {
+        if (!adj.has(edge.source)) adj.set(edge.source, new Set())
+        if (!adj.has(edge.target)) adj.set(edge.target, new Set())
+        adj.get(edge.source)!.add(edge.target)
+        adj.get(edge.target)!.add(edge.source)
       }
+      return adj
     },
 
     nodesWithinHops(): (nodeId: string, hops: number) => Set<string> {
+      const adj = this.graphAdjacency
       return (nodeId: string, hops: number) => {
         const visited = new Set<string>([nodeId])
         let frontier = new Set<string>([nodeId])
@@ -301,14 +358,12 @@ export const useGraphStore = defineStore('graph', {
         for (let i = 0; i < hops; i++) {
           const nextFrontier = new Set<string>()
           for (const nid of frontier) {
-            for (const edge of this.graphEdges) {
-              if (edge.source === nid && !visited.has(edge.target)) {
-                visited.add(edge.target)
-                nextFrontier.add(edge.target)
-              }
-              if (edge.target === nid && !visited.has(edge.source)) {
-                visited.add(edge.source)
-                nextFrontier.add(edge.source)
+            const neighbors = adj.get(nid)
+            if (!neighbors) continue
+            for (const neighbor of neighbors) {
+              if (!visited.has(neighbor)) {
+                visited.add(neighbor)
+                nextFrontier.add(neighbor)
               }
             }
           }
