@@ -161,39 +161,40 @@
 
     <div class="absolute right-4 top-4 z-30">
       <button
-        class="flex h-6 w-6 items-center justify-center rounded border border-white/10 bg-white/5 text-xs text-gray-500 hover:text-gray-300"
+        class="flex h-7 w-7 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-xs text-gray-500 hover:text-gray-300 hover:bg-white/[0.06] transition-all backdrop-blur-sm"
         @click="showHelp = !showHelp"
         title="Keyboard shortcuts (?)"
       >
-        ?
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="6" cy="6" r="5" /><path d="M4.5 4.5a1.5 1.5 0 0 1 3 0c0 .8-.7 1-1.5 1.5M6 8.5v.01" stroke-linecap="round"/>
+        </svg>
       </button>
     </div>
 
     <Transition name="fade">
       <div
         v-if="showHelp"
-        class="absolute right-4 top-12 z-50 w-56 rounded-lg border border-white/10 bg-[#1a1a2e] p-3 shadow-xl"
+        class="absolute right-4 top-14 z-50 w-52 rounded-xl border border-white/[0.08] bg-[#1a1a2e]/95 backdrop-blur-xl p-3 shadow-2xl shadow-black/40"
       >
-        <h3 class="mb-2 text-xs uppercase tracking-wider text-gray-500">Keyboard shortcuts</h3>
-        <div class="space-y-1 text-xs">
-          <div class="flex justify-between"><span class="text-gray-400">⌘K</span><span class="text-gray-600">Command palette</span></div>
-          <div class="flex justify-between"><span class="text-gray-400">/</span><span class="text-gray-600">Search</span></div>
-          <div class="flex justify-between"><span class="text-gray-400">Esc</span><span class="text-gray-600">Deselect / Close</span></div>
-          <div class="flex justify-between"><span class="text-gray-400">0</span><span class="text-gray-600">Fit to screen</span></div>
-          <div class="flex justify-between"><span class="text-gray-400">+ / -</span><span class="text-gray-600">Zoom in / out</span></div>
-          <div class="flex justify-between"><span class="text-gray-400">?</span><span class="text-gray-600">Toggle help</span></div>
+        <h3 class="mb-2.5 text-[10px] uppercase tracking-widest text-gray-600 font-medium">Shortcuts</h3>
+        <div class="space-y-1.5 text-xs">
+          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.04] px-1.5 py-0.5 rounded text-[10px] font-mono">⌘K</kbd><span class="text-gray-500">Palette</span></div>
+          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.04] px-1.5 py-0.5 rounded text-[10px] font-mono">/</kbd><span class="text-gray-500">Search</span></div>
+          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.04] px-1.5 py-0.5 rounded text-[10px] font-mono">Esc</kbd><span class="text-gray-500">Close</span></div>
+          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.04] px-1.5 py-0.5 rounded text-[10px] font-mono">0</kbd><span class="text-gray-500">Fit to screen</span></div>
+          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.04] px-1.5 py-0.5 rounded text-[10px] font-mono">+/-</kbd><span class="text-gray-500">Zoom</span></div>
         </div>
       </div>
     </Transition>
 
     <div
       v-if="edgeTypesInGraph.length"
-      class="absolute bottom-9 left-3 z-30 rounded-md border border-white/10 bg-[#12121a]/70 px-2 py-1 backdrop-blur-sm"
+      class="absolute bottom-9 left-3 z-30 rounded-lg border border-white/[0.06] bg-[#0e0e18]/80 px-2.5 py-1.5 backdrop-blur-md"
     >
       <div class="flex items-center gap-3">
         <div v-for="edgeType in edgeTypesInGraph" :key="`legend-${edgeType}`" class="flex items-center gap-1.5">
-          <span class="h-px w-5" :style="{ backgroundColor: edgeColor(edgeType), opacity: 0.9 }" />
-          <span class="text-[8px] uppercase tracking-wide text-gray-500">{{ edgeType }}</span>
+          <span class="h-0.5 w-4 rounded-full" :style="{ backgroundColor: edgeColor(edgeType), opacity: 0.8 }" />
+          <span class="text-[9px] text-gray-500 tracking-wide">{{ edgeType.replace('_', ' ') }}</span>
         </div>
       </div>
     </div>
@@ -201,30 +202,31 @@
     <div class="status-glow absolute bottom-7 left-0 right-0 h-px" />
 
     <div
-      class="absolute bottom-0 left-0 right-0 flex h-7 items-center gap-4 border-t border-white/5 bg-[#12121a]/90 px-4 font-mono text-xs text-gray-500"
+      class="absolute bottom-0 left-0 right-0 flex h-7 items-center gap-3 border-t border-white/[0.04] bg-[#0e0e18]/95 backdrop-blur-sm px-4 font-mono text-[10px] text-gray-500"
     >
-      <div class="flex items-center gap-2 text-gray-400">
-        <span class="h-1.5 w-1.5 rounded-full bg-cyan-400" />
-        <span class="text-[10px] font-semibold tracking-wide">StackMap</span>
+      <div class="flex items-center gap-1.5 text-gray-400">
+        <span class="h-1.5 w-1.5 rounded-full bg-cyan-400/80" />
+        <span class="font-semibold tracking-wider text-[10px]">StackMap</span>
       </div>
-      <span>{{ store.visibleNodes.length }}/{{ store.nodes.length }} resources</span>
+      <span class="h-3 w-px bg-white/[0.06]" />
+      <span>{{ store.visibleNodes.length }}<span class="text-gray-600">/{{ store.nodes.length }}</span> resources</span>
       <span>{{ store.visibleEdges.length }} connections</span>
       <span class="text-gray-600">{{ viewModeLabel }}</span>
-      <span v-if="store.groups.length > 0">{{ store.groups.length }} groups</span>
-      <span v-if="store.metadata.terraform_version">Terraform v{{ store.metadata.terraform_version }}</span>
-      <span>{{ Math.round(zoomScale * 100) }}%</span>
-      <div class="flex items-center gap-1 rounded border border-white/10 bg-white/[0.03] px-1.5 py-0.5">
+      <span v-if="store.groups.length > 0" class="text-gray-600">{{ store.groups.length }} groups</span>
+      <span v-if="store.metadata.terraform_version" class="text-gray-600">TF v{{ store.metadata.terraform_version }}</span>
+      <span class="text-gray-600">{{ Math.round(zoomScale * 100) }}%</span>
+      <div class="flex items-center gap-0.5 rounded-md border border-white/[0.06] bg-white/[0.02] px-1 py-0.5">
         <div
           v-for="lane in architectureStrip"
           :key="`strip-${lane.name}`"
-          class="flex items-center gap-1 rounded px-1 py-[1px]"
-          :style="{ backgroundColor: lane.bg }"
+          class="flex items-center gap-0.5 rounded px-1 py-[1px]"
+          :style="{ backgroundColor: lane.count > 0 ? lane.bg : 'transparent' }"
         >
-          <span class="text-[8px] uppercase tracking-wide" :style="{ color: lane.accent }">{{ lane.short }}</span>
-          <span class="text-[9px] text-gray-300">{{ lane.count }}</span>
+          <span class="text-[8px] uppercase tracking-wide" :style="{ color: lane.count > 0 ? lane.accent : '#4b5563' }">{{ lane.short }}</span>
+          <span v-if="lane.count > 0" class="text-[9px] text-gray-300">{{ lane.count }}</span>
         </div>
       </div>
-      <span class="ml-auto text-gray-600">scroll to zoom · drag to pan · ⌘K command palette</span>
+      <span class="ml-auto text-gray-600 hidden sm:inline">scroll to zoom · drag to pan · ⌘K palette</span>
     </div>
   </div>
 </template>
