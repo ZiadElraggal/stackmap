@@ -141,6 +141,19 @@ def _resolve_source_with_remote_pull(
     return pulled
 
 
+def _default_serve_source() -> str:
+    """Pick the most likely local graph source for `stackmap serve`."""
+    candidates = [
+        "stackmap-repo-output.json",
+        "stackmap-output.json",
+        "terraform.tfstate",
+    ]
+    for candidate in candidates:
+        if Path(candidate).exists():
+            return candidate
+    return "terraform.tfstate"
+
+
 def _scan_repository_sources(
     root: Path,
     include_types: set[str] | None,
@@ -261,6 +274,13 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def end_headers(self) -> None:
+        # Prevent browser caching of sample-data.json and API responses across runs.
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
+        super().end_headers()
 
     def do_GET(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
@@ -480,8 +500,8 @@ def scan_repo(
 @app.command()
 def serve(
     source: str = typer.Option(
-        "terraform.tfstate",
-        help="Path to infrastructure source file (default: terraform.tfstate)",
+        _default_serve_source,
+        help="Path to infrastructure source file (default: stackmap-repo-output.json, stackmap-output.json, or terraform.tfstate if found)",
     ),
     terraform_dir: str | None = typer.Option(
         None,

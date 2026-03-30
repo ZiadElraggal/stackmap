@@ -433,7 +433,12 @@ function edgeTargetPos(edge: StackMapEdge) {
 }
 
 onMounted(async () => {
-  await store.loadFromJSON('/sample-data.json')
+  try {
+    await store.loadFromJSON('/api/graph')
+  } catch {
+    // Fallback for static/offline exports that only ship sample-data.json.
+    await store.loadFromJSON('/sample-data.json')
+  }
 
   recomputeLayout()
 

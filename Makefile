@@ -1,4 +1,4 @@
-.PHONY: install-dev brew-install brew-upgrade brew-uninstall test lint format frontend-build sync-webapp-assets package-build package build-package phase1-check phase2-check phase3-check phase4-check demo-check
+.PHONY: install-dev brew-install brew-upgrade brew-uninstall test lint format frontend-build sync-webapp-assets package-build package build-package release-check phase1-check phase2-check phase3-check phase4-check demo-check
 
 install-dev:
 	pip install -e ".[dev]"
@@ -37,6 +37,18 @@ package-build: frontend-build sync-webapp-assets
 package: package-build
 
 build-package: package-build
+
+release-check: package-build
+	./.venv/bin/stackmap scan --source tests/fixtures/sam-simple.json --format json --output /tmp/stackmap-release-check.json
+	./.venv/bin/stackmap serve --source tests/fixtures/sam-simple.json --host 127.0.0.1 --port 3011 --no-open >/tmp/stackmap-release-check.log 2>&1 & pid=$$!; \
+	sleep 2; \
+	curl -sf http://127.0.0.1:3011/api/health; \
+	curl -sf http://127.0.0.1:3011/api/graph > /tmp/stackmap-release-graph.json; \
+	curl -sf http://127.0.0.1:3011/ > /tmp/stackmap-release-index.html; \
+	! grep -q '@vite/client' /tmp/stackmap-release-index.html; \
+	! grep -q 'node_modules/nuxt/dist/app/entry.js' /tmp/stackmap-release-index.html; \
+	kill $$pid; wait $$pid 2>/dev/null || true
+	@echo "Release check passed."
 
 ## Run a full check of the 4th phase: frontend build, phase gates, and Terraform/CFN scans.
 phase4-check:

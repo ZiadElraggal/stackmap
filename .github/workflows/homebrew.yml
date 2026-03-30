@@ -66,3 +66,18 @@ jobs:
         run: |
           stackmap --help
           stackmap version
+          stackmap scan --source tests/fixtures/sam-simple.json --format json --output /tmp/stackmap-smoke.json
+          test -s /tmp/stackmap-smoke.json
+          stackmap serve --source tests/fixtures/sam-simple.json --host 127.0.0.1 --port 3011 --no-open >/tmp/stackmap-serve.log 2>&1 &
+          pid=$!
+          cleanup() {
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          sleep 3
+          curl -sf http://127.0.0.1:3011/api/health | grep '"status": "ok"'
+          curl -sf http://127.0.0.1:3011/api/graph | grep '"nodes"'
+          curl -sf http://127.0.0.1:3011/ >/tmp/stackmap-homebrew-index.html
+          ! grep -q '@vite/client' /tmp/stackmap-homebrew-index.html
+          ! grep -q 'node_modules/nuxt/dist/app/entry.js' /tmp/stackmap-homebrew-index.html
