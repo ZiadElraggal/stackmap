@@ -1,6 +1,6 @@
 <template>
   <div
-    class="absolute bottom-10 right-4 w-52 h-40 bg-[#12121a]/90 border border-white/10 rounded-lg overflow-hidden z-30 minimap-shell"
+    class="absolute bottom-10 right-4 w-48 h-36 bg-[#0e0e18]/90 border border-white/[0.06] rounded-xl overflow-hidden z-30 minimap-shell backdrop-blur-sm"
     @mousedown="onMouseDown"
   >
     <svg class="w-full h-full" :viewBox="viewBox">
@@ -105,6 +105,6 @@ function onMouseDown(e: MouseEvent) {
 
 <style scoped>
 .minimap-shell {
-  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.45);
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.4), 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 </style>

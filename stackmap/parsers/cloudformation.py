@@ -71,6 +71,37 @@ CFN_CATEGORY_MAP: dict[str, ResourceCategory] = {
     "AWS::SQS::Queue": ResourceCategory.QUEUE,
     "AWS::SNS::Topic": ResourceCategory.QUEUE,
     "AWS::SNS::Subscription": ResourceCategory.QUEUE,
+    # EventBridge
+    "AWS::Events::Rule": ResourceCategory.INTEGRATION,
+    "AWS::Events::EventBus": ResourceCategory.INTEGRATION,
+    "AWS::Scheduler::Schedule": ResourceCategory.INTEGRATION,
+    # Kinesis
+    "AWS::Kinesis::Stream": ResourceCategory.QUEUE,
+    "AWS::KinesisFirehose::DeliveryStream": ResourceCategory.QUEUE,
+    # Secrets & Config
+    "AWS::SecretsManager::Secret": ResourceCategory.SECURITY,
+    "AWS::SSM::Parameter": ResourceCategory.SECURITY,
+    # Cognito
+    "AWS::Cognito::IdentityPool": ResourceCategory.SECURITY,
+    # WAF
+    "AWS::WAFv2::WebACL": ResourceCategory.SECURITY,
+    "AWS::WAFv2::WebACLAssociation": ResourceCategory.SECURITY,
+    # ElastiCache
+    "AWS::ElastiCache::CacheCluster": ResourceCategory.DATABASE,
+    "AWS::ElastiCache::ReplicationGroup": ResourceCategory.DATABASE,
+    "AWS::ElastiCache::SubnetGroup": ResourceCategory.DATABASE,
+    # ACM
+    "AWS::CertificateManager::Certificate": ResourceCategory.SECURITY,
+    # AppSync
+    "AWS::AppSync::GraphQLApi": ResourceCategory.INTEGRATION,
+    "AWS::AppSync::DataSource": ResourceCategory.INTEGRATION,
+    "AWS::AppSync::Resolver": ResourceCategory.INTEGRATION,
+    # Step Functions
+    "AWS::StepFunctions::Activity": ResourceCategory.INTEGRATION,
+    # ECR
+    "AWS::ECR::Repository": ResourceCategory.CONTAINER,
+    # SES
+    "AWS::SES::EmailIdentity": ResourceCategory.INTEGRATION,
     # SAM resources
     "AWS::Serverless::Function": ResourceCategory.COMPUTE,
     "AWS::Serverless::Api": ResourceCategory.INTEGRATION,
@@ -113,6 +144,23 @@ WEIGHT_MAP: dict[str, int] = {
     "AWS::EC2::Subnet": 2,
     "AWS::SQS::Queue": 4,
     "AWS::SNS::Topic": 4,
+    "AWS::Events::Rule": 3,
+    "AWS::Events::EventBus": 4,
+    "AWS::Kinesis::Stream": 4,
+    "AWS::KinesisFirehose::DeliveryStream": 4,
+    "AWS::SecretsManager::Secret": 3,
+    "AWS::Cognito::UserPool": 4,
+    "AWS::WAFv2::WebACL": 3,
+    "AWS::ElastiCache::CacheCluster": 5,
+    "AWS::ElastiCache::ReplicationGroup": 5,
+    "AWS::AppSync::GraphQLApi": 5,
+    "AWS::ECR::Repository": 3,
+    "AWS::RDS::DBCluster": 5,
+    "AWS::Serverless::Function": 5,
+    "AWS::Serverless::Api": 5,
+    "AWS::Serverless::HttpApi": 5,
+    "AWS::Serverless::StateMachine": 5,
+    "AWS::Serverless::SimpleTable": 5,
 }
 
 _SUB_REF_PATTERN = re.compile(r"\${([A-Za-z0-9:_\-.]+)}")
@@ -142,6 +190,12 @@ _HELPER_TYPES = {
     "AWS::EC2::EIP",
     "AWS::EC2::NatGateway",
     "AWS::Serverless::LayerVersion",
+    "AWS::WAFv2::WebACLAssociation",
+    "AWS::CertificateManager::Certificate",
+    "AWS::ElastiCache::SubnetGroup",
+    "AWS::AppSync::DataSource",
+    "AWS::AppSync::Resolver",
+    "AWS::ECR::Repository",
 }
 
 _CFN_INTRINSIC_SHORTCUTS = {
@@ -305,7 +359,24 @@ def _edge_type_for(source_type: str, target_type: str) -> EdgeType:
         "AWS::Events::Rule",
         "AWS::ElasticLoadBalancingV2::Listener",
         "AWS::ElasticLoadBalancingV2::ListenerRule",
-    } and target_type == "AWS::Lambda::Function":
+    } and target_type in {
+        "AWS::Lambda::Function",
+        "AWS::Serverless::Function",
+    }:
+        return EdgeType.TRIGGERS
+    if source_type == "AWS::Events::Rule" and target_type in {
+        "AWS::Lambda::Function",
+        "AWS::Serverless::Function",
+        "AWS::StepFunctions::StateMachine",
+        "AWS::Serverless::StateMachine",
+        "AWS::SQS::Queue",
+        "AWS::SNS::Topic",
+    }:
+        return EdgeType.TRIGGERS
+    if source_type in {"AWS::Kinesis::Stream", "AWS::DynamoDB::Table"} and target_type in {
+        "AWS::Lambda::Function",
+        "AWS::Serverless::Function",
+    }:
         return EdgeType.TRIGGERS
     return EdgeType.REFERENCES
 
@@ -431,7 +502,7 @@ class CloudFormationParser(BaseParser):
                                 )
                             )
 
-            # SAM: implicit API event wiring (Api/HttpApi event -> Function)
+            # SAM: implicit event wiring (Events -> Function)
             if source_node.resource_type == "AWS::Serverless::Function":
                 props = spec.get("Properties", {})
                 if isinstance(props, dict):
@@ -441,28 +512,106 @@ class CloudFormationParser(BaseParser):
                             if not isinstance(event, dict):
                                 continue
                             event_type = event.get("Type")
-                            event_props = event.get("Properties")
-                            if event_type not in {"Api", "HttpApi"} or not isinstance(event_props, dict):
-                                continue
-                            api_ref_obj = event_props.get("RestApiId") or event_props.get("ApiId")
-                            api_refs = _iter_refs(api_ref_obj)
-                            for api_logical_id, _kind in api_refs:
-                                api_node = node_by_id.get(api_logical_id)
-                                if not api_node or api_node.id == source_node.id:
-                                    continue
-                                key = (api_node.id, source_node.id, EdgeType.TRIGGERS.value)
-                                if key in edge_keys:
-                                    continue
-                                edge_keys.add(key)
-                                edges.append(
-                                    StackMapEdge(
-                                        id=f"{api_node.id}->{source_node.id}:{EdgeType.TRIGGERS.value}",
-                                        source=api_node.id,
-                                        target=source_node.id,
-                                        edge_type=EdgeType.TRIGGERS,
-                                        label="triggers",
+                            event_props = event.get("Properties", {})
+                            if not isinstance(event_props, dict):
+                                event_props = {}
+
+                            # Api/HttpApi event -> Function
+                            if event_type in {"Api", "HttpApi"}:
+                                api_ref_obj = event_props.get("RestApiId") or event_props.get("ApiId")
+                                api_refs = _iter_refs(api_ref_obj) if api_ref_obj else []
+                                for api_logical_id, _kind in api_refs:
+                                    api_node = node_by_id.get(api_logical_id)
+                                    if not api_node or api_node.id == source_node.id:
+                                        continue
+                                    key = (api_node.id, source_node.id, EdgeType.TRIGGERS.value)
+                                    if key in edge_keys:
+                                        continue
+                                    edge_keys.add(key)
+                                    edges.append(
+                                        StackMapEdge(
+                                            id=f"{api_node.id}->{source_node.id}:{EdgeType.TRIGGERS.value}",
+                                            source=api_node.id,
+                                            target=source_node.id,
+                                            edge_type=EdgeType.TRIGGERS,
+                                            label="triggers",
+                                        )
                                     )
-                                )
+
+                            # SQS event -> Function
+                            elif event_type == "SQS":
+                                queue_ref = event_props.get("Queue")
+                                for ref_id, _kind in _iter_refs(queue_ref) if queue_ref else []:
+                                    q_node = node_by_id.get(ref_id)
+                                    if q_node and q_node.id != source_node.id:
+                                        key = (q_node.id, source_node.id, EdgeType.TRIGGERS.value)
+                                        if key not in edge_keys:
+                                            edge_keys.add(key)
+                                            edges.append(StackMapEdge(
+                                                id=f"{q_node.id}->{source_node.id}:{EdgeType.TRIGGERS.value}",
+                                                source=q_node.id, target=source_node.id,
+                                                edge_type=EdgeType.TRIGGERS, label="triggers",
+                                            ))
+
+                            # SNS event -> Function
+                            elif event_type == "SNS":
+                                topic_ref = event_props.get("Topic")
+                                for ref_id, _kind in _iter_refs(topic_ref) if topic_ref else []:
+                                    t_node = node_by_id.get(ref_id)
+                                    if t_node and t_node.id != source_node.id:
+                                        key = (t_node.id, source_node.id, EdgeType.TRIGGERS.value)
+                                        if key not in edge_keys:
+                                            edge_keys.add(key)
+                                            edges.append(StackMapEdge(
+                                                id=f"{t_node.id}->{source_node.id}:{EdgeType.TRIGGERS.value}",
+                                                source=t_node.id, target=source_node.id,
+                                                edge_type=EdgeType.TRIGGERS, label="triggers",
+                                            ))
+
+                            # DynamoDB Stream event -> Function
+                            elif event_type == "DynamoDB":
+                                stream_ref = event_props.get("Stream")
+                                for ref_id, _kind in _iter_refs(stream_ref) if stream_ref else []:
+                                    d_node = node_by_id.get(ref_id)
+                                    if d_node and d_node.id != source_node.id:
+                                        key = (d_node.id, source_node.id, EdgeType.TRIGGERS.value)
+                                        if key not in edge_keys:
+                                            edge_keys.add(key)
+                                            edges.append(StackMapEdge(
+                                                id=f"{d_node.id}->{source_node.id}:{EdgeType.TRIGGERS.value}",
+                                                source=d_node.id, target=source_node.id,
+                                                edge_type=EdgeType.TRIGGERS, label="stream triggers",
+                                            ))
+
+                            # Kinesis event -> Function
+                            elif event_type == "Kinesis":
+                                stream_ref = event_props.get("Stream")
+                                for ref_id, _kind in _iter_refs(stream_ref) if stream_ref else []:
+                                    k_node = node_by_id.get(ref_id)
+                                    if k_node and k_node.id != source_node.id:
+                                        key = (k_node.id, source_node.id, EdgeType.TRIGGERS.value)
+                                        if key not in edge_keys:
+                                            edge_keys.add(key)
+                                            edges.append(StackMapEdge(
+                                                id=f"{k_node.id}->{source_node.id}:{EdgeType.TRIGGERS.value}",
+                                                source=k_node.id, target=source_node.id,
+                                                edge_type=EdgeType.TRIGGERS, label="stream triggers",
+                                            ))
+
+                            # S3 event -> Function
+                            elif event_type == "S3":
+                                bucket_ref = event_props.get("Bucket")
+                                for ref_id, _kind in _iter_refs(bucket_ref) if bucket_ref else []:
+                                    b_node = node_by_id.get(ref_id)
+                                    if b_node and b_node.id != source_node.id:
+                                        key = (b_node.id, source_node.id, EdgeType.TRIGGERS.value)
+                                        if key not in edge_keys:
+                                            edge_keys.add(key)
+                                            edges.append(StackMapEdge(
+                                                id=f"{b_node.id}->{source_node.id}:{EdgeType.TRIGGERS.value}",
+                                                source=b_node.id, target=source_node.id,
+                                                edge_type=EdgeType.TRIGGERS, label="event triggers",
+                                            ))
 
         self._mark_helper_parents(nodes, edges)
         groups = self._extract_groups(nodes, edges)

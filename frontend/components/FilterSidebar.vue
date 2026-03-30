@@ -1,15 +1,19 @@
 <template>
   <div
     :class="[
-      'fixed left-0 top-0 h-full bg-[#12121a] border-r border-white/10 z-40 transition-all duration-200 flex flex-col',
+      'fixed left-0 top-0 h-full bg-[#12121a]/95 backdrop-blur-md border-r border-white/[0.06] z-40 transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] flex flex-col',
       collapsed ? 'w-10' : 'w-64',
     ]"
   >
     <button
-      class="h-8 flex items-center justify-center text-gray-500 hover:text-gray-300 border-b border-white/10 text-xs"
+      class="h-9 flex items-center justify-center text-gray-500 hover:text-gray-300 border-b border-white/[0.06] text-xs transition-colors"
       @click="collapsed = !collapsed"
     >
-      {{ collapsed ? '▶' : '◀ Filters' }}
+      <svg
+        width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"
+        class="transition-transform duration-200" :class="collapsed ? '' : 'rotate-180'"
+      ><path d="M5 3l4 4-4 4"/></svg>
+      <span v-if="!collapsed" class="ml-1.5 tracking-wide">Filters</span>
     </button>
 
     <div v-if="!collapsed" class="flex-1 overflow-y-auto p-3 transition-opacity duration-150 opacity-100">
@@ -98,7 +102,7 @@
 
       <section class="pt-4">
         <button
-          class="w-full text-xs text-gray-500 hover:text-gray-300 border border-white/10 rounded px-2 py-1.5 transition"
+          class="w-full text-xs text-gray-500 hover:text-gray-300 border border-white/[0.08] rounded-md px-2 py-1.5 transition-all hover:bg-white/[0.03] active:scale-[0.98]"
           @click="resetFilters"
         >
           Reset all filters
@@ -172,10 +176,8 @@ function resetFilters() {
   store.setSearch('')
 }
 
-onUnmounted(() => {
-  // no-op cleanup guard for drag listeners in case component unmounts mid-drag
-  window.onmouseup = null
-})
+// Drag listeners are cleaned up via their own mouseup handlers.
+// No global onmouseup clobbering needed.
 </script>
 
 <style scoped>
