@@ -211,6 +211,85 @@ def test_scan_repo_include_filter_excludes_other_types(tmp_path: Path) -> None:
     assert discovered_types == {"cloudformation"}
 
 
+def test_scan_repo_does_not_classify_non_template_yaml_as_cloudformation(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    (repo_root / "cfn.yaml").write_text(
+        "\n".join(
+            [
+                "AWSTemplateFormatVersion: '2010-09-09'",
+                "Resources:",
+                "  Bucket:",
+                "    Type: AWS::S3::Bucket",
+            ]
+        )
+    )
+    (repo_root / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\npackages: {}\n")
+
+    out = tmp_path / "repo-out-yaml-filter.json"
+    result = runner.invoke(
+        app,
+        [
+            "scan-repo",
+            "--root",
+            str(repo_root),
+            "--include",
+            "cloudformation",
+            "--no-sam-build",
+            "--no-terraform-pull-missing",
+            "--format",
+            "json",
+            "--output",
+            str(out),
+        ],
+    )
+
+    assert result.exit_code == 0
+
+    import json
+
+    data = json.loads(out.read_text())
+    discovered_paths = {Path(entry["path"]).name for entry in data["metadata"]["discovered_sources"]}
+    assert discovered_paths == {"cfn.yaml"}
+
+
+def test_scan_repo_ignores_claude_worktrees(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    (repo_root / "cfn.json").write_text((FIXTURES / "cloudformation-simple.json").read_text())
+    worktree_dir = repo_root / ".claude" / "worktrees" / "w1"
+    worktree_dir.mkdir(parents=True)
+    (worktree_dir / "cfn.json").write_text((FIXTURES / "cloudformation-simple.json").read_text())
+
+    out = tmp_path / "repo-out-ignore-worktrees.json"
+    result = runner.invoke(
+        app,
+        [
+            "scan-repo",
+            "--root",
+            str(repo_root),
+            "--include",
+            "cloudformation",
+            "--no-sam-build",
+            "--no-terraform-pull-missing",
+            "--format",
+            "json",
+            "--output",
+            str(out),
+        ],
+    )
+
+    assert result.exit_code == 0
+
+    import json
+
+    data = json.loads(out.read_text())
+    discovered_paths = [entry["path"] for entry in data["metadata"]["discovered_sources"]]
+    assert len(discovered_paths) == 1
+    assert discovered_paths[0].endswith("/cfn.json")
+    assert "/.claude/" not in discovered_paths[0]
+
+
 def test_scan_repo_invalid_include_type_fails(tmp_path: Path) -> None:
     out = tmp_path / "repo-out.json"
     result = runner.invoke(
