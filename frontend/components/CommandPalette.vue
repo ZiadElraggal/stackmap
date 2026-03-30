@@ -7,20 +7,23 @@
         @click.self="close"
         @keydown.escape="close"
       >
-        <div class="w-[500px] bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl overflow-hidden">
+        <div class="w-[520px] bg-[#1a1a2e]/95 backdrop-blur-xl border border-white/[0.08] rounded-2xl shadow-2xl shadow-black/50 overflow-hidden">
           <!-- Input -->
-          <div class="flex items-center gap-2 px-4 py-3 border-b border-white/10">
-            <span class="text-gray-500">⌘</span>
+          <div class="flex items-center gap-3 px-4 py-3.5 border-b border-white/[0.06]">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" class="text-gray-500 flex-shrink-0">
+              <circle cx="7" cy="7" r="5" /><path d="M11 11l4 4" />
+            </svg>
             <input
               ref="inputRef"
               v-model="query"
               type="text"
               placeholder="Search resources or run a command..."
-              class="bg-transparent text-gray-200 placeholder-gray-600 outline-none flex-1 font-mono text-sm"
+              class="bg-transparent text-gray-200 placeholder-gray-600 outline-none flex-1 text-sm"
               @keydown.enter="executeSelected"
               @keydown.down.prevent="moveSelection(1)"
               @keydown.up.prevent="moveSelection(-1)"
             />
+            <span class="text-[10px] text-gray-600 font-mono flex-shrink-0 px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/[0.06]">esc</span>
           </div>
 
           <!-- Results -->

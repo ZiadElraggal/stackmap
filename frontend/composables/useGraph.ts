@@ -99,6 +99,13 @@ export function truncate(str: string, maxLen: number = 22): string {
 }
 
 export function formatResourceType(resourceType: string): string {
+  // CloudFormation / SAM types: "AWS::Lambda::Function" -> "lambda function"
+  if (resourceType.startsWith('AWS::')) {
+    const parts = resourceType.split('::')
+    // Drop "AWS" prefix, join remaining parts lowercased
+    return parts.slice(1).join(' ').toLowerCase()
+  }
+  // Terraform types: "aws_lambda_function" -> "lambda function"
   return resourceType.replace(/^aws_/, '').replace(/_/g, ' ')
 }
 

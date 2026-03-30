@@ -9,23 +9,35 @@
 
       <div class="p-4 border-b border-white/10">
         <div class="flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <span class="inline-flex items-center justify-center w-8 h-8 rounded bg-white/5" :style="{ color: categoryColor }">
-              <svg width="24" height="24" viewBox="0 0 24 24">
+          <div class="flex items-center gap-3 min-w-0">
+            <span
+              class="inline-flex items-center justify-center w-9 h-9 rounded-lg flex-shrink-0"
+              :style="{ backgroundColor: `${categoryColor}15`, color: categoryColor }"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24">
                 <g v-html="iconPath" />
               </svg>
             </span>
-            <div>
-              <h2 class="text-base font-semibold text-white font-mono leading-tight">{{ node.name }}</h2>
-              <p class="text-xs text-gray-500 font-mono">{{ node.resource_type }}</p>
+            <div class="min-w-0">
+              <h2 class="text-sm font-semibold text-white font-mono leading-tight truncate">{{ node.name }}</h2>
+              <p class="text-xs text-gray-500 font-mono truncate">{{ node.resource_type }}</p>
             </div>
           </div>
           <button
-            class="text-gray-500 hover:text-gray-300 transition"
+            class="text-gray-500 hover:text-gray-300 transition flex-shrink-0 w-6 h-6 flex items-center justify-center rounded hover:bg-white/5"
             @click="store.selectNode(null)"
           >
-            ✕
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2l8 8M10 2l-8 8"/></svg>
           </button>
+        </div>
+
+        <div class="flex items-center gap-1.5 mt-3">
+          <span
+            class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium tracking-wide"
+            :style="{ backgroundColor: `${categoryColor}20`, color: categoryColor }"
+          >{{ node.category }}</span>
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] text-gray-500 bg-white/5">{{ node.provider }}</span>
+          <span v-if="node.position_hint?.tier" class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] text-gray-500 bg-white/5">{{ node.position_hint.tier }}</span>
         </div>
       </div>
 
@@ -60,54 +72,69 @@
       </div>
 
       <div class="p-4 border-b border-white/10">
-        <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">Connections ({{ edges.length }})</h3>
+        <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">
+          Connections
+          <span class="text-gray-600 ml-1 normal-case tracking-normal">({{ edges.length }})</span>
+        </h3>
 
         <div v-if="outgoing.length > 0" class="mb-3">
-          <p class="text-xs text-gray-600 mb-1">Outgoing →</p>
+          <p class="text-[10px] text-gray-600 mb-1.5 uppercase tracking-wider flex items-center gap-1">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 5h6M6 3l2 2-2 2"/></svg>
+            Outgoing
+          </p>
           <div
             v-for="e in outgoing"
             :key="e.id"
-            class="flex items-center gap-2 text-xs py-1 px-2 rounded hover:bg-white/5 cursor-pointer"
+            class="flex items-center gap-2 text-xs py-1.5 px-2 rounded-md hover:bg-white/5 cursor-pointer transition-colors group"
             @click="store.selectNode(e.target)"
           >
-            <span class="w-2 h-2 rounded-full" :style="{ backgroundColor: nodeColorById(e.target) }" />
-            <span class="inline-flex items-center justify-center w-4 h-4" :style="{ color: nodeColorById(e.target) }">
-              <svg width="12" height="12" viewBox="0 0 24 24"><g v-html="nodeIconById(e.target)" /></svg>
+            <span
+              class="w-5 h-5 rounded flex-shrink-0 flex items-center justify-center"
+              :style="{ backgroundColor: `${nodeColorById(e.target)}15`, color: nodeColorById(e.target) }"
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24"><g v-html="nodeIconById(e.target)" /></svg>
             </span>
-            <span class="text-gray-300 font-mono truncate">{{ nodeNameById(e.target) }}</span>
-            <span class="text-gray-600 ml-auto">{{ e.label || e.edge_type }}</span>
+            <span class="text-gray-300 font-mono truncate group-hover:text-white transition-colors">{{ nodeNameById(e.target) }}</span>
+            <span class="text-[10px] text-gray-600 ml-auto flex-shrink-0 font-mono">{{ e.label || e.edge_type }}</span>
           </div>
         </div>
 
         <div v-if="incoming.length > 0">
-          <p class="text-xs text-gray-600 mb-1">← Incoming</p>
+          <p class="text-[10px] text-gray-600 mb-1.5 uppercase tracking-wider flex items-center gap-1">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 5H2M4 3L2 5l2 2"/></svg>
+            Incoming
+          </p>
           <div
             v-for="e in incoming"
             :key="e.id"
-            class="flex items-center gap-2 text-xs py-1 px-2 rounded hover:bg-white/5 cursor-pointer"
+            class="flex items-center gap-2 text-xs py-1.5 px-2 rounded-md hover:bg-white/5 cursor-pointer transition-colors group"
             @click="store.selectNode(e.source)"
           >
-            <span class="w-2 h-2 rounded-full" :style="{ backgroundColor: nodeColorById(e.source) }" />
-            <span class="inline-flex items-center justify-center w-4 h-4" :style="{ color: nodeColorById(e.source) }">
-              <svg width="12" height="12" viewBox="0 0 24 24"><g v-html="nodeIconById(e.source)" /></svg>
+            <span
+              class="w-5 h-5 rounded flex-shrink-0 flex items-center justify-center"
+              :style="{ backgroundColor: `${nodeColorById(e.source)}15`, color: nodeColorById(e.source) }"
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24"><g v-html="nodeIconById(e.source)" /></svg>
             </span>
-            <span class="text-gray-300 font-mono truncate">{{ nodeNameById(e.source) }}</span>
-            <span class="text-gray-600 ml-auto">{{ e.label || e.edge_type }}</span>
+            <span class="text-gray-300 font-mono truncate group-hover:text-white transition-colors">{{ nodeNameById(e.source) }}</span>
+            <span class="text-[10px] text-gray-600 ml-auto flex-shrink-0 font-mono">{{ e.label || e.edge_type }}</span>
           </div>
         </div>
+
+        <div v-if="edges.length === 0" class="text-xs text-gray-600 italic py-2">No connections</div>
       </div>
 
       <div class="p-4 border-b border-white/10">
-        <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">Show connections</h3>
-        <div class="flex gap-1">
+        <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">Neighborhood</h3>
+        <div class="flex gap-1.5">
           <button
             v-for="h in [0, 1, 2, 3]"
             :key="h"
             :class="[
-              'px-2 py-1 rounded-full text-xs font-mono transition border',
+              'px-2.5 py-1 rounded-md text-xs font-mono transition-all',
               store.hopLimit === h
-                ? 'text-blue-300 border-blue-500/30 active-hop'
-                : 'text-gray-500 hover:text-gray-300 border-white/10',
+                ? 'text-white active-hop shadow-sm'
+                : 'text-gray-500 hover:text-gray-300 bg-white/[0.03] hover:bg-white/[0.06]',
             ]"
             @click="store.setHopLimit(h)"
           >
@@ -116,18 +143,24 @@
         </div>
       </div>
 
-      <div class="p-4 border-t border-white/10">
+      <div class="p-4">
         <button
-          class="text-xs text-gray-500 hover:text-gray-300 transition"
+          class="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 transition group"
           @click="showRaw = !showRaw"
         >
-          {{ showRaw ? 'Hide' : 'View' }} Raw JSON
+          <svg
+            width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5"
+            class="transition-transform" :class="showRaw ? 'rotate-90' : ''"
+          ><path d="M3 2l4 3-4 3"/></svg>
+          <span>{{ showRaw ? 'Hide' : 'View' }} raw properties</span>
         </button>
-        <div v-if="showRaw" class="mt-2 max-w-full overflow-hidden">
-          <pre
-            class="p-2 bg-black/30 rounded text-xs text-gray-400 font-mono max-h-80 overflow-y-auto whitespace-pre-wrap break-words"
-          >{{ rawJsonText }}</pre>
-        </div>
+        <Transition name="expand">
+          <div v-if="showRaw" class="mt-2 max-w-full overflow-hidden">
+            <pre
+              class="p-3 bg-black/30 rounded-lg text-[11px] text-gray-400 font-mono max-h-80 overflow-y-auto whitespace-pre-wrap break-words leading-relaxed"
+            >{{ rawJsonText }}</pre>
+          </div>
+        </Transition>
       </div>
     </div>
   </Transition>
@@ -226,6 +259,7 @@ function nodeIconById(id: string): string {
 <style scoped>
 .detail-shell {
   box-shadow: -20px 0 60px rgba(0, 0, 0, 0.5);
+  border-left: 1px solid rgba(255,255,255,0.06);
 }
 
 .panel-accent {
@@ -233,25 +267,37 @@ function nodeIconById(id: string): string {
   left: 0;
   top: 0;
   bottom: 0;
-  width: 3px;
-  background: var(--panel-color);
+  width: 2px;
+  background: linear-gradient(
+    180deg,
+    var(--panel-color),
+    color-mix(in srgb, var(--panel-color) 30%, transparent)
+  );
 }
 
 .active-hop {
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--panel-color) 15%, transparent),
-    color-mix(in srgb, var(--panel-color) 5%, transparent)
-  );
+  background: color-mix(in srgb, var(--panel-color) 18%, transparent);
+  color: var(--panel-color);
 }
 
 .slide-enter-active,
 .slide-leave-active {
-  transition: transform 0.25s ease;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .slide-enter-from,
 .slide-leave-to {
   transform: translateX(100%);
+}
+
+.expand-enter-active,
+.expand-leave-active {
+  transition: all 0.15s ease;
+  overflow: hidden;
+}
+.expand-enter-from,
+.expand-leave-to {
+  opacity: 0;
+  max-height: 0;
 }
 </style>
