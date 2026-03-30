@@ -9,6 +9,19 @@ import typer
 
 from stackmap.parsers.base import BaseParser, StackMapIR
 
+try:
+    import yaml  # type: ignore[import-untyped]
+except Exception:  # pragma: no cover
+    yaml = None
+
+
+def _is_sam_transform(transform: object) -> bool:
+    if transform == "AWS::Serverless-2016-10-31":
+        return True
+    if isinstance(transform, list):
+        return "AWS::Serverless-2016-10-31" in transform
+    return False
+
 
 def detect_source_type(source_path: str | Path) -> str:
     """Auto-detect infrastructure source type from file extension or content."""
@@ -17,13 +30,26 @@ def detect_source_type(source_path: str | Path) -> str:
         return "terraform"
     if path.suffix.lower() in {".template", ".cfn"}:
         return "cloudformation"
-    if path.suffix.lower() in {".yaml", ".yml", ".json"}:
+    if path.suffix.lower() in {".yaml", ".yml"}:
         try:
-            raw = path.read_text()
-            if path.suffix.lower() in {".yaml", ".yml"}:
-                if "AWS::Serverless-2016-10-31" in raw:
+            if yaml is None:
+                raise typer.BadParameter(
+                    "YAML CloudFormation template detected but PyYAML is not installed."
+                )
+            data = yaml.safe_load(path.read_text())
+            if not isinstance(data, dict):
+                raise ValueError("not a mapping")
+            if "AWSTemplateFormatVersion" in data or "Resources" in data:
+                if _is_sam_transform(data.get("Transform")):
                     return "sam"
                 return "cloudformation"
+        except typer.BadParameter:
+            raise
+        except Exception:
+            pass
+    if path.suffix.lower() == ".json":
+        try:
+            raw = path.read_text()
             data = json.loads(raw)
             if (
                 isinstance(data, dict)
@@ -40,10 +66,7 @@ def detect_source_type(source_path: str | Path) -> str:
                 "AWSTemplateFormatVersion" in data
                 or "Resources" in data
             ):
-                transform = data.get("Transform")
-                if transform == "AWS::Serverless-2016-10-31" or (
-                    isinstance(transform, list) and "AWS::Serverless-2016-10-31" in transform
-                ):
+                if _is_sam_transform(data.get("Transform")):
                     return "sam"
                 return "cloudformation"
         except Exception:

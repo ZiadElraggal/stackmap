@@ -12,7 +12,9 @@ from stackmap.parsers.registry import detect_source_type, parse_source
 
 _IGNORED_DIRS = {
     ".git",
+    ".claude",
     ".venv",
+    ".aws-sam",
     "node_modules",
     ".terraform",
     ".tmp-pkg-venv",
