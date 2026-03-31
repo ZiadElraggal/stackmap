@@ -1,0 +1,140 @@
+{
+  "metadata": {
+    "source_type": "terraform",
+    "scanned_at": "2026-03-30T09:00:00+00:00"
+  },
+  "nodes": [
+    {
+      "id": "cdn",
+      "name": "edge-distribution",
+      "resource_type": "aws_cloudfront_distribution",
+      "provider": "aws",
+      "category": "cdn",
+      "properties": {
+        "enabled": true
+      },
+      "tags": {},
+      "position_hint": {
+        "tier": "frontend",
+        "weight": 5
+      }
+    },
+    {
+      "id": "api",
+      "name": "orders-api",
+      "resource_type": "aws_api_gateway_rest_api",
+      "provider": "aws",
+      "category": "integration",
+      "properties": {
+        "name": "orders-api"
+      },
+      "tags": {},
+      "position_hint": {
+        "tier": "api",
+        "weight": 5
+      }
+    },
+    {
+      "id": "handler",
+      "name": "orders-handler",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "runtime": "python3.12",
+        "memory_size": 256,
+        "timeout": 15
+      },
+      "tags": {},
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5
+      }
+    },
+    {
+      "id": "sns",
+      "name": "legacy-events",
+      "resource_type": "aws_sns_topic",
+      "provider": "aws",
+      "category": "queue",
+      "properties": {
+        "fifo_topic": false
+      },
+      "tags": {},
+      "position_hint": {
+        "tier": "backend",
+        "weight": 3
+      }
+    },
+    {
+      "id": "ddb",
+      "name": "orders-table",
+      "resource_type": "aws_dynamodb_table",
+      "provider": "aws",
+      "category": "database",
+      "properties": {
+        "billing_mode": "PAY_PER_REQUEST",
+        "hash_key": "pk"
+      },
+      "tags": {},
+      "position_hint": {
+        "tier": "data",
+        "weight": 5
+      }
+    },
+    {
+      "id": "bucket",
+      "name": "orders-artifacts",
+      "resource_type": "aws_s3_bucket",
+      "provider": "aws",
+      "category": "storage",
+      "properties": {
+        "acl": "private",
+        "versioning": true
+      },
+      "tags": {},
+      "position_hint": {
+        "tier": "data",
+        "weight": 4
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "cdn-api:routes_to",
+      "source": "cdn",
+      "target": "api",
+      "edge_type": "routes_to",
+      "label": "routes"
+    },
+    {
+      "id": "api-handler:triggers",
+      "source": "api",
+      "target": "handler",
+      "edge_type": "triggers",
+      "label": "invokes"
+    },
+    {
+      "id": "handler-ddb:writes_to",
+      "source": "handler",
+      "target": "ddb",
+      "edge_type": "writes_to",
+      "label": "writes"
+    },
+    {
+      "id": "handler-bucket:reads_from",
+      "source": "handler",
+      "target": "bucket",
+      "edge_type": "reads_from",
+      "label": "reads"
+    },
+    {
+      "id": "handler-sns:triggers",
+      "source": "handler",
+      "target": "sns",
+      "edge_type": "triggers",
+      "label": "publishes"
+    }
+  ],
+  "groups": []
+}
