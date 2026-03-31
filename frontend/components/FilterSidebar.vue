@@ -34,6 +34,14 @@
           >
             Raw
           </button>
+          <button
+            v-if="store.hasOrganizationData"
+            class="px-2 py-1 transition border-l border-white/10"
+            :class="store.viewMode === 'organization' ? 'bg-blue-500/20 text-blue-400' : 'bg-transparent text-gray-400 hover:bg-white/5'"
+            @click="store.setViewMode('organization')"
+          >
+            Org
+          </button>
         </div>
       </section>
 
@@ -85,7 +93,7 @@
         </div>
       </section>
 
-      <section v-if="store.groups.length > 0" class="py-4 border-b border-white/5">
+      <section v-if="store.graphGroups.length > 0" class="py-4 border-b border-white/5">
         <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">Groups</h3>
         <div class="space-y-1">
           <div
@@ -98,6 +106,43 @@
             <span class="text-gray-600">({{ group.children.length }})</span>
           </div>
         </div>
+      </section>
+
+      <section v-if="store.hasOrganizationData" class="py-4 border-b border-white/5">
+        <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">Accounts</h3>
+        <div class="space-y-1">
+          <button
+            class="w-full text-left text-xs rounded px-2 py-1 transition"
+            :class="store.activeAccountId === null ? 'bg-white/5 text-white' : 'text-gray-400 hover:bg-white/5'"
+            @click="store.setActiveAccount(null)"
+          >
+            All accounts
+          </button>
+          <button
+            v-for="item in orgTree"
+            :key="item.id"
+            class="w-full text-left text-xs rounded px-2 py-1 transition flex items-center gap-2"
+            :class="item.account_id && store.activeAccountId === item.account_id ? 'bg-cyan-500/10 text-cyan-300' : 'text-gray-400 hover:bg-white/5'"
+            :style="{ paddingLeft: `${8 + item.depth * 14}px` }"
+            @click="onOrgTreeClick(item.account_id)"
+          >
+            <span class="text-[10px] uppercase tracking-wide text-gray-600">{{ item.group_type }}</span>
+            <span class="truncate">{{ item.name }}</span>
+          </button>
+        </div>
+      </section>
+
+      <section v-if="store.hasOrganizationData" class="py-4 border-b border-white/5">
+        <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">Cross-account</h3>
+        <button
+          class="w-full flex items-center justify-between text-xs rounded px-2 py-1 transition hover:bg-white/5"
+          @click="store.setShowCrossAccountEdges(!store.showCrossAccountEdges)"
+        >
+          <span class="text-gray-300">Show cross-account links</span>
+          <span class="toggle" :class="{ on: store.showCrossAccountEdges }" style="--toggle-color: #f97316">
+            <span class="knob" />
+          </span>
+        </button>
       </section>
 
       <section class="pt-4">
@@ -136,7 +181,8 @@ const categories = computed(() => {
     .sort((a, b) => b.count - a.count)
 })
 
-const topGroups = computed(() => store.groups.filter(g => g.parent === null))
+const topGroups = computed(() => store.graphGroups.filter(g => g.parent === null))
+const orgTree = computed(() => store.organizationTree)
 
 const sliderX = computed(() => 8 + ((minWeight.value - 1) / 4) * 224)
 const sliderFill = computed(() => Math.max(0, sliderX.value - 8))
@@ -174,6 +220,15 @@ function resetFilters() {
   minWeight.value = 1
   store.setMinWeight(1)
   store.setSearch('')
+}
+
+function onOrgTreeClick(accountId?: string) {
+  if (!accountId) return
+  if (store.viewMode === 'organization') {
+    store.enterAccountArchitecture(accountId)
+    return
+  }
+  store.setActiveAccount(accountId)
 }
 
 // Drag listeners are cleaned up via their own mouseup handlers.

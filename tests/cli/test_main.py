@@ -440,3 +440,105 @@ def test_scan_accepts_stackmap_diff_json(tmp_path: Path) -> None:
     assert scan_result.exit_code == 0
     assert roundtrip_out.exists()
     assert "repo" not in scan_result.output.lower()
+
+
+def test_scan_repo_with_org_file_builds_org_metadata(tmp_path: Path) -> None:
+    repo_root = FIXTURES / "org_repo"
+    out = tmp_path / "org-repo.json"
+
+    result = runner.invoke(
+        app,
+        [
+            "scan-repo",
+            "--root",
+            str(repo_root),
+            "--org-file",
+            str(repo_root / "org.json"),
+            "--no-sam-build",
+            "--no-terraform-pull-missing",
+            "--format",
+            "json",
+            "--output",
+            str(out),
+        ],
+    )
+
+    assert result.exit_code == 0
+
+    import json
+
+    payload = json.loads(out.read_text())
+    assert payload["metadata"]["organization"]["org_id"] == "o-stackmap"
+    assert payload["metadata"]["organization_overlay"]["unscanned_account_ids"] == ["210000000007"]
+    assert payload["metadata"]["cross_account_edges"] > 0
+    assert any(group["group_type"] == "ou" for group in payload["groups"])
+    assert any(group["group_type"] == "account" for group in payload["groups"])
+
+
+def test_scan_repo_org_strict_rejects_missing_accounts(tmp_path: Path) -> None:
+    import json
+
+    repo_root = FIXTURES / "org_repo"
+    org_data = json.loads((repo_root / "org.json").read_text())
+    org_data["accounts"] = [account for account in org_data["accounts"] if account["id"] != "210000000005"]
+    org_override = tmp_path / "org.json"
+    org_override.write_text(json.dumps(org_data))
+
+    result = runner.invoke(
+        app,
+        [
+            "scan-repo",
+            "--root",
+            str(repo_root),
+            "--org-file",
+            str(org_override),
+            "--org-strict",
+            "--no-sam-build",
+            "--no-terraform-pull-missing",
+            "--format",
+            "json",
+            "--output",
+            str(tmp_path / "out.json"),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "missing from the organization file" in result.output
+
+
+def test_org_import_writes_output(monkeypatch, tmp_path: Path) -> None:
+    from stackmap.organizations import OrganizationDocument
+
+    def fake_build_org_document_from_aws(profile=None, region=None, root_id=None):  # type: ignore[no-untyped-def]
+        assert profile == "sandbox"
+        assert region == "us-east-1"
+        assert root_id is None
+        return OrganizationDocument(
+            org_id="o-test",
+            root_id="r-root",
+            root_name="Root",
+            ous=[{"id": "ou-eng", "name": "Engineering", "parent": "r-root", "path": "Root/Engineering"}],
+            accounts=[{"id": "210000000001", "name": "prod", "parent": "ou-eng", "ou_path": "Root/Engineering"}],
+        )
+
+    monkeypatch.setattr("stackmap.cli.main.build_org_document_from_aws", fake_build_org_document_from_aws)
+    out = tmp_path / "org.json"
+    result = runner.invoke(
+        app,
+        [
+            "org-import",
+            "--profile",
+            "sandbox",
+            "--output",
+            str(out),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert out.exists()
+
+    import json
+
+    payload = json.loads(out.read_text())
+    assert payload["org_id"] == "o-test"
+    assert payload["accounts"][0]["id"] == "210000000001"
