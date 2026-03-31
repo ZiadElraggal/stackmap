@@ -5,7 +5,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import typer
+try:
+    import typer
+except Exception:  # pragma: no cover
+    class _TyperCompat:
+        class BadParameter(ValueError):
+            pass
+
+    typer = _TyperCompat()
 
 from stackmap.parsers.base import BaseParser, StackMapIR
 
@@ -56,6 +63,16 @@ def detect_source_type(source_path: str | Path) -> str:
             data = json.loads(raw)
             if (
                 isinstance(data, dict)
+                and "org_id" in data
+                and "root_id" in data
+                and "accounts" in data
+                and "ous" in data
+                and isinstance(data.get("accounts"), list)
+                and isinstance(data.get("ous"), list)
+            ):
+                return "organization"
+            if (
+                isinstance(data, dict)
                 and "metadata" in data
                 and "nodes" in data
                 and "edges" in data
@@ -95,6 +112,7 @@ def detect_source_type(source_path: str | Path) -> str:
     raise typer.BadParameter(
         f"Cannot auto-detect source type for {source_path}. "
         "Supported formats: Terraform state (.tfstate), CloudFormation template (.json/.yaml/.yml), "
+        "AWS Organizations export (.json), "
         "StackMap IR/diff (.json), "
         "SAM template (.json/.yaml/.yml with AWS::Serverless transform)"
     )
@@ -113,6 +131,10 @@ def build_parser(source_type: str) -> BaseParser:
         from stackmap.parsers.sam import SamParser
 
         return SamParser()
+    if source_type == "organization":
+        from stackmap.parsers.organization import OrganizationParser
+
+        return OrganizationParser()
     if source_type == "stackmap":
         from stackmap.parsers.stackmap_ir import StackMapIRParser
 

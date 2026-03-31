@@ -64,6 +64,9 @@ const groupColor = computed(() => {
   if (props.group.group_type === 'vpc' || props.group.group_type === 'subnet') {
     return CATEGORY_COLORS.network
   }
+  if (props.group.group_type === 'account') return '#22d3ee'
+  if (props.group.group_type === 'ou') return '#f59e0b'
+  if (props.group.group_type === 'organization_root') return '#38bdf8'
   return CATEGORY_COLORS.other
 })
 
@@ -73,6 +76,15 @@ const fillColor = computed(() => {
     : 'color-mix(in srgb, var(--group-color) 3%, transparent)'
 })
 const strokeColor = computed(() => 'color-mix(in srgb, var(--group-color) 12%, transparent)')
-const dashPattern = computed(() => (isNested.value ? '8 5' : '12 6'))
-const iconPath = computed(() => CATEGORY_ICONS.network)
+const dashPattern = computed(() => {
+  if (props.group.group_type === 'organization_root') return '16 8'
+  if (props.group.group_type === 'ou') return '10 6'
+  if (props.group.group_type === 'account') return '6 4'
+  return isNested.value ? '8 5' : '12 6'
+})
+const iconPath = computed(() => {
+  if (props.group.group_type === 'account') return CATEGORY_ICONS.other
+  if (props.group.group_type === 'ou' || props.group.group_type === 'organization_root') return CATEGORY_ICONS.security
+  return CATEGORY_ICONS.network
+})
 </script>

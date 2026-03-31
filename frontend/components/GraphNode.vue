@@ -254,6 +254,11 @@ const nodeOpacity = computed(() => {
 })
 
 function onClick() {
+  const accountId = props.node.metadata?.account_id || props.node.position_hint?.account_id
+  if (store.viewMode === 'organization' && props.node.position_hint?.view_kind === 'account_summary' && accountId) {
+    store.enterAccountArchitecture(accountId)
+    return
+  }
   store.selectNode(isSelected.value ? null : props.node.id)
 }
 function onHover() {

@@ -24,6 +24,7 @@ export const EDGE_COLORS: Record<string, string> = {
   references: '#64748b',
   contains: '#475569',
   authenticates: '#ef4444',
+  cross_account_reference: '#f97316',
 }
 
 export const CATEGORY_ICONS: Record<string, string> = {

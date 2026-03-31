@@ -25,7 +25,7 @@
       <rect width="100%" height="100%" fill="#0a0a0f" @click="store.selectNode(null)" />
 
       <g ref="zoomGroupRef">
-        <g>
+        <g v-if="store.viewMode !== 'organization'">
           <rect
             v-for="band in tierBands"
             :key="`tier-band-${band.name}`"
@@ -41,7 +41,7 @@
           />
         </g>
 
-        <g>
+        <g v-if="store.viewMode !== 'organization'">
           <line
             v-for="divider in tierDividers"
             :key="`tier-divider-${divider.name}`"
@@ -64,7 +64,7 @@
           @click="store.selectNode(null)"
         />
 
-        <g v-for="band in tierBands" :key="`tier-${band.name}`">
+        <g v-if="store.viewMode !== 'organization'" v-for="band in tierBands" :key="`tier-${band.name}`">
           <rect
             :x="graphBounds.minX - 226"
             :y="band.yStart + 12"
@@ -111,7 +111,7 @@
           >{{ band.name.toUpperCase() }}</text>
         </g>
 
-        <g v-for="(band, idx) in tierBands" :key="`flow-arrow-${band.name}`">
+        <g v-if="store.viewMode !== 'organization'" v-for="(band, idx) in tierBands" :key="`flow-arrow-${band.name}`">
           <text
             v-if="idx < tierBands.length - 1"
             :x="graphBounds.minX + graphBounds.width / 2"
@@ -124,7 +124,7 @@
         </g>
 
         <GroupBoundary
-          v-for="group in store.groups"
+          v-for="group in store.graphGroups"
           :key="group.id"
           :group="group"
           :positions="store.positions"
@@ -156,6 +156,20 @@
     <div class="absolute left-1/2 top-4 z-40 -translate-x-1/2">
       <SearchBar ref="searchBarRef" @pan-to="panToNode" />
     </div>
+
+    <Transition name="fade">
+      <div
+        v-if="store.activeBreadcrumb.length > 0"
+        class="absolute left-1/2 top-16 z-40 -translate-x-1/2 flex items-center gap-2 rounded-xl border border-white/[0.08] bg-[#0e0e18]/95 px-4 py-2 backdrop-blur-md shadow-xl"
+      >
+        <button
+          class="text-[10px] font-mono text-cyan-400 transition-colors hover:text-cyan-300"
+          @click="store.setActiveAccount(null)"
+        >all accounts</button>
+        <span class="text-[10px] font-mono text-gray-600">/</span>
+        <span class="text-[10px] font-mono text-gray-400">{{ store.activeBreadcrumb.join(' / ') }}</span>
+      </div>
+    </Transition>
 
     <Transition name="fade">
       <div
@@ -238,8 +252,9 @@
       <span>{{ store.visibleNodes.length }}<span class="text-gray-600">/{{ store.nodes.length }}</span> resources</span>
       <span>{{ store.visibleEdges.length }} connections</span>
       <span class="text-gray-600">{{ viewModeLabel }}</span>
-      <span v-if="store.groups.length > 0" class="text-gray-600">{{ store.groups.length }} groups</span>
+      <span v-if="store.graphGroups.length > 0" class="text-gray-600">{{ store.graphGroups.length }} groups</span>
       <span v-if="store.metadata.terraform_version" class="text-gray-600">TF v{{ store.metadata.terraform_version }}</span>
+      <span v-if="store.showCrossAccountEdges && store.metadata.cross_account_edges" class="text-gray-600">{{ store.metadata.cross_account_edges }} cross-account</span>
       <span class="text-gray-600">{{ Math.round(zoomScale * 100) }}%</span>
       <div class="flex items-center gap-0.5 rounded-md border border-white/[0.06] bg-white/[0.02] px-1 py-0.5">
         <div
@@ -279,7 +294,12 @@ const zoomScale = ref(1)
 let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null
 let svgSelection: d3.Selection<SVGSVGElement, unknown, null, undefined> | null = null
 
-const orderedVisibleNodes = computed(() => sortByTier(store.visibleNodes))
+const orderedVisibleNodes = computed(() => {
+  if (store.viewMode === 'organization') {
+    return [...store.visibleNodes].sort((a, b) => a.name.localeCompare(b.name))
+  }
+  return sortByTier(store.visibleNodes)
+})
 const visibleNodeMap = computed(() => new Map(store.visibleNodes.map(n => [n.id, n])))
 const edgeEntryBaseDelay = computed(() => orderedVisibleNodes.value.length * 15 + 200)
 const edgeTypesInGraph = computed(() => [...new Set(store.visibleEdges.map(edge => edge.edge_type))])
@@ -302,6 +322,7 @@ const graphBounds = computed(() => {
 })
 
 const tierBands = computed(() => {
+  if (store.viewMode === 'organization') return []
   const tierNodes: Record<string, number[]> = {}
   for (const node of store.visibleNodes) {
     const tier = node.position_hint?.tier || 'backend'
@@ -357,6 +378,7 @@ const tierBands = computed(() => {
 
 const tierDividers = computed(() => {
   const dividers: Array<{ name: string; y: number; stroke: string }> = []
+  if (store.viewMode === 'organization') return dividers
   for (let i = 0; i < tierBands.value.length - 1; i++) {
     const current = tierBands.value[i]
     const next = tierBands.value[i + 1]
@@ -406,6 +428,7 @@ const architectureStrip = computed(() => {
 
 const viewModeLabel = computed(() => {
   if (store.viewMode === 'architecture') return 'architecture view'
+  if (store.viewMode === 'organization') return 'organization view'
   const sourceType = String(store.metadata?.source_type || '').toLowerCase()
   if (sourceType === 'cloudformation') return 'cloudformation raw view'
   if (sourceType === 'terraform') return 'terraform raw view'
@@ -507,6 +530,8 @@ watch(
     store.diffSlider,
     store.graphNodes.map(n => n.id).join('|'),
     store.graphEdges.map(e => e.id).join('|'),
+    store.graphGroups.map(g => g.id).join('|'),
+    store.activeAccountId,
   ],
   () => {
     if (!store.loaded) return
@@ -590,7 +615,9 @@ function fitToViewport() {
 }
 
 function recomputeLayout() {
-  const positions = store.diffMode ? computeDiffLayout() : computeLayout(store.graphNodes, store.graphEdges, store.groups)
+  const positions = store.diffMode
+    ? computeDiffLayout()
+    : computeLayout(store.graphNodes, store.graphEdges, store.graphGroups)
   store.setPositions(positions)
 }
 
@@ -612,8 +639,8 @@ function computeDiffLayout(): Record<string, NodePosition> {
     edgeDiffStatus[edge.id] !== 'removed' && afterIds.has(edge.source) && afterIds.has(edge.target)
   )
 
-  const beforePositions = computeLayout(beforeNodes, beforeEdges, store.groups)
-  const afterPositions = computeLayout(afterNodes, afterEdges, store.groups)
+  const beforePositions = computeLayout(beforeNodes, beforeEdges, store.graphGroups)
+  const afterPositions = computeLayout(afterNodes, afterEdges, store.graphGroups)
   const beforeFallback = centroidForPositions(beforePositions)
   const afterFallback = centroidForPositions(afterPositions)
 

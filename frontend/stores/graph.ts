@@ -8,6 +8,14 @@ export interface StackMapNode {
   category: string
   properties: Record<string, any>
   tags: Record<string, string>
+  metadata?: {
+    account_id?: string
+    account_name?: string
+    region?: string
+    org_path?: string
+    view_kind?: string
+    scanned?: boolean
+  }
   position_hint: {
     tier: string
     weight: number
@@ -15,6 +23,10 @@ export interface StackMapNode {
     is_helper?: boolean
     diff_status?: string
     diff_changes?: Record<string, unknown>
+    account_id?: string
+    region?: string
+    org_path?: string
+    view_kind?: string
   }
 }
 
@@ -32,11 +44,26 @@ export interface StackMapGroup {
   group_type: string
   children: string[]
   parent: string | null
+  metadata?: {
+    source_kind?: string
+    account_id?: string
+    account_name?: string
+    ou_id?: string
+    org_path?: string
+  }
 }
 
 export interface NodePosition {
   x: number
   y: number
+}
+
+interface OrgTreeItem {
+  id: string
+  name: string
+  group_type: string
+  depth: number
+  account_id?: string
 }
 
 const HELPER_RESOURCE_TYPES = new Set([
@@ -74,21 +101,15 @@ const HELPER_RESOURCE_TYPES = new Set([
   'aws_s3_bucket_notification',
   'aws_nat_gateway',
   'aws_internet_gateway',
-  // New helper types
   'aws_cloudwatch_event_target',
   'aws_secretsmanager_secret_version',
   'aws_cognito_user_pool_client',
   'aws_cognito_identity_pool',
   'aws_wafv2_web_acl_association',
   'aws_acm_certificate_validation',
-  'aws_s3_bucket_website_configuration',
-  'aws_s3_bucket_cors_configuration',
-  'aws_s3_bucket_lifecycle_configuration',
-  'aws_s3_bucket_notification',
   'aws_ecr_lifecycle_policy',
   'aws_appsync_datasource',
   'aws_appsync_resolver',
-  // CloudFormation helper equivalents
   'AWS::ApiGateway::Deployment',
   'AWS::ApiGateway::Stage',
   'AWS::ApiGateway::Method',
@@ -138,6 +159,7 @@ const PRIMARY_CATEGORY_PRIORITY: Record<string, number> = {
 }
 
 const ARCH_DROPPED_EDGE_TYPES = new Set(['authenticates', 'contains'])
+const ORG_GROUP_TYPES = new Set(['organization_root', 'ou', 'account'])
 
 const REFERENCE_TYPE_ALLOWLIST = new Set([
   'aws_ecs_service->aws_ecs_cluster',
@@ -162,27 +184,18 @@ const REFERENCE_TYPE_ALLOWLIST = new Set([
   'aws_cloudwatch_event_target->aws_cloudwatch_event_rule',
 ])
 
-function shouldKeepReferenceEdge(
-  source: StackMapNode | undefined,
-  target: StackMapNode | undefined
-): boolean {
+function shouldKeepReferenceEdge(source: StackMapNode | undefined, target: StackMapNode | undefined): boolean {
   if (!source || !target) return false
 
   const pair = `${source.resource_type}->${target.resource_type}`
   if (REFERENCE_TYPE_ALLOWLIST.has(pair)) return true
 
-  // Keep references that still communicate business/data intent.
-  const sourceIsComputeLike = ['compute', 'container', 'integration', 'serverless'].includes(
-    source.category
-  )
+  const sourceIsComputeLike = ['compute', 'container', 'integration', 'serverless'].includes(source.category)
   const targetIsDataLike = ['database', 'storage', 'queue'].includes(target.category)
   if (sourceIsComputeLike && targetIsDataLike) return true
 
-  // Keep references from entry/routing nodes to core compute/data nodes.
   const sourceIsEntry = ['cdn', 'dns', 'network', 'integration'].includes(source.category)
-  const targetIsCore = ['compute', 'container', 'integration', 'database', 'storage', 'queue'].includes(
-    target.category
-  )
+  const targetIsCore = ['compute', 'container', 'integration', 'database', 'storage', 'queue'].includes(target.category)
   if (sourceIsEntry && targetIsCore) return true
 
   return false
@@ -262,6 +275,216 @@ function buildHelperParentMap(nodes: StackMapNode[], edges: StackMapEdge[]): Map
   return map
 }
 
+function accountIdForNode(node: StackMapNode): string | undefined {
+  return node.metadata?.account_id || node.position_hint?.account_id
+}
+
+function groupTouchesAccount(
+  group: StackMapGroup,
+  nodesById: Map<string, StackMapNode>,
+  accountId: string
+): boolean {
+  if (group.metadata?.account_id === accountId) return true
+  return group.children.some(childId => accountIdForNode(nodesById.get(childId) as StackMapNode) === accountId)
+}
+
+function dominantCategory(counts: Record<string, number>): string {
+  const entries = Object.entries(counts)
+  if (!entries.length) return 'other'
+  entries.sort((a, b) => {
+    if (b[1] !== a[1]) return b[1] - a[1]
+    const pa = PRIMARY_CATEGORY_PRIORITY[a[0]] ?? 100
+    const pb = PRIMARY_CATEGORY_PRIORITY[b[0]] ?? 100
+    return pa - pb
+  })
+  return entries[0][0]
+}
+
+function buildOrganizationSummaryNodes(
+  nodes: StackMapNode[],
+  groups: StackMapGroup[],
+  metadata: Record<string, any>
+): StackMapNode[] {
+  const countsByAccount: Record<string, Record<string, number>> = {}
+  const regionByAccount: Record<string, Set<string>> = {}
+
+  for (const node of nodes) {
+    const accountId = accountIdForNode(node)
+    if (!accountId) continue
+    countsByAccount[accountId] ||= {}
+    countsByAccount[accountId][node.category] = (countsByAccount[accountId][node.category] || 0) + 1
+    regionByAccount[accountId] ||= new Set()
+    const region = node.metadata?.region || node.position_hint?.region
+    if (region) regionByAccount[accountId].add(region)
+  }
+
+  const accountGroups = groups.filter(group => group.group_type === 'account')
+  const accountMeta = new Map<string, any>()
+  for (const group of accountGroups) {
+    const accountId = group.metadata?.account_id || group.id.replace(/^group:account:/, '')
+    accountMeta.set(accountId, {
+      id: accountId,
+      name: group.metadata?.account_name || group.name || accountId,
+      ou_path: group.metadata?.org_path,
+      scanned: Boolean(group.children.length),
+    })
+  }
+
+  const orgAccounts = Array.isArray(metadata.organization?.accounts) ? metadata.organization.accounts : []
+  for (const account of orgAccounts) {
+    accountMeta.set(account.id, {
+      id: account.id,
+      name: account.name || account.id,
+      ou_path: account.ou_path,
+      scanned: accountMeta.get(account.id)?.scanned ?? false,
+    })
+  }
+
+  return [...accountMeta.values()]
+    .sort((a, b) => String(a.ou_path || '').localeCompare(String(b.ou_path || '')) || String(a.name).localeCompare(String(b.name)))
+    .map(account => {
+      const categoryCounts = countsByAccount[account.id] || {}
+      const resourceCount = Object.values(categoryCounts).reduce((sum, count) => sum + count, 0)
+      const category = dominantCategory(categoryCounts)
+      return {
+        id: `account-summary:${account.id}`,
+        name: account.name,
+        resource_type: 'aws_account',
+        provider: 'aws',
+        category,
+        properties: {
+          account_id: account.id,
+          resource_count: resourceCount,
+          regions: [...(regionByAccount[account.id] || new Set())],
+          categories: categoryCounts,
+          scanned: resourceCount > 0 || Boolean(account.scanned),
+          ou_path: account.ou_path,
+        },
+        tags: {},
+        metadata: {
+          account_id: account.id,
+          account_name: account.name,
+          org_path: account.ou_path,
+          view_kind: 'account_summary',
+          scanned: resourceCount > 0 || Boolean(account.scanned),
+        },
+        position_hint: {
+          tier: 'backend',
+          weight: resourceCount > 0 ? 4 : 2,
+          account_id: account.id,
+          org_path: account.ou_path,
+          view_kind: 'account_summary',
+        },
+      } as StackMapNode
+    })
+}
+
+function buildOrganizationGroups(
+  rawGroups: StackMapGroup[],
+  summaryNodes: StackMapNode[],
+  rawNodes: StackMapNode[]
+): StackMapGroup[] {
+  const summaryIdByAccount = new Map(summaryNodes.map(node => [node.metadata?.account_id, node.id]))
+  const nodesById = new Map(rawNodes.map(node => [node.id, node]))
+  const orgGroups = rawGroups.filter(group => ORG_GROUP_TYPES.has(group.group_type))
+
+  if (!orgGroups.length) {
+    return rawGroups
+      .filter(group => group.group_type === 'account')
+      .map(group => {
+        const accountId = group.metadata?.account_id || group.id.replace(/^group:account:/, '')
+        const summaryId = summaryIdByAccount.get(accountId)
+        return {
+          ...group,
+          children: summaryId ? [summaryId] : [],
+        }
+      })
+  }
+
+  return orgGroups.map(group => {
+    const accountIds = new Set(
+      group.children
+        .map(childId => accountIdForNode(nodesById.get(childId) as StackMapNode))
+        .filter((accountId): accountId is string => Boolean(accountId))
+    )
+    if (group.group_type === 'account') {
+      const accountId = group.metadata?.account_id || group.id.replace(/^group:account:/, '')
+      const summaryId = summaryIdByAccount.get(accountId)
+      return {
+        ...group,
+        children: summaryId ? [summaryId] : [],
+      }
+    }
+    return {
+      ...group,
+      children: [...accountIds]
+        .map(accountId => summaryIdByAccount.get(accountId))
+        .filter((id): id is string => Boolean(id)),
+    }
+  })
+}
+
+function buildOrganizationEdges(nodes: StackMapNode[], edges: StackMapEdge[], showCrossAccount: boolean): StackMapEdge[] {
+  const nodeById = new Map(nodes.map(node => [node.id, node]))
+  const dedup = new Map<string, number>()
+
+  for (const edge of edges) {
+    if (!showCrossAccount && edge.edge_type === 'cross_account_reference') continue
+    const source = nodeById.get(edge.source)
+    const target = nodeById.get(edge.target)
+    const sourceAccount = source ? accountIdForNode(source) : undefined
+    const targetAccount = target ? accountIdForNode(target) : undefined
+    if (!sourceAccount || !targetAccount || sourceAccount === targetAccount) continue
+    const key = `${sourceAccount}|${targetAccount}`
+    dedup.set(key, (dedup.get(key) || 0) + 1)
+  }
+
+  return [...dedup.entries()].map(([key, count]) => {
+    const [sourceAccount, targetAccount] = key.split('|')
+    return {
+      id: `account-summary:${sourceAccount}->account-summary:${targetAccount}:cross_account_reference`,
+      source: `account-summary:${sourceAccount}`,
+      target: `account-summary:${targetAccount}`,
+      edge_type: 'cross_account_reference',
+      label: `${count} cross-account link${count === 1 ? '' : 's'}`,
+    }
+  })
+}
+
+function flattenOrganizationTree(groups: StackMapGroup[]): OrgTreeItem[] {
+  const byParent = new Map<string | null, StackMapGroup[]>()
+  for (const group of groups) {
+    const key = group.parent ?? null
+    if (!byParent.has(key)) byParent.set(key, [])
+    byParent.get(key)?.push(group)
+  }
+
+  const result: OrgTreeItem[] = []
+
+  const walk = (parent: string | null, depth: number) => {
+    const children = [...(byParent.get(parent) || [])].sort((a, b) => {
+      const order = { organization_root: 0, ou: 1, account: 2 }
+      const ao = order[a.group_type as keyof typeof order] ?? 99
+      const bo = order[b.group_type as keyof typeof order] ?? 99
+      if (ao !== bo) return ao - bo
+      return a.name.localeCompare(b.name)
+    })
+    for (const group of children) {
+      result.push({
+        id: group.id,
+        name: group.name,
+        group_type: group.group_type,
+        depth,
+        account_id: group.metadata?.account_id,
+      })
+      walk(group.id, depth + 1)
+    }
+  }
+
+  walk(null, 0)
+  return result
+}
+
 export const useGraphStore = defineStore('graph', {
   state: () => ({
     nodes: [] as StackMapNode[],
@@ -275,11 +498,13 @@ export const useGraphStore = defineStore('graph', {
     minWeight: 1,
     hopLimit: 0,
     searchQuery: '',
-    viewMode: 'architecture' as 'architecture' | 'raw',
+    viewMode: 'architecture' as 'architecture' | 'raw' | 'organization',
     loaded: false,
     diffMode: false as boolean,
     diffSlider: 0.5 as number,
     showOnlyChanges: false as boolean,
+    activeAccountId: null as string | null,
+    showCrossAccountEdges: true as boolean,
   }),
 
   getters: {
@@ -290,26 +515,69 @@ export const useGraphStore = defineStore('graph', {
         ?? null
     },
 
+    hasOrganizationData(state): boolean {
+      return state.groups.some(group => group.group_type === 'account')
+    },
+
     helperParentMap(state): Map<string, string> {
-      if (state.viewMode === 'raw') return new Map()
+      if (state.viewMode === 'raw' || state.viewMode === 'organization') return new Map()
       return buildHelperParentMap(state.nodes, state.edges)
     },
 
+    organizationNodes(state): StackMapNode[] {
+      if (!this.hasOrganizationData) return []
+      return buildOrganizationSummaryNodes(state.nodes, state.groups, state.metadata)
+    },
+
+    organizationGroups(state): StackMapGroup[] {
+      return buildOrganizationGroups(state.groups, this.organizationNodes, state.nodes)
+    },
+
+    organizationEdges(state): StackMapEdge[] {
+      return buildOrganizationEdges(state.nodes, state.edges, state.showCrossAccountEdges)
+    },
+
     graphNodes(state): StackMapNode[] {
-      if (state.viewMode === 'raw') return state.nodes
+      if (state.viewMode === 'organization') return this.organizationNodes
+      if (state.viewMode === 'raw') {
+        return state.activeAccountId
+          ? state.nodes.filter(node => accountIdForNode(node) === state.activeAccountId)
+          : state.nodes
+      }
+
       const parentMap = this.helperParentMap
-      // Hide ALL helper nodes: those with parents (remapped) AND orphans (dropped)
-      return state.nodes.filter(n => !parentMap.has(n.id) && !isHelperNode(n))
+      let graphNodes = state.nodes.filter(n => !parentMap.has(n.id) && !isHelperNode(n))
+      if (state.activeAccountId) {
+        graphNodes = graphNodes.filter(node => accountIdForNode(node) === state.activeAccountId)
+      }
+      return graphNodes
     },
 
     graphEdges(state): StackMapEdge[] {
-      if (state.viewMode === 'raw') return state.edges
+      if (state.viewMode === 'organization') {
+        return this.organizationEdges
+      }
+
+      let baseEdges = state.edges
+      if (!state.showCrossAccountEdges) {
+        baseEdges = baseEdges.filter(edge => edge.edge_type !== 'cross_account_reference')
+      }
+
+      if (state.viewMode === 'raw') {
+        if (!state.activeAccountId) return baseEdges
+        const visibleIds = new Set(
+          state.nodes
+            .filter(node => accountIdForNode(node) === state.activeAccountId)
+            .map(node => node.id)
+        )
+        return baseEdges.filter(edge => visibleIds.has(edge.source) && visibleIds.has(edge.target))
+      }
 
       const parentMap = this.helperParentMap
       const dedup = new Set<string>()
       let remapped: StackMapEdge[] = []
 
-      for (const edge of state.edges) {
+      for (const edge of baseEdges) {
         const source = parentMap.get(edge.source) || edge.source
         const target = parentMap.get(edge.target) || edge.target
         if (source === target) continue
@@ -328,14 +596,32 @@ export const useGraphStore = defineStore('graph', {
 
       if (state.viewMode === 'architecture') {
         const nodeById = new Map(state.nodes.map(n => [n.id, n]))
-        remapped = remapped.filter(e => {
-          if (ARCH_DROPPED_EDGE_TYPES.has(e.edge_type)) return false
-          if (e.edge_type !== 'references') return true
-          return shouldKeepReferenceEdge(nodeById.get(e.source), nodeById.get(e.target))
+        remapped = remapped.filter(edge => {
+          if (ARCH_DROPPED_EDGE_TYPES.has(edge.edge_type)) return false
+          if (edge.edge_type === 'cross_account_reference') return true
+          if (edge.edge_type !== 'references') return true
+          return shouldKeepReferenceEdge(nodeById.get(edge.source), nodeById.get(edge.target))
         })
       }
 
+      if (state.activeAccountId) {
+        const visibleIds = new Set(this.graphNodes.map(node => node.id))
+        remapped = remapped.filter(edge => visibleIds.has(edge.source) && visibleIds.has(edge.target))
+      }
+
       return remapped
+    },
+
+    graphGroups(state): StackMapGroup[] {
+      if (state.viewMode === 'organization') return this.organizationGroups
+      if (!state.activeAccountId) return state.groups
+
+      const nodesById = new Map(state.nodes.map(node => [node.id, node]))
+      return state.groups.filter(group => groupTouchesAccount(group, nodesById, state.activeAccountId as string))
+    },
+
+    organizationTree(): OrgTreeItem[] {
+      return flattenOrganizationTree(this.organizationGroups)
     },
 
     connectedNodeIds(): (nodeId: string) => Set<string> {
@@ -397,18 +683,26 @@ export const useGraphStore = defineStore('graph', {
       return (state.metadata?.edge_diff_status as Record<string, string>) ?? {}
     },
 
+    activeBreadcrumb(state): string[] {
+      if (!state.activeAccountId) return []
+      const accountNode = this.organizationNodes.find(node => node.metadata?.account_id === state.activeAccountId)
+      const path = String(accountNode?.metadata?.org_path || '').trim()
+      if (!path) return [accountNode?.name || state.activeAccountId]
+      return path.split('/').filter(Boolean).concat(accountNode?.name || [])
+    },
+
     visibleNodes(state): StackMapNode[] {
       let hopSet: Set<string> | null = null
       if (state.hopLimit > 0 && state.selectedNodeId) {
         hopSet = this.nodesWithinHops(state.selectedNodeId, state.hopLimit)
       }
 
-      return this.graphNodes.filter((n: StackMapNode) => {
-        if (state.categoryFilters[n.category] === false) return false
-        if (state.minWeight > 1 && (n.position_hint?.weight || 2) < state.minWeight) return false
-        if (hopSet && !hopSet.has(n.id)) return false
+      return this.graphNodes.filter((node: StackMapNode) => {
+        if (state.categoryFilters[node.category] === false) return false
+        if (state.minWeight > 1 && (node.position_hint?.weight || 2) < state.minWeight) return false
+        if (hopSet && !hopSet.has(node.id)) return false
         if (state.diffMode) {
-          const diffStatus = n.position_hint?.diff_status
+          const diffStatus = node.position_hint?.diff_status
           if (state.showOnlyChanges && diffStatus === 'unchanged') return false
           if (diffStatus === 'added' && state.diffSlider <= 0) return false
           if (diffStatus === 'removed' && state.diffSlider >= 1) return false
@@ -418,12 +712,12 @@ export const useGraphStore = defineStore('graph', {
     },
 
     visibleEdges(): StackMapEdge[] {
-      const visibleIds = new Set(this.visibleNodes.map((n: StackMapNode) => n.id))
-      return this.graphEdges.filter((e: StackMapEdge) => visibleIds.has(e.source) && visibleIds.has(e.target))
+      const visibleIds = new Set(this.visibleNodes.map((node: StackMapNode) => node.id))
+      return this.graphEdges.filter((edge: StackMapEdge) => visibleIds.has(edge.source) && visibleIds.has(edge.target))
     },
 
     nodeEdges(): (nodeId: string) => StackMapEdge[] {
-      return (nodeId: string) => this.graphEdges.filter((e: StackMapEdge) => e.source === nodeId || e.target === nodeId)
+      return (nodeId: string) => this.graphEdges.filter((edge: StackMapEdge) => edge.source === nodeId || edge.target === nodeId)
     },
   },
 
@@ -439,8 +733,8 @@ export const useGraphStore = defineStore('graph', {
       this.edges = data.edges || []
       this.groups = data.groups || []
 
-      const cats = new Set(this.nodes.map(n => n.category))
-      this.categoryFilters = Object.fromEntries([...cats].map(c => [c, true]))
+      const cats = new Set(this.graphNodes.map(node => node.category))
+      this.categoryFilters = Object.fromEntries([...cats].map(category => [category, true]))
 
       if (this.metadata.diff_mode) {
         this.diffMode = true
@@ -495,21 +789,43 @@ export const useGraphStore = defineStore('graph', {
       this.searchQuery = query
     },
 
-    setViewMode(mode: 'architecture' | 'raw') {
+    setViewMode(mode: 'architecture' | 'raw' | 'organization') {
       this.viewMode = mode
       if (mode === 'architecture' && this.selectedNodeId) {
         const parent = this.helperParentMap.get(this.selectedNodeId)
         if (parent) this.selectedNodeId = parent
       }
+      if (mode === 'organization') {
+        this.selectedNodeId = null
+      }
+    },
+
+    setActiveAccount(accountId: string | null) {
+      this.activeAccountId = accountId
+      this.selectedNodeId = null
+      this.hopLimit = 0
+    },
+
+    enterAccountArchitecture(accountId: string) {
+      this.activeAccountId = accountId
+      this.viewMode = 'architecture'
+      this.selectedNodeId = null
+      this.hopLimit = 0
+    },
+
+    setShowCrossAccountEdges(show: boolean) {
+      this.showCrossAccountEdges = show
     },
 
     resetFilters() {
-      for (const cat of Object.keys(this.categoryFilters)) {
-        this.categoryFilters[cat] = true
+      for (const category of Object.keys(this.categoryFilters)) {
+        this.categoryFilters[category] = true
       }
       this.minWeight = 1
       this.hopLimit = 0
       this.searchQuery = ''
+      this.activeAccountId = null
+      this.showCrossAccountEdges = true
     },
   },
 })
