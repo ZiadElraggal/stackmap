@@ -341,3 +341,102 @@ def test_scan_accepts_stackmap_ir_json(tmp_path: Path) -> None:
     assert out.exists()
     assert "Source type" in result.output
     assert "repo" in result.output.lower()
+
+
+def test_diff_json_writes_output(tmp_path: Path) -> None:
+    out = tmp_path / "diff.json"
+    result = runner.invoke(
+        app,
+        [
+            "diff",
+            "--from",
+            str(FIXTURES / "timeline-before.json"),
+            "--to",
+            str(FIXTURES / "timeline-after.json"),
+            "--format",
+            "json",
+            "--output",
+            str(out),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert out.exists()
+
+    import json
+
+    payload = json.loads(out.read_text())
+    assert payload["summary"] == {
+        "added": 2,
+        "removed": 1,
+        "modified": 1,
+        "unchanged": 4,
+    }
+
+
+def test_diff_html_uses_exporter(monkeypatch, tmp_path: Path) -> None:
+    out = tmp_path / "diff.html"
+    called = {"value": False}
+
+    def fake_export(ir, output_path):  # type: ignore[no-untyped-def]
+        called["value"] = True
+        assert ir.metadata["diff_mode"] is True
+        Path(output_path).write_text("<html>diff</html>")
+
+    monkeypatch.setattr("stackmap.export.export_ir_to_html", fake_export)
+
+    result = runner.invoke(
+        app,
+        [
+            "diff",
+            "--from",
+            str(FIXTURES / "timeline-before.json"),
+            "--to",
+            str(FIXTURES / "timeline-after.json"),
+            "--format",
+            "html",
+            "--output",
+            str(out),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert called["value"] is True
+    assert out.exists()
+
+
+def test_scan_accepts_stackmap_diff_json(tmp_path: Path) -> None:
+    diff_out = tmp_path / "timeline-demo.json"
+    diff_result = runner.invoke(
+        app,
+        [
+            "diff",
+            "--from",
+            str(FIXTURES / "timeline-before.json"),
+            "--to",
+            str(FIXTURES / "timeline-after.json"),
+            "--format",
+            "json",
+            "--output",
+            str(diff_out),
+        ],
+    )
+    assert diff_result.exit_code == 0
+
+    roundtrip_out = tmp_path / "served-like.json"
+    scan_result = runner.invoke(
+        app,
+        [
+            "scan",
+            "--source",
+            str(diff_out),
+            "--format",
+            "json",
+            "--output",
+            str(roundtrip_out),
+        ],
+    )
+
+    assert scan_result.exit_code == 0
+    assert roundtrip_out.exists()
+    assert "repo" not in scan_result.output.lower()
