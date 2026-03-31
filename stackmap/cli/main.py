@@ -5,6 +5,7 @@ import tempfile
 import threading
 import time
 import webbrowser
+from datetime import UTC, datetime
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -209,6 +210,12 @@ def _write_graph_json(path: Path, ir_data: dict[str, Any]) -> None:
     path.write_text(json.dumps(ir_data, indent=2))
 
 
+def _annotate_scan_metadata(ir: StackMapIR, source_path: Path) -> None:
+    """Attach scan metadata used by diff/time-travel views."""
+    ir.metadata.setdefault("scanned_at", datetime.now(UTC).isoformat())
+    ir.metadata.setdefault("source_path", str(source_path))
+
+
 def _has_dev_only_nuxt_entry(public_dir: Path) -> bool:
     index_path = public_dir / "index.html"
     if not index_path.exists():
@@ -239,6 +246,7 @@ def _watch_source_loop(
         last_mtime = current_mtime
         try:
             _, ir = _parse_source(str(source_path))
+            _annotate_scan_metadata(ir, source_path)
             version = state.update(ir)
             _, snapshot = state.snapshot()
             _write_graph_json(static_dir / "sample-data.json", snapshot)
@@ -344,7 +352,8 @@ def scan(
 
     with console.status("[bold]Scanning infrastructure...[/bold]"):
         try:
-            source_type, ir = _parse_source(source)
+            source_type, ir = _parse_source(str(source_path))
+            _annotate_scan_metadata(ir, source_path)
         except typer.BadParameter as exc:
             console.print(f"[red]Error:[/red] {exc}")
             raise typer.Exit(1)
@@ -445,6 +454,8 @@ def scan_repo(
             console.print(f"[red]Error:[/red] {exc}")
             raise typer.Exit(1)
 
+    _annotate_scan_metadata(merged_ir, root_path)
+
     if output_format == "json":
         merged_ir.write_json(output)
     else:
@@ -531,7 +542,8 @@ def serve(
 
     with console.status("[bold]Preparing local viewer...[/bold]"):
         try:
-            source_type, ir = _parse_source(source)
+            source_type, ir = _parse_source(str(source_path))
+            _annotate_scan_metadata(ir, source_path)
         except typer.BadParameter as exc:
             console.print(f"[red]Error:[/red] {exc}")
             raise typer.Exit(1)
@@ -623,6 +635,74 @@ def serve(
             watcher.join(timeout=1.0)
         if temp_dir and temp_dir.exists():
             shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@app.command()
+def diff(
+    from_file: str = typer.Option(..., "--from", help="Path to the 'before' IR JSON file"),
+    to_file: str = typer.Option(..., "--to", help="Path to the 'after' IR JSON file"),
+    output: str = typer.Option("stackmap-diff.json", help="Output file path"),
+    format: str = typer.Option("json", help="Output format: json or html"),
+) -> None:
+    """Compare two infrastructure snapshots and visualise what changed."""
+    from stackmap.graph.diff import compute_diff
+
+    output_format = format.lower()
+    if output_format not in {"json", "html"}:
+        console.print(
+            f"[red]Error:[/red] Format '{format}' not supported. Use 'json' or 'html'."
+        )
+        raise typer.Exit(1)
+
+    from_path = Path(from_file)
+    to_path = Path(to_file)
+    if not from_path.exists():
+        console.print(f"[red]Error:[/red] --from file not found: {from_path}")
+        raise typer.Exit(1)
+    if not to_path.exists():
+        console.print(f"[red]Error:[/red] --to file not found: {to_path}")
+        raise typer.Exit(1)
+
+    with console.status("[bold]Computing diff...[/bold]"):
+        try:
+            from_ir = StackMapIR.read_json(from_path)
+            to_ir = StackMapIR.read_json(to_path)
+            result = compute_diff(from_ir, to_ir)
+        except Exception as exc:
+            console.print(f"[red]Error:[/red] {exc}")
+            raise typer.Exit(1)
+
+    if output_format == "json":
+        result.write_json(output)
+    else:
+        from stackmap.export import export_ir_to_html
+
+        try:
+            export_ir_to_html(result.to_diff_ir(), output)
+        except RuntimeError as exc:
+            console.print(f"[red]Error:[/red] {exc}")
+            raise typer.Exit(1)
+
+    summary = result.summary
+    table = Table(title="StackMap Diff Results", show_header=False)
+    table.add_column("Metric", style="bold")
+    table.add_column("Value", style="cyan")
+    table.add_row("From", str(from_path))
+    table.add_row("To", str(to_path))
+    table.add_row("Added", str(summary.added))
+    table.add_row("Removed", str(summary.removed))
+    table.add_row("Modified", str(summary.modified))
+    table.add_row("Unchanged", str(summary.unchanged))
+    table.add_row("Output", output)
+    console.print()
+    console.print(table)
+    console.print(
+        f"\n[green]✓[/green] Diff complete: "
+        f"[green]+{summary.added}[/green] added, "
+        f"[red]-{summary.removed}[/red] removed, "
+        f"[yellow]~{summary.modified}[/yellow] modified, "
+        f"{summary.unchanged} unchanged."
+    )
 
 
 @app.command()

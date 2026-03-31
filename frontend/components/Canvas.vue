@@ -157,6 +157,32 @@
       <SearchBar ref="searchBarRef" @pan-to="panToNode" />
     </div>
 
+    <Transition name="fade">
+      <div
+        v-if="diffSummaryMeta"
+        class="absolute left-1/2 top-16 z-40 -translate-x-1/2 flex items-center gap-3 rounded-xl border border-white/[0.08] bg-[#0e0e18]/95 px-4 py-2 backdrop-blur-md shadow-xl"
+      >
+        <span class="text-[10px] font-mono text-gray-500 tracking-widest uppercase">Diff</span>
+        <span class="h-3 w-px bg-white/[0.08]" />
+        <span class="text-[11px] font-mono font-semibold text-green-400">+{{ diffSummaryMeta.added }}</span>
+        <span class="text-[11px] font-mono font-semibold text-red-400">-{{ diffSummaryMeta.removed }}</span>
+        <span class="text-[11px] font-mono font-semibold text-amber-400">~{{ diffSummaryMeta.modified }}</span>
+        <span class="text-[11px] font-mono text-gray-500">{{ diffSummaryMeta.unchanged }} unchanged</span>
+        <span class="h-3 w-px bg-white/[0.08]" />
+        <button
+          v-if="store.diffMode"
+          class="text-[10px] font-mono text-gray-400 transition-colors hover:text-white"
+          :class="store.showOnlyChanges ? 'text-amber-400' : ''"
+          @click="store.setShowOnlyChanges(!store.showOnlyChanges)"
+        >{{ store.showOnlyChanges ? 'show all' : 'changes only' }}</button>
+        <button
+          v-else
+          class="text-[10px] font-mono text-cyan-400 transition-colors hover:text-cyan-300"
+          @click="store.setDiffMode(true)"
+        >open timeline</button>
+      </div>
+    </Transition>
+
     <Minimap :viewport="viewportRect" @pan-to-position="panToPosition" />
 
     <div class="absolute right-4 top-4 z-30">
@@ -234,7 +260,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import * as d3 from 'd3'
-import { useGraphStore, type StackMapEdge, type StackMapNode } from '~/stores/graph'
+import { useGraphStore, type NodePosition, type StackMapEdge, type StackMapNode } from '~/stores/graph'
 import { useLayout } from '~/composables/useLayout'
 import { EDGE_COLORS, getNodeHeight } from '~/composables/useGraph'
 
@@ -386,6 +412,12 @@ const viewModeLabel = computed(() => {
   return 'raw view'
 })
 
+const diffSummaryMeta = computed(() => {
+  const summary = store.metadata?.diff_summary
+  if (!summary || typeof summary !== 'object') return null
+  return summary as { added: number; removed: number; modified: number; unchanged: number }
+})
+
 function tierBandOpacity(bandName: string): number {
   if (!hoveredTier.value) return 0.65
   return hoveredTier.value === bandName ? 0.95 : 0.28
@@ -471,8 +503,10 @@ onUnmounted(() => {
 watch(
   () => [
     store.viewMode,
-    store.visibleNodes.map(n => n.id).join('|'),
-    store.visibleEdges.map(e => e.id).join('|'),
+    store.diffMode,
+    store.diffSlider,
+    store.graphNodes.map(n => n.id).join('|'),
+    store.graphEdges.map(e => e.id).join('|'),
   ],
   () => {
     if (!store.loaded) return
@@ -556,8 +590,101 @@ function fitToViewport() {
 }
 
 function recomputeLayout() {
-  const positions = computeLayout(store.graphNodes, store.graphEdges, store.groups)
+  const positions = store.diffMode ? computeDiffLayout() : computeLayout(store.graphNodes, store.graphEdges, store.groups)
   store.setPositions(positions)
+}
+
+function computeDiffLayout(): Record<string, NodePosition> {
+  const allNodes = store.graphNodes
+  const allEdges = store.graphEdges
+  const nodeDiffStatus = store.nodeDiffStatus
+  const edgeDiffStatus = store.edgeDiffStatus
+
+  const beforeNodes = allNodes.filter(node => nodeDiffStatus[node.id] !== 'added')
+  const afterNodes = allNodes.filter(node => nodeDiffStatus[node.id] !== 'removed')
+  const beforeIds = new Set(beforeNodes.map(node => node.id))
+  const afterIds = new Set(afterNodes.map(node => node.id))
+
+  const beforeEdges = allEdges.filter(edge =>
+    edgeDiffStatus[edge.id] !== 'added' && beforeIds.has(edge.source) && beforeIds.has(edge.target)
+  )
+  const afterEdges = allEdges.filter(edge =>
+    edgeDiffStatus[edge.id] !== 'removed' && afterIds.has(edge.source) && afterIds.has(edge.target)
+  )
+
+  const beforePositions = computeLayout(beforeNodes, beforeEdges, store.groups)
+  const afterPositions = computeLayout(afterNodes, afterEdges, store.groups)
+  const beforeFallback = centroidForPositions(beforePositions)
+  const afterFallback = centroidForPositions(afterPositions)
+
+  const positions: Record<string, NodePosition> = {}
+  for (const node of allNodes) {
+    const beforePos =
+      beforePositions[node.id] ??
+      inferAnchorPosition(node, beforeEdges, beforePositions, beforeFallback)
+    const afterPos =
+      afterPositions[node.id] ??
+      inferAnchorPosition(node, afterEdges, afterPositions, afterFallback)
+
+    positions[node.id] = {
+      x: lerp(beforePos.x, afterPos.x, store.diffSlider),
+      y: lerp(beforePos.y, afterPos.y, store.diffSlider),
+    }
+  }
+
+  return positions
+}
+
+function inferAnchorPosition(
+  node: StackMapNode,
+  edges: StackMapEdge[],
+  positions: Record<string, NodePosition>,
+  fallback: NodePosition
+): NodePosition {
+  const neighborPositions: NodePosition[] = []
+
+  for (const edge of edges) {
+    if (edge.source !== node.id && edge.target !== node.id) continue
+    const neighborId = edge.source === node.id ? edge.target : edge.source
+    const neighborPos = positions[neighborId]
+    if (neighborPos) neighborPositions.push(neighborPos)
+  }
+
+  if (neighborPositions.length > 0) {
+    return centroidForList(neighborPositions)
+  }
+
+  const tierPeers = store.graphNodes
+    .filter(candidate => candidate.position_hint?.tier === node.position_hint?.tier)
+    .map(candidate => positions[candidate.id])
+    .filter((pos): pos is NodePosition => Boolean(pos))
+
+  if (tierPeers.length > 0) {
+    return centroidForList(tierPeers)
+  }
+
+  return fallback
+}
+
+function centroidForPositions(positions: Record<string, NodePosition>): NodePosition {
+  const all = Object.values(positions)
+  if (all.length === 0) return { x: 0, y: 0 }
+  return centroidForList(all)
+}
+
+function centroidForList(points: NodePosition[]): NodePosition {
+  const total = points.reduce(
+    (acc, point) => ({ x: acc.x + point.x, y: acc.y + point.y }),
+    { x: 0, y: 0 }
+  )
+  return {
+    x: total.x / points.length,
+    y: total.y / points.length,
+  }
+}
+
+function lerp(from: number, to: number, t: number): number {
+  return from + (to - from) * t
 }
 
 function zoomBy(factor: number) {
