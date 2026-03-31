@@ -5,12 +5,28 @@
     :style="{
       '--node-color': categoryColor,
       '--entry-delay': `${entryDelay}ms`,
+      '--diff-color': diffBorderColor,
     }"
-    :opacity="isDimmed ? 0.12 : 1"
+    :opacity="nodeOpacity"
     @click.stop="onClick"
     @mouseenter="onHover"
     @mouseleave="onLeave"
   >
+    <rect
+      v-if="diffStatus && diffStatus !== 'unchanged'"
+      :width="nodeWidth + 16"
+      :height="nodeHeight + 16"
+      :x="-(nodeWidth + 16) / 2"
+      :y="-(nodeHeight + 16) / 2"
+      :rx="18"
+      :ry="18"
+      fill="none"
+      :stroke="diffBorderColor"
+      stroke-width="1.5"
+      :opacity="0.45"
+      class="diff-glow"
+    />
+
     <rect
       :width="nodeWidth"
       :height="nodeHeight"
@@ -19,8 +35,8 @@
       :rx="12"
       :ry="12"
       :fill="`${categoryColor}0F`"
-      stroke="rgba(255,255,255,0.06)"
-      stroke-width="1"
+      :stroke="diffStatus && diffStatus !== 'unchanged' ? diffBorderColor : 'rgba(255,255,255,0.06)'"
+      :stroke-width="diffStatus && diffStatus !== 'unchanged' ? 1.5 : 1"
       class="outer-shell"
     />
 
@@ -95,6 +111,28 @@
       dominant-baseline="central"
     >{{ shortType }}</text>
 
+    <g v-if="diffStatus && diffStatus !== 'unchanged'">
+      <rect
+        :x="nodeWidth / 2 - 16"
+        :y="-nodeHeight / 2 - 2"
+        width="14"
+        height="14"
+        rx="3"
+        ry="3"
+        :fill="diffBorderColor"
+        fill-opacity="0.9"
+      />
+      <text
+        :x="nodeWidth / 2 - 9"
+        :y="-nodeHeight / 2 + 8"
+        text-anchor="middle"
+        fill="#fff"
+        font-size="9"
+        font-weight="700"
+        font-family="'JetBrains Mono', monospace"
+      >{{ diffBadge }}</text>
+    </g>
+
     <title>{{ node.name }} ({{ node.resource_type }})</title>
   </g>
 </template>
@@ -118,9 +156,11 @@ const props = withDefaults(
     x: number
     y: number
     entryDelay?: number
+    zoomScale?: number
   }>(),
   {
     entryDelay: 0,
+    zoomScale: 1,
   }
 )
 
@@ -135,6 +175,33 @@ const shortType = computed(() => formatResourceType(props.node.resource_type))
 const prominence = computed(() => getNodeProminence(props.node))
 const nodeWidth = computed(() => getNodeWidth(props.node))
 const nodeHeight = computed(() => getNodeHeight(props.node))
+const diffStatus = computed(() => props.node.position_hint?.diff_status as string | undefined)
+
+const diffBorderColor = computed(() => {
+  switch (diffStatus.value) {
+    case 'added':
+      return '#22c55e'
+    case 'removed':
+      return '#ef4444'
+    case 'modified':
+      return '#f59e0b'
+    default:
+      return 'transparent'
+  }
+})
+
+const diffBadge = computed(() => {
+  switch (diffStatus.value) {
+    case 'added':
+      return '+'
+    case 'removed':
+      return '−'
+    case 'modified':
+      return '~'
+    default:
+      return ''
+  }
+})
 
 const nameFontSize = computed(() => {
   if (prominence.value === 'primary') return 13
@@ -167,6 +234,23 @@ const isDimmed = computed(() => {
   if (hovered === props.node.id) return false
   const connected = store.connectedNodeIds(hovered)
   return !connected.has(props.node.id)
+})
+
+const nodeOpacity = computed(() => {
+  if (store.diffMode && diffStatus.value) {
+    if (diffStatus.value === 'removed') {
+      const base = Math.max(0, (0.5 - store.diffSlider) * 2)
+      return isDimmed.value ? base * 0.12 : Math.max(0.2, base)
+    }
+    if (diffStatus.value === 'added') {
+      const base = Math.max(0, (store.diffSlider - 0.5) * 2)
+      return isDimmed.value ? base * 0.12 : Math.max(0.2, base)
+    }
+    if (diffStatus.value === 'unchanged' && store.showOnlyChanges) {
+      return isDimmed.value ? 0.06 : 0.2
+    }
+  }
+  return isDimmed.value ? 0.12 : 1
 })
 
 function onClick() {
@@ -228,6 +312,10 @@ onMounted(() => {
   stroke: color-mix(in srgb, var(--node-color) 80%, transparent);
   stroke-width: 2;
   filter: drop-shadow(0 0 20px color-mix(in srgb, var(--node-color) 30%, transparent));
+}
+
+.diff-glow {
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--diff-color) 35%, transparent));
 }
 
 .graph-node .node-name,
