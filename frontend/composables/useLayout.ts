@@ -9,9 +9,9 @@ const BASE_TIER_Y: Record<string, number> = {
   data: 750,
 }
 
-function getTierY(nodeCount: number): Record<string, number> {
+function getTierBaseY(nodeCount: number): Record<string, number> {
   if (nodeCount > 60) {
-    return { frontend: 0, api: 320, backend: 640, data: 960 }
+    return { frontend: 0, api: 360, backend: 720, data: 1080 }
   }
   return BASE_TIER_Y
 }
@@ -26,6 +26,30 @@ const TIER_ORDER: Record<string, number> = {
 const LAYOUT_EDGE_TYPES = new Set(['triggers', 'writes_to', 'reads_from', 'routes_to'])
 const TIER_LIST = ['frontend', 'api', 'backend', 'data']
 
+// Canonical category order used when assigning sub-rows within a tier.
+// Categories that appear earlier get a row closer to the top of the tier band.
+const SUB_ROW_CATEGORY_ORDER = [
+  'serverless',
+  'compute',
+  'container',
+  'integration',
+  'queue',
+  'database',
+  'storage',
+  'cdn',
+  'dns',
+  'network',
+  'security',
+  'monitoring',
+  'other',
+]
+
+// Sub-rows are activated for a tier that has more nodes than this threshold.
+const SUB_ROW_THRESHOLD = 8
+
+// Vertical spacing between sub-rows within a tier.
+const SUB_ROW_HEIGHT = 120
+
 // For large graphs, increase spacing to prevent visual clutter
 function getLayoutParams(nodeCount: number) {
   if (nodeCount > 80) {
@@ -37,10 +61,62 @@ function getLayoutParams(nodeCount: number) {
   return { nodesep: 70, ranksep: 180, edgesep: 25, marginx: 40, marginy: 40, minGap: 30 }
 }
 
+/**
+ * Compute per-node Y positions incorporating sub-tier rows.
+ *
+ * When a tier has more than SUB_ROW_THRESHOLD nodes, its nodes are split into
+ * sub-rows by category.  Each category within the tier gets its own horizontal
+ * row, spaced SUB_ROW_HEIGHT apart.  The first sub-row sits at the tier base Y.
+ *
+ * Returns a map of node.id -> Y position.
+ */
+function computeSubTierY(
+  nodes: StackMapNode[],
+  tierBaseY: Record<string, number>
+): Record<string, number> {
+  const nodeY: Record<string, number> = {}
+
+  const byTier = new Map<string, StackMapNode[]>()
+  for (const node of nodes) {
+    const tier = node.position_hint?.tier || 'backend'
+    if (!byTier.has(tier)) byTier.set(tier, [])
+    byTier.get(tier)!.push(node)
+  }
+
+  for (const [tier, tierNodes] of byTier) {
+    const baseY = tierBaseY[tier] ?? tierBaseY.backend
+
+    if (tierNodes.length <= SUB_ROW_THRESHOLD) {
+      // Single row — every node in the tier shares the same Y.
+      for (const node of tierNodes) {
+        nodeY[node.id] = baseY
+      }
+      continue
+    }
+
+    // Collect the unique categories present in this tier, sorted canonically.
+    const categoriesPresent = new Set(tierNodes.map(n => n.category))
+    const sortedCategories = SUB_ROW_CATEGORY_ORDER.filter(c => categoriesPresent.has(c))
+    // Append any categories not covered by the canonical order.
+    for (const cat of categoriesPresent) {
+      if (!sortedCategories.includes(cat)) sortedCategories.push(cat)
+    }
+
+    const categoryRowIndex = new Map(sortedCategories.map((c, i) => [c, i]))
+
+    for (const node of tierNodes) {
+      const rowIdx = categoryRowIndex.get(node.category) ?? 0
+      nodeY[node.id] = baseY + rowIdx * SUB_ROW_HEIGHT
+    }
+  }
+
+  return nodeY
+}
+
 export function useLayout() {
   /**
-   * Hybrid layout: dagre computes optimal X positions (minimizing edge crossings),
-   * then we override Y positions with our fixed tier system.
+   * Hybrid layout: dagre computes optimal X positions (minimising edge crossings),
+   * then we override Y positions with our tier + sub-tier system.
    */
   function computeLayout(
     nodes: StackMapNode[],
@@ -49,9 +125,19 @@ export function useLayout() {
   ): Record<string, NodePosition> {
     if (nodes.length === 0) return {}
 
-    const TIER_Y = getTierY(nodes.length)
+    const TIER_BASE_Y = getTierBaseY(nodes.length)
+    const nodeSubY = computeSubTierY(nodes, TIER_BASE_Y)
 
-    // Group nodes by tier for fallback
+    // Group nodes by (tier, category) for the de-overlap pass.
+    const byTierCategory = new Map<string, StackMapNode[]>()
+    for (const node of nodes) {
+      const tier = node.position_hint?.tier || 'backend'
+      const key = `${tier}__${node.category}`
+      if (!byTierCategory.has(key)) byTierCategory.set(key, [])
+      byTierCategory.get(key)!.push(node)
+    }
+
+    // Also maintain byTier for fallback and center-align.
     const byTier = new Map<string, StackMapNode[]>()
     for (const node of nodes) {
       const tier = node.position_hint?.tier || 'backend'
@@ -99,14 +185,13 @@ export function useLayout() {
       try {
         dagre.layout(g)
 
-        // Take X from dagre, Y from our tier system
+        // Take X from dagre, Y from our tier+sub-tier system
         for (const node of nodes) {
           const dagreNode = g.node(node.id)
           if (dagreNode && Number.isFinite(dagreNode.x)) {
-            const tier = node.position_hint?.tier || 'backend'
             positions[node.id] = {
               x: dagreNode.x,
-              y: TIER_Y[tier] ?? TIER_Y.backend,
+              y: nodeSubY[node.id] ?? (TIER_BASE_Y[node.position_hint?.tier || 'backend'] ?? TIER_BASE_Y.backend),
             }
           }
         }
@@ -116,7 +201,7 @@ export function useLayout() {
       }
     }
 
-    // Fallback: simple horizontal spacing per tier
+    // Fallback: simple horizontal spacing per (tier, category) group
     if (Object.keys(positions).length < nodes.length) {
       const startX = 200
       const rowGap = nodes.length > 60 ? 200 : 160
@@ -127,36 +212,34 @@ export function useLayout() {
           if (!positions[node.id]) {
             positions[node.id] = {
               x: startX + idx * rowGap - tierWidth / 2 + rowGap / 2,
-              y: TIER_Y[tier] ?? TIER_Y.backend,
+              y: nodeSubY[node.id] ?? (TIER_BASE_Y[tier] ?? TIER_BASE_Y.backend),
             }
           }
         })
       }
     }
 
-    // De-overlap pass: since we override Y, nodes dagre put on different ranks
-    // may now share the same Y. Spread them out if they overlap.
+    // De-overlap pass: spread nodes within the same (tier, category) group.
     const MIN_GAP = params.minGap
 
-    for (const tier of TIER_LIST) {
-      const tierNodes = (byTier.get(tier) || [])
+    for (const groupNodes of byTierCategory.values()) {
+      const sorted = groupNodes
         .filter(n => positions[n.id])
         .sort((a, b) => positions[a.id].x - positions[b.id].x)
 
-      for (let i = 1; i < tierNodes.length; i++) {
-        const prev = tierNodes[i - 1]
-        const curr = tierNodes[i]
+      for (let i = 1; i < sorted.length; i++) {
+        const prev = sorted[i - 1]
+        const curr = sorted[i]
         const prevRight = positions[prev.id].x + getNodeWidth(prev) / 2
         const currLeft = positions[curr.id].x - getNodeWidth(curr) / 2
         const overlap = prevRight + MIN_GAP - currLeft
         if (overlap > 0) {
-          // Push current node right
           positions[curr.id].x += overlap
         }
       }
     }
 
-    // Center-align tiers: shift each tier so its center aligns with the overall center
+    // Center-align: shift each (tier, category) group so the overall tier center aligns.
     const allX = Object.values(positions).map(p => p.x)
     if (allX.length > 0) {
       const globalCenterX = (Math.min(...allX) + Math.max(...allX)) / 2

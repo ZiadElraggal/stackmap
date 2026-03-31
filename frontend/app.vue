@@ -15,6 +15,7 @@
 
     <FilterSidebar />
     <Canvas ref="canvasRef" @toggle-command-palette="cmdRef?.toggle()" />
+    <TimeTravelSlider />
     <DetailPanel />
     <CommandPalette ref="cmdRef" @pan-to="onPanTo" @fit-to-screen="onFit" />
 

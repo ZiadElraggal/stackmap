@@ -74,7 +74,15 @@ const props = withDefaults(
 
 const store = useGraphStore()
 
-const edgeColor = computed(() => EDGE_COLORS[props.edge.edge_type] || '#64748b')
+const edgeDiffStatus = computed(() => store.edgeDiffStatus[props.edge.id] as string | undefined)
+
+const edgeColor = computed(() => {
+  if (store.diffMode && edgeDiffStatus.value) {
+    if (edgeDiffStatus.value === 'added') return '#22c55e'
+    if (edgeDiffStatus.value === 'removed') return '#ef4444'
+  }
+  return EDGE_COLORS[props.edge.edge_type] || '#64748b'
+})
 
 const isConnectedToHovered = computed(() => {
   const hovered = store.hoveredNodeId
@@ -101,6 +109,16 @@ const computedOpacity = computed(() => {
   if (store.selectedNodeId) {
     return isConnectedToSelected.value ? 0.9 : 0.06
   }
+  // Diff mode: dim unchanged edges, fade removed edges based on slider
+  if (store.diffMode && edgeDiffStatus.value) {
+    if (edgeDiffStatus.value === 'removed') {
+      return Math.max(0.05, (0.5 - store.diffSlider) * 2 * 0.7)
+    }
+    if (edgeDiffStatus.value === 'added') {
+      return Math.max(0.05, (store.diffSlider - 0.5) * 2 * 0.7)
+    }
+    if (edgeDiffStatus.value === 'unchanged') return 0.15
+  }
   const type = props.edge.edge_type
   if (type === 'triggers') return 0.85
   if (type === 'writes_to' || type === 'reads_from') return 0.7
@@ -123,6 +141,8 @@ const strokeWidth = computed(() => {
 })
 
 const dashPattern = computed(() => {
+  if (store.diffMode && edgeDiffStatus.value === 'added') return '6 3'
+  if (store.diffMode && edgeDiffStatus.value === 'removed') return '3 4'
   if (props.edge.edge_type === 'references') return '4 3'
   if (props.edge.edge_type === 'contains') return '1 3'
   return 'none'

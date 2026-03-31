@@ -31,14 +31,45 @@
           </button>
         </div>
 
-        <div class="flex items-center gap-1.5 mt-3">
+        <div class="flex items-center gap-1.5 mt-3 flex-wrap">
           <span
             class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium tracking-wide"
             :style="{ backgroundColor: `${categoryColor}20`, color: categoryColor }"
           >{{ node.category }}</span>
           <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] text-gray-500 bg-white/5">{{ node.provider }}</span>
           <span v-if="node.position_hint?.tier" class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] text-gray-500 bg-white/5">{{ node.position_hint.tier }}</span>
+          <!-- Diff status badge -->
+          <span
+            v-if="diffStatus"
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold"
+            :style="{ backgroundColor: `${diffStatusColor}20`, color: diffStatusColor }"
+          >{{ diffBadgeLabel }}</span>
         </div>
+      </div>
+
+      <!-- Diff changes section — shown only for modified nodes -->
+      <div v-if="diffChanges && Object.keys(diffChanges).length > 0" class="p-4 border-b border-amber-500/20 bg-amber-500/[0.03]">
+        <h3 class="text-xs uppercase tracking-wider text-amber-500/70 mb-2 flex items-center gap-1.5">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 1v4M5 7.5v.5"/></svg>
+          Changes
+        </h3>
+        <dl>
+          <div
+            v-for="[key, change] in Object.entries(diffChanges)"
+            :key="key"
+            class="mb-1.5"
+          >
+            <dt class="text-[10px] text-gray-500 font-mono mb-0.5">{{ key }}</dt>
+            <div class="flex flex-col gap-0.5">
+              <dd class="text-[11px] font-mono px-2 py-0.5 rounded bg-red-500/10 text-red-400 line-through opacity-70">
+                {{ formatValue((change as any).old) }}
+              </dd>
+              <dd class="text-[11px] font-mono px-2 py-0.5 rounded bg-green-500/10 text-green-400">
+                {{ formatValue((change as any).new) }}
+              </dd>
+            </div>
+          </div>
+        </dl>
       </div>
 
       <div class="p-4 border-b border-white/10">
@@ -175,6 +206,24 @@ const store = useGraphStore()
 const showRaw = ref(false)
 
 const node = computed(() => store.selectedNode)
+const diffStatus = computed(() => node.value?.position_hint?.diff_status as string | undefined)
+const diffChanges = computed(() => node.value?.position_hint?.diff_changes as Record<string, unknown> | undefined)
+const diffStatusColor = computed(() => {
+  switch (diffStatus.value) {
+    case 'added': return '#22c55e'
+    case 'removed': return '#ef4444'
+    case 'modified': return '#f59e0b'
+    default: return '#9ca3af'
+  }
+})
+const diffBadgeLabel = computed(() => {
+  switch (diffStatus.value) {
+    case 'added': return '+ added'
+    case 'removed': return '− removed'
+    case 'modified': return '~ modified'
+    default: return ''
+  }
+})
 const categoryColor = computed(() => CATEGORY_COLORS[node.value?.category || ''] || '#9ca3af')
 const iconPath = computed(() => CATEGORY_ICONS[node.value?.category || 'other'] || CATEGORY_ICONS.other)
 

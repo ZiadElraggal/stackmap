@@ -149,6 +149,7 @@
           :x="store.positions[node.id]?.x ?? 0"
           :y="store.positions[node.id]?.y ?? 0"
           :entry-delay="idx * 15"
+          :zoom-scale="zoomScale"
         />
       </g>
     </svg>
@@ -156,6 +157,27 @@
     <div class="absolute left-1/2 top-4 z-40 -translate-x-1/2">
       <SearchBar ref="searchBarRef" @pan-to="panToNode" />
     </div>
+
+    <!-- Diff mode banner -->
+    <Transition name="fade">
+      <div
+        v-if="store.diffMode && store.diffSummary"
+        class="absolute left-1/2 top-16 z-40 -translate-x-1/2 flex items-center gap-3 rounded-xl border border-white/[0.08] bg-[#0e0e18]/95 px-4 py-2 backdrop-blur-md shadow-xl"
+      >
+        <span class="text-[10px] font-mono text-gray-500 tracking-widest uppercase">Diff</span>
+        <span class="h-3 w-px bg-white/[0.08]" />
+        <span class="text-[11px] font-mono font-semibold text-green-400">+{{ store.diffSummary.added }}</span>
+        <span class="text-[11px] font-mono font-semibold text-red-400">-{{ store.diffSummary.removed }}</span>
+        <span class="text-[11px] font-mono font-semibold text-amber-400">~{{ store.diffSummary.modified }}</span>
+        <span class="text-[11px] font-mono text-gray-500">{{ store.diffSummary.unchanged }} unchanged</span>
+        <span class="h-3 w-px bg-white/[0.08]" />
+        <button
+          class="text-[10px] font-mono text-gray-400 hover:text-white transition-colors"
+          :class="store.showOnlyChanges ? 'text-amber-400' : ''"
+          @click="store.setShowOnlyChanges(!store.showOnlyChanges)"
+        >{{ store.showOnlyChanges ? 'show all' : 'changes only' }}</button>
+      </div>
+    </Transition>
 
     <Minimap :viewport="viewportRect" @pan-to-position="panToPosition" />
 

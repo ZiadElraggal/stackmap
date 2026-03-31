@@ -1,4 +1,5 @@
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -82,12 +83,144 @@ def _validate_include_types(include: list[str]) -> set[str] | None:
     return normalized
 
 
-def _pull_remote_terraform_state(target_path: Path, terraform_dir: Path) -> Path:
-    """Pull remote Terraform state via `terraform state pull`."""
+def _check_terraform_initialized(terraform_dir: Path) -> bool:
+    """Return True if terraform has been initialized in *terraform_dir*."""
+    return (terraform_dir / ".terraform").exists() or (
+        terraform_dir / ".terraform.lock.hcl"
+    ).exists()
+
+
+def _detect_terraform_backend(terraform_dir: Path) -> str | None:
+    """Parse *.tf files in *terraform_dir* and return the configured backend type, if any."""
+    for tf_file in sorted(terraform_dir.glob("*.tf")):
+        try:
+            content = tf_file.read_text(encoding="utf-8", errors="replace")
+            match = re.search(
+                r'terraform\s*\{[^}]*backend\s+"(\w+)"',
+                content,
+                re.DOTALL,
+            )
+            if match:
+                return match.group(1)
+        except OSError:
+            continue
+    return None
+
+
+def _map_auth_error(stderr: str) -> str | None:
+    """Map common Terraform credential errors to actionable messages."""
+    s = stderr.lower()
+    if any(p in s for p in ("nocredentialproviders", "no credential", "credential not found")):
+        return (
+            "AWS credentials not found. "
+            "Ensure AWS_PROFILE or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY are set."
+        )
+    if "accessdenied" in s or "access denied" in s:
+        return "AWS access denied. Check IAM permissions for Terraform state access."
+    if "expired" in s and "token" in s:
+        return (
+            "AWS credentials have expired. "
+            "Refresh your session (e.g. `aws sso login`) and try again."
+        )
+    if "unauthorized" in s:
+        return (
+            "Terraform Cloud / remote backend authentication failed. "
+            "Check TF_TOKEN_* env vars or ~/.terraform.d/credentials.tfrc.json."
+        )
+    return None
+
+
+def _list_terraform_workspaces(terraform_dir: Path) -> list[str]:
+    """Return the list of Terraform workspace names available in *terraform_dir*."""
+    try:
+        result = subprocess.run(
+            ["terraform", "workspace", "list"],
+            cwd=terraform_dir,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        workspaces: list[str] = []
+        for line in result.stdout.splitlines():
+            ws = line.strip().lstrip("* ").strip()
+            if ws:
+                workspaces.append(ws)
+        return workspaces or ["default"]
+    except Exception:
+        return ["default"]
+
+
+def _pull_remote_terraform_state(
+    target_path: Path,
+    terraform_dir: Path,
+    workspace: str | None = None,
+) -> Path:
+    """Pull remote Terraform state via ``terraform state pull``.
+
+    Enhancements over the original implementation:
+    - Detects the configured backend type and skips pull for ``local`` backends.
+    - Checks that ``terraform init`` has been run and offers to run it when missing.
+    - Selects the requested workspace via the TF_WORKSPACE env var (non-destructive).
+    - Maps common credential errors to actionable messages.
+    """
+    # --- Backend type detection -----------------------------------------------
+    backend = _detect_terraform_backend(terraform_dir)
+    if backend == "local":
+        # State is already on disk; no remote pull needed.
+        local_state = terraform_dir / "terraform.tfstate"
+        if local_state.exists():
+            console.print(
+                f"[dim]Detected local backend in {terraform_dir}; "
+                f"using existing {local_state.name}[/dim]"
+            )
+            return local_state
+        raise RuntimeError(
+            f"Detected local backend in {terraform_dir} but terraform.tfstate not found. "
+            "Run `terraform apply` first to create the state file."
+        )
+    if backend:
+        console.print(
+            f"[dim]Detected backend: [cyan]{backend}[/cyan] in {terraform_dir.name}[/dim]"
+        )
+
+    # --- Init check -----------------------------------------------------------
+    if not _check_terraform_initialized(terraform_dir):
+        should_init = typer.confirm(
+            f"Terraform is not initialised in {terraform_dir}.\n"
+            "Run `terraform init` now? (This will initialise providers and backend.)",
+            default=True,
+        )
+        if not should_init:
+            raise RuntimeError(
+                f"Terraform backend not initialised. Run `terraform init` in {terraform_dir} first."
+            )
+        try:
+            subprocess.run(
+                ["terraform", "init", "-input=false"],
+                cwd=terraform_dir,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            console.print(f"[green]✓[/green] Terraform initialised in {terraform_dir.name}")
+        except subprocess.CalledProcessError as exc:
+            stderr = (exc.stderr or "").strip()
+            raise RuntimeError(
+                f"terraform init failed in {terraform_dir}.\n{stderr}"
+            ) from exc
+
+    # --- State pull -----------------------------------------------------------
+    env: dict[str, str] | None = None
+    if workspace and workspace != "default":
+        import os  # noqa: PLC0415
+
+        env = {**os.environ, "TF_WORKSPACE": workspace}
+
     try:
         result = subprocess.run(
             ["terraform", "state", "pull"],
             cwd=terraform_dir,
+            env=env,
             check=True,
             capture_output=True,
             text=True,
@@ -101,6 +234,12 @@ def _pull_remote_terraform_state(target_path: Path, terraform_dir: Path) -> Path
         stderr = (exc.stderr or "").strip()
         stdout = (exc.stdout or "").strip()
         detail = stderr if stderr else stdout
+        friendly = _map_auth_error(detail)
+        if friendly:
+            raise RuntimeError(
+                f"Failed to pull remote Terraform state.\n"
+                f"Directory: {terraform_dir}\n{friendly}"
+            ) from exc
         raise RuntimeError(
             "Failed to pull remote Terraform state with `terraform state pull`.\n"
             f"Directory: {terraform_dir}\n{detail}"
@@ -111,16 +250,39 @@ def _pull_remote_terraform_state(target_path: Path, terraform_dir: Path) -> Path
     return target_path
 
 
+_STALE_DEFAULT_SECONDS = 3600  # 1 hour
+
+
 def _resolve_source_with_remote_pull(
     source: str,
     terraform_dir: str | None,
     auto_pull_remote: bool,
+    force_pull: bool = False,
+    stale_warn_after: int = _STALE_DEFAULT_SECONDS,
+    workspace: str | None = None,
 ) -> Path:
     source_path = Path(source)
-    if source_path.exists() or not auto_pull_remote:
+
+    # If the file exists and we are NOT force-pulling, just check for staleness.
+    if source_path.exists() and not force_pull:
+        if stale_warn_after > 0:
+            age = time.time() - source_path.stat().st_mtime
+            if age > stale_warn_after:
+                hours = int(age // 3600)
+                mins = int((age % 3600) // 60)
+                age_str = f"{hours}h {mins}m" if hours else f"{mins}m"
+                console.print(
+                    f"[yellow]Warning:[/yellow] {source_path.name} was last modified "
+                    f"{age_str} ago. Use [cyan]--force-pull[/cyan] to re-pull fresh state."
+                )
         return source_path
 
-    looks_like_tfstate = source_path.suffix == ".tfstate" or source_path.name.endswith(".tfstate")
+    if not auto_pull_remote and not force_pull:
+        return source_path
+
+    looks_like_tfstate = source_path.suffix == ".tfstate" or source_path.name.endswith(
+        ".tfstate"
+    )
     if not looks_like_tfstate:
         return source_path
 
@@ -128,15 +290,31 @@ def _resolve_source_with_remote_pull(
     if not tf_dir.exists():
         raise RuntimeError(f"Terraform directory not found: {tf_dir}")
 
-    should_pull = typer.confirm(
-        f"Source file not found: {source_path}\n"
-        f"Pull remote Terraform state from {tf_dir} using `terraform state pull`?",
-        default=True,
-    )
+    if force_pull and source_path.exists():
+        action_desc = f"Re-pull remote Terraform state from {tf_dir}?"
+    else:
+        action_desc = (
+            f"Source file not found: {source_path}\n"
+            f"Pull remote Terraform state from {tf_dir} using `terraform state pull`?"
+        )
+
+    # When using --workspace, offer workspace selection
+    selected_workspace = workspace
+    if not selected_workspace:
+        workspaces = _list_terraform_workspaces(tf_dir)
+        if len(workspaces) > 1:
+            console.print(f"[cyan]Available workspaces:[/cyan] {', '.join(workspaces)}")
+            selected_workspace = typer.prompt(
+                "Select workspace",
+                default="default",
+                show_default=True,
+            )
+
+    should_pull = typer.confirm(action_desc, default=True)
     if not should_pull:
         return source_path
 
-    pulled = _pull_remote_terraform_state(source_path, tf_dir)
+    pulled = _pull_remote_terraform_state(source_path, tf_dir, workspace=selected_workspace)
     console.print(f"[green]✓[/green] Pulled remote state to [cyan]{pulled}[/cyan]")
     return pulled
 
@@ -321,6 +499,19 @@ def scan(
         "--auto-pull-remote/--no-auto-pull-remote",
         help="When source is missing, offer to run `terraform state pull`",
     ),
+    force_pull: bool = typer.Option(
+        False,
+        "--force-pull/--no-force-pull",
+        help="Re-pull remote Terraform state even if a local .tfstate already exists",
+    ),
+    stale_warn_after: int = typer.Option(
+        _STALE_DEFAULT_SECONDS,
+        help="Warn if the existing state file is older than this many seconds (0 = disable)",
+    ),
+    workspace: str | None = typer.Option(
+        None,
+        help="Terraform workspace to use when pulling remote state",
+    ),
     output: str = typer.Option("stackmap-output.json", help="Output file path"),
     format: str = typer.Option("json", help="Output format: json or html"),
 ) -> None:
@@ -333,7 +524,14 @@ def scan(
         raise typer.Exit(1)
 
     try:
-        source_path = _resolve_source_with_remote_pull(source, terraform_dir, auto_pull_remote)
+        source_path = _resolve_source_with_remote_pull(
+            source,
+            terraform_dir,
+            auto_pull_remote,
+            force_pull=force_pull,
+            stale_warn_after=stale_warn_after,
+            workspace=workspace,
+        )
     except RuntimeError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(1)
@@ -623,6 +821,77 @@ def serve(
             watcher.join(timeout=1.0)
         if temp_dir and temp_dir.exists():
             shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@app.command()
+def diff(
+    from_file: str = typer.Option(..., "--from", help="Path to the 'before' IR JSON file"),
+    to_file: str = typer.Option(..., "--to", help="Path to the 'after' IR JSON file"),
+    output: str = typer.Option("stackmap-diff.json", help="Output file path"),
+    format: str = typer.Option("json", help="Output format: json or html"),
+) -> None:
+    """Compare two infrastructure snapshots and visualise what changed."""
+    from stackmap.graph.diff import compute_diff  # noqa: PLC0415
+    from stackmap.parsers.base import StackMapIR  # noqa: PLC0415
+
+    output_format = format.lower()
+    if output_format not in {"json", "html"}:
+        console.print(
+            f"[red]Error:[/red] Format '{format}' not supported. Use 'json' or 'html'."
+        )
+        raise typer.Exit(1)
+
+    from_path = Path(from_file)
+    to_path = Path(to_file)
+
+    if not from_path.exists():
+        console.print(f"[red]Error:[/red] --from file not found: {from_path}")
+        raise typer.Exit(1)
+    if not to_path.exists():
+        console.print(f"[red]Error:[/red] --to file not found: {to_path}")
+        raise typer.Exit(1)
+
+    with console.status("[bold]Computing diff...[/bold]"):
+        try:
+            from_ir = StackMapIR.read_json(from_path)
+            to_ir = StackMapIR.read_json(to_path)
+            result = compute_diff(from_ir, to_ir)
+        except Exception as exc:
+            console.print(f"[red]Error:[/red] {exc}")
+            raise typer.Exit(1)
+
+    if output_format == "json":
+        result.write_json(output)
+    elif output_format == "html":
+        from stackmap.export import export_ir_to_html  # noqa: PLC0415
+
+        diff_ir = result.to_diff_ir()
+        try:
+            export_ir_to_html(diff_ir, output)
+        except RuntimeError as exc:
+            console.print(f"[red]Error:[/red] {exc}")
+            raise typer.Exit(1)
+
+    s = result.summary
+    table = Table(title="StackMap Diff Results", show_header=False)
+    table.add_column("Metric", style="bold")
+    table.add_column("Value", style="cyan")
+    table.add_row("From", str(from_path))
+    table.add_row("To", str(to_path))
+    table.add_row("Added", str(s.added))
+    table.add_row("Removed", str(s.removed))
+    table.add_row("Modified", str(s.modified))
+    table.add_row("Unchanged", str(s.unchanged))
+    table.add_row("Output", output)
+    console.print()
+    console.print(table)
+    console.print(
+        f"\n[green]✓[/green] Diff complete: "
+        f"[green]+{s.added}[/green] added, "
+        f"[red]-{s.removed}[/red] removed, "
+        f"[yellow]~{s.modified}[/yellow] modified, "
+        f"{s.unchanged} unchanged."
+    )
 
 
 @app.command()
