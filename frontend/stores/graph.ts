@@ -13,6 +13,8 @@ export interface StackMapNode {
     weight: number
     logical_parent?: string
     is_helper?: boolean
+    diff_status?: string
+    diff_changes?: Record<string, unknown>
   }
 }
 
@@ -275,6 +277,9 @@ export const useGraphStore = defineStore('graph', {
     searchQuery: '',
     viewMode: 'architecture' as 'architecture' | 'raw',
     loaded: false,
+    diffMode: false as boolean,
+    diffSlider: 0.5 as number,
+    showOnlyChanges: false as boolean,
   }),
 
   getters: {
@@ -374,6 +379,24 @@ export const useGraphStore = defineStore('graph', {
       }
     },
 
+    diffSummary(state): { added: number; removed: number; modified: number; unchanged: number } | null {
+      if (!state.diffMode) return null
+      return (state.metadata?.diff_summary as { added: number; removed: number; modified: number; unchanged: number }) ?? null
+    },
+
+    nodeDiffStatus(): Record<string, string> {
+      return Object.fromEntries(
+        this.nodes
+          .map(n => [n.id, n.position_hint?.diff_status])
+          .filter((entry): entry is [string, string] => typeof entry[1] === 'string')
+      )
+    },
+
+    edgeDiffStatus(state): Record<string, string> {
+      if (!state.diffMode) return {}
+      return (state.metadata?.edge_diff_status as Record<string, string>) ?? {}
+    },
+
     visibleNodes(state): StackMapNode[] {
       let hopSet: Set<string> | null = null
       if (state.hopLimit > 0 && state.selectedNodeId) {
@@ -384,6 +407,12 @@ export const useGraphStore = defineStore('graph', {
         if (state.categoryFilters[n.category] === false) return false
         if (state.minWeight > 1 && (n.position_hint?.weight || 2) < state.minWeight) return false
         if (hopSet && !hopSet.has(n.id)) return false
+        if (state.diffMode) {
+          const diffStatus = n.position_hint?.diff_status
+          if (state.showOnlyChanges && diffStatus === 'unchanged') return false
+          if (diffStatus === 'added' && state.diffSlider <= 0) return false
+          if (diffStatus === 'removed' && state.diffSlider >= 1) return false
+        }
         return true
       })
     },
@@ -413,7 +442,28 @@ export const useGraphStore = defineStore('graph', {
       const cats = new Set(this.nodes.map(n => n.category))
       this.categoryFilters = Object.fromEntries([...cats].map(c => [c, true]))
 
+      if (this.metadata.diff_mode) {
+        this.diffMode = true
+        this.diffSlider = 0.5
+      }
+
       this.loaded = true
+    },
+
+    setDiffMode(enabled: boolean) {
+      this.diffMode = enabled
+      if (!enabled) {
+        this.diffSlider = 0.5
+        this.showOnlyChanges = false
+      }
+    },
+
+    setDiffSlider(value: number) {
+      this.diffSlider = Math.max(0, Math.min(1, value))
+    },
+
+    setShowOnlyChanges(show: boolean) {
+      this.showOnlyChanges = show
     },
 
     selectNode(nodeId: string | null) {

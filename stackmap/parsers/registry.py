@@ -65,6 +65,18 @@ def detect_source_type(source_path: str | Path) -> str:
                 and isinstance(data.get("groups"), list)
             ):
                 return "stackmap"
+            if (
+                isinstance(data, dict)
+                and "from_metadata" in data
+                and "to_metadata" in data
+                and "node_diffs" in data
+                and "edge_diffs" in data
+                and "summary" in data
+                and isinstance(data.get("node_diffs"), list)
+                and isinstance(data.get("edge_diffs"), list)
+                and isinstance(data.get("summary"), dict)
+            ):
+                return "stackmap_diff"
             if isinstance(data, dict) and (
                 "AWSTemplateFormatVersion" in data
                 or "Resources" in data
@@ -83,7 +95,7 @@ def detect_source_type(source_path: str | Path) -> str:
     raise typer.BadParameter(
         f"Cannot auto-detect source type for {source_path}. "
         "Supported formats: Terraform state (.tfstate), CloudFormation template (.json/.yaml/.yml), "
-        "StackMap IR (.json), "
+        "StackMap IR/diff (.json), "
         "SAM template (.json/.yaml/.yml with AWS::Serverless transform)"
     )
 
@@ -105,6 +117,10 @@ def build_parser(source_type: str) -> BaseParser:
         from stackmap.parsers.stackmap_ir import StackMapIRParser
 
         return StackMapIRParser()
+    if source_type == "stackmap_diff":
+        from stackmap.parsers.stackmap_ir import StackMapDiffParser
+
+        return StackMapDiffParser()
     raise typer.BadParameter(f"Unsupported source type: {source_type}")
 
 
@@ -112,7 +128,7 @@ def parse_source(source_path: str | Path) -> tuple[str, StackMapIR]:
     source_type = detect_source_type(source_path)
     parser = build_parser(source_type)
     ir = parser.parse(str(source_path))
-    if source_type == "stackmap":
+    if source_type in {"stackmap", "stackmap_diff"}:
         embedded_source_type = ir.metadata.get("source_type")
         if isinstance(embedded_source_type, str) and embedded_source_type.strip():
             return embedded_source_type, ir

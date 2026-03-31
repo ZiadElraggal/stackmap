@@ -32,7 +32,7 @@ def get_dev_frontend_public_dir() -> Path | None:
 
 
 def get_preferred_public_dir() -> Path | None:
-    packaged = get_packaged_public_dir()
-    if packaged:
-        return packaged
-    return get_dev_frontend_public_dir()
+    dev_public = get_dev_frontend_public_dir()
+    if dev_public:
+        return dev_public
+    return get_packaged_public_dir()
