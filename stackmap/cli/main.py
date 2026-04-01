@@ -16,6 +16,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from stackmap.organizations import build_org_document_from_aws, load_organization_document
 from stackmap.parsers.base import BaseParser, StackMapIR
 from stackmap.parsers.registry import (
     build_parser as _registry_build_parser,
@@ -162,6 +163,8 @@ def _scan_repository_sources(
     strict_linking: bool,
     sam_build: bool,
     terraform_pull_missing: bool,
+    org_file: Path | None = None,
+    org_strict: bool = False,
 ) -> tuple[StackMapIR, list[DiscoveredSource], list[str], dict[str, int]]:
     discovered, missing_tfstate_dirs = discover_sources(
         root=root,
@@ -197,10 +200,14 @@ def _scan_repository_sources(
             "Add Terraform state, CloudFormation, or SAM templates."
         )
 
+    org_document = load_organization_document(org_file) if org_file else None
+
     merged = merge_sources(
         parsed,
         strict_linking=strict_linking,
         parse_errors=parse_errors,
+        org_document=org_document,
+        org_strict=org_strict,
     )
     all_warnings = warnings + parse_errors
     return merged.ir, merged.discovered, all_warnings, merged.link_counts
@@ -418,6 +425,15 @@ def scan_repo(
         "--terraform-pull-missing/--no-terraform-pull-missing",
         help="When Terraform *.tf exists without usable local state, offer `terraform state pull`.",
     ),
+    org_file: str | None = typer.Option(
+        None,
+        help="Optional normalized AWS Organizations JSON export to overlay account/OU hierarchy.",
+    ),
+    org_strict: bool = typer.Option(
+        False,
+        "--org-strict/--no-org-strict",
+        help="Fail when scanned AWS accounts are missing from the provided org file.",
+    ),
     output: str = typer.Option("stackmap-repo-output.json", help="Output file path"),
     format: str = typer.Option("json", help="Output format: json or html"),
 ) -> None:
@@ -434,6 +450,13 @@ def scan_repo(
         console.print(f"[red]Error:[/red] Repository root not found: {root_path}")
         raise typer.Exit(1)
 
+    org_path: Path | None = None
+    if org_file:
+        org_path = Path(org_file).resolve()
+        if not org_path.exists():
+            console.print(f"[red]Error:[/red] Organization file not found: {org_path}")
+            raise typer.Exit(1)
+
     try:
         include_types = _validate_include_types(include)
     except typer.BadParameter as exc:
@@ -449,6 +472,8 @@ def scan_repo(
                 strict_linking=strict_linking,
                 sam_build=sam_build,
                 terraform_pull_missing=terraform_pull_missing,
+                org_file=org_path,
+                org_strict=org_strict,
             )
         except Exception as exc:
             console.print(f"[red]Error:[/red] {exc}")
@@ -489,6 +514,16 @@ def scan_repo(
         f"medium={link_counts.get('medium', 0)}, "
         f"low={link_counts.get('low', 0)}",
     )
+    if merged_ir.metadata.get("organization"):
+        org_overlay = merged_ir.metadata.get("organization_overlay", {})
+        table.add_row("Organization", "enabled")
+        table.add_row(
+            "Org coverage",
+            f"mapped={len(org_overlay.get('mapped_account_ids', []))}, "
+            f"unmapped={len(org_overlay.get('unmapped_account_ids', []))}, "
+            f"unscanned={len(org_overlay.get('unscanned_account_ids', []))}",
+        )
+        table.add_row("Cross-account", str(merged_ir.metadata.get("cross_account_edges", 0)))
     table.add_row("Link policy", "strict" if strict_linking else "loose")
     table.add_row("Output", output)
     console.print()
@@ -505,6 +540,40 @@ def scan_repo(
     console.print(
         f"\n[green]✓[/green] Repository scan complete: {len(merged_ir.nodes)} resources, "
         f"{len(merged_ir.edges)} connections."
+    )
+
+
+@app.command("org-import")
+def org_import(
+    output: str = typer.Option("org.json", help="Output file path"),
+    profile: str | None = typer.Option(None, help="AWS profile to use"),
+    region: str = typer.Option("us-east-1", help="AWS region for Organizations API calls"),
+    root_id: str | None = typer.Option(None, help="Optional Organizations root ID override"),
+) -> None:
+    """Export AWS Organizations hierarchy into a normalized JSON file."""
+    with console.status("[bold]Fetching AWS Organizations hierarchy...[/bold]"):
+        try:
+            org = build_org_document_from_aws(profile=profile, region=region, root_id=root_id)
+        except Exception as exc:
+            console.print(f"[red]Error:[/red] {exc}")
+            raise typer.Exit(1)
+
+    output_path = Path(output)
+    output_path.write_text(json.dumps(org.to_dict(), indent=2))
+
+    table = Table(title="StackMap Organization Export", show_header=False)
+    table.add_column("Metric", style="bold")
+    table.add_column("Value", style="cyan")
+    table.add_row("Organization", org.org_id)
+    table.add_row("Root", org.root_name)
+    table.add_row("OUs", str(len(org.ous)))
+    table.add_row("Accounts", str(len(org.accounts)))
+    table.add_row("Output", str(output_path))
+    console.print()
+    console.print(table)
+    console.print(
+        f"\n[green]✓[/green] Exported organization hierarchy with "
+        f"{len(org.ous)} OUs and {len(org.accounts)} accounts."
     )
 
 

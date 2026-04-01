@@ -45,9 +45,12 @@ export function useLayout() {
   function computeLayout(
     nodes: StackMapNode[],
     edges: StackMapEdge[],
-    _groups: StackMapGroup[]
+    groups: StackMapGroup[]
   ): Record<string, NodePosition> {
     if (nodes.length === 0) return {}
+    if (nodes.some(node => node.position_hint?.view_kind === 'account_summary')) {
+      return computeOrganizationLayout(nodes, groups)
+    }
 
     const TIER_Y = getTierY(nodes.length)
 
@@ -173,6 +176,61 @@ export function useLayout() {
           positions[id].x += shift
         }
       }
+    }
+
+    return positions
+  }
+
+  function computeOrganizationLayout(
+    nodes: StackMapNode[],
+    groups: StackMapGroup[]
+  ): Record<string, NodePosition> {
+    const positions: Record<string, NodePosition> = {}
+    const groupById = new Map(groups.map(group => [group.id, group]))
+    const depthCache = new Map<string, number>()
+
+    function depthForNode(node: StackMapNode): number {
+      const path = node.metadata?.org_path || node.position_hint?.org_path
+      if (typeof path === 'string' && path.trim()) {
+        return Math.max(0, path.split('/').filter(Boolean).length - 1)
+      }
+      return 1
+    }
+
+    function depthForGroup(group: StackMapGroup): number {
+      if (depthCache.has(group.id)) return depthCache.get(group.id) as number
+      const parent = group.parent ? groupById.get(group.parent) : null
+      const depth = parent ? depthForGroup(parent) + 1 : 0
+      depthCache.set(group.id, depth)
+      return depth
+    }
+
+    const rows = new Map<number, StackMapNode[]>()
+    for (const node of nodes) {
+      let depth = depthForNode(node)
+      const accountGroup = groups.find(group => group.group_type === 'account' && group.metadata?.account_id === node.metadata?.account_id)
+      if (accountGroup) {
+        depth = Math.max(depth, depthForGroup(accountGroup))
+      }
+      if (!rows.has(depth)) rows.set(depth, [])
+      rows.get(depth)?.push(node)
+    }
+
+    const sortedDepths = [...rows.keys()].sort((a, b) => a - b)
+    for (const depth of sortedDepths) {
+      const row = (rows.get(depth) || []).sort((a, b) => {
+        const ap = String(a.metadata?.org_path || '')
+        const bp = String(b.metadata?.org_path || '')
+        return ap.localeCompare(bp) || a.name.localeCompare(b.name)
+      })
+      const gap = 300
+      const startX = -((row.length - 1) * gap) / 2
+      row.forEach((node, index) => {
+        positions[node.id] = {
+          x: startX + index * gap,
+          y: 180 + depth * 240,
+        }
+      })
     }
 
     return positions

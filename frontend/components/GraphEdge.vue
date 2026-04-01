@@ -132,6 +132,7 @@ const strokeWidth = computed(() => {
     references: 1,
     contains: 0.8,
     authenticates: 1.2,
+    cross_account_reference: 2.2,
   }
   const lift = isConnectedToHovered.value ? 0.5 : 0
   return (base[props.edge.edge_type] ?? 1.2) + lift
@@ -140,6 +141,7 @@ const strokeWidth = computed(() => {
 const dashPattern = computed(() => {
   if (store.diffMode && edgeDiffStatus.value === 'added') return '6 3'
   if (store.diffMode && edgeDiffStatus.value === 'removed') return '3 4'
+  if (props.edge.edge_type === 'cross_account_reference') return '8 4'
   if (props.edge.edge_type === 'references') return '4 3'
   if (props.edge.edge_type === 'contains') return '1 3'
   return 'none'
@@ -191,7 +193,7 @@ const labelPosition = computed(() => {
 const labelWidth = computed(() => Math.max(36, props.edge.edge_type.length * 5.4 + 8))
 const showLabel = computed(() => {
   if (props.zoomScale <= 0.6) return false
-  return ['triggers', 'reads_from', 'writes_to'].includes(props.edge.edge_type)
+  return ['triggers', 'reads_from', 'writes_to', 'cross_account_reference'].includes(props.edge.edge_type)
 })
 </script>
 

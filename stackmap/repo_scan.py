@@ -8,6 +8,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from stackmap.organizations import (
+    OrganizationDocument,
+    infer_cross_account_edges,
+    overlay_organization_groups,
+)
 from stackmap.parsers.base import EdgeType, StackMapEdge, StackMapGroup, StackMapIR, StackMapNode
 from stackmap.parsers.registry import detect_source_type, parse_source
 
@@ -97,10 +102,13 @@ def discover_sources(
     max_depth: int = 6,
 ) -> tuple[list[DiscoveredSource], list[Path]]:
     discovered: list[DiscoveredSource] = []
+    supported_repo_types = {"terraform", "cloudformation", "sam"}
     for path in _candidate_source_files(root, max_depth):
         try:
             source_type = detect_source_type(path)
         except Exception:
+            continue
+        if source_type not in supported_repo_types:
             continue
         if include_types and source_type not in include_types:
             continue
@@ -186,6 +194,8 @@ def merge_sources(
     parsed: list[tuple[DiscoveredSource, StackMapIR]],
     strict_linking: bool = True,
     parse_errors: list[str] | None = None,
+    org_document: OrganizationDocument | None = None,
+    org_strict: bool = False,
 ) -> RepoScanResult:
     nodes: list[StackMapNode] = []
     edges: list[StackMapEdge] = []
@@ -200,6 +210,7 @@ def merge_sources(
         source_keys[source_key] = src.source_type
 
         id_map: dict[str, str] = {}
+        group_id_map: dict[str, str] = {}
         for n in ir.nodes:
             nid = _qualify_node_id(source_key, n.id)
             id_map[n.id] = nid
@@ -211,10 +222,14 @@ def merge_sources(
                 category=n.category,
                 properties={**n.properties},
                 tags={**n.tags},
+                metadata={**n.metadata},
                 position_hint={**n.position_hint, "source_file": str(src.path), "source_type": src.source_type},
             )
             nodes.append(merged_node)
             node_map[(source_key, nid)] = merged_node
+
+        for g in ir.groups:
+            group_id_map[g.id] = f"{source_key}::{g.id}"
 
         for e in ir.edges:
             src_id = id_map.get(e.source)
@@ -233,14 +248,15 @@ def merge_sources(
 
         for g in ir.groups:
             children = [id_map[c] for c in g.children if c in id_map]
-            parent = id_map[g.parent] if g.parent and g.parent in id_map else None
+            parent = group_id_map.get(g.parent) if g.parent else None
             groups.append(
                 StackMapGroup(
-                    id=f"{source_key}::{g.id}",
+                    id=group_id_map[g.id],
                     name=g.name,
                     group_type=g.group_type,
                     children=children,
                     parent=parent,
+                    metadata={**g.metadata},
                 )
             )
 
@@ -331,6 +347,11 @@ def merge_sources(
         edges=edges,
         groups=groups,
     )
+
+    overlay_organization_groups(merged, org=org_document, strict=org_strict)
+    cross_account_edges = infer_cross_account_edges(merged)
+    merged.metadata["cross_account_edges"] = cross_account_edges
+
     return RepoScanResult(
         ir=merged,
         discovered=[src for src, _ir in parsed],
