@@ -16,6 +16,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 from stackmap.organizations import (
     OrganizationDocument,
+    build_org_document_from_session,
     infer_cross_account_edges,
     load_organization_document,
     overlay_organization_groups,
@@ -274,6 +275,26 @@ class AWSAPIExecutor:
             )
             return None
 
+    def call_optional(
+        self,
+        service: str,
+        operation: str,
+        *,
+        region: str,
+        swallow_codes: set[str] | None = None,
+        **params: Any,
+    ) -> Any:
+        try:
+            return self.call(service, operation, region=region, **params)
+        except ClientError as exc:
+            code = exc.response.get("Error", {}).get("Code", "Unknown")
+            if swallow_codes and code in swallow_codes:
+                self.context.warnings.append(
+                    f"{self.context.account_id}:{region}:{service}.{operation} skipped: {code}"
+                )
+                return None
+            raise
+
     def paginate(self, service: str, operation: str, result_key: str, *, region: str, **params: Any) -> list[dict[str, Any]]:
         if self.context.dry_run:
             self.context.recorder.plan(self.context.account_id, region, service, f"paginate:{operation}", params)
@@ -427,7 +448,7 @@ class AWSLiveScanner:
     def dry_run_plan(self) -> list[PlannedAPICall]:
         session, auth_description = self._resolve_base_session()
         if self.org_scan:
-            org = load_organization_document(self.org_file or "")
+            org = self._load_or_discover_org(session)
             plans: list[PlannedAPICall] = []
             for account in org.accounts:
                 role_arn = f"arn:aws:iam::{account['id']}:role/{self.role_name}"
@@ -469,10 +490,8 @@ class AWSLiveScanner:
         return context.recorder.planned
 
     def _scan_organization(self) -> StackMapIR:
-        if not self.org_file:
-            raise ValueError("--org-scan requires --org-file")
-        org = load_organization_document(self.org_file)
         base_session, auth_description = self._resolve_base_session()
+        org = self._load_or_discover_org(base_session)
         merged = StackMapIR(
             metadata={
                 "source_type": "aws_live",
@@ -553,6 +572,17 @@ class AWSLiveScanner:
         infer_cross_account_edges(merged)
         return merged
 
+    def _load_or_discover_org(self, session: boto3.session.Session) -> OrganizationDocument:
+        if self.org_file:
+            return load_organization_document(self.org_file)
+        try:
+            return build_org_document_from_session(session)
+        except Exception as exc:
+            raise RuntimeError(
+                "Unable to discover AWS Organizations automatically. "
+                "Ensure this principal can call Organizations APIs, or provide --org-file."
+            ) from exc
+
     def _resolve_base_session(self) -> tuple[boto3.session.Session, str]:
         session = self._session_factory(profile_name=self.profile) if self.profile else self._session_factory()
         creds = session.get_credentials()
@@ -599,9 +629,19 @@ class AWSLiveScanner:
 
     def _plan_account(self, context: AccountScanContext) -> None:
         executor = AWSAPIExecutor(context)
-        for region in context.regions:
-            for service in sorted(context.services):
-                self._collect_service(service, region, executor, plan_only=True)
+        for region, service in self._service_scan_targets(context):
+            self._collect_service(service, region, executor, plan_only=True)
+
+    def _service_scan_targets(self, context: AccountScanContext) -> list[tuple[str, str]]:
+        primary_region = context.regions[0] if context.regions else "us-east-1"
+        targets: list[tuple[str, str]] = []
+        for service in sorted(context.services):
+            if service in GLOBAL_SERVICES:
+                targets.append((primary_region, service))
+                continue
+            for region in context.regions:
+                targets.append((region, service))
+        return targets
 
     def _scan_account(self, context: AccountScanContext) -> StackMapIR:
         nodes: list[StackMapNode] = []
@@ -616,6 +656,8 @@ class AWSLiveScanner:
             regional_errors: list[str] = []
             executor = AWSAPIExecutor(context)
             for service in sorted(context.services):
+                if service in GLOBAL_SERVICES and region != (context.regions[0] if context.regions else region):
+                    continue
                 try:
                     service_nodes, service_pending, service_groups = self._collect_service(service, region, executor)
                     regional_nodes.extend(service_nodes)
@@ -625,8 +667,9 @@ class AWSLiveScanner:
                     regional_errors.append(f"{context.account_id}:{region}:{service}: {exc}")
             return regional_nodes, regional_pending_edges, regional_groups, regional_warnings, regional_errors
 
-        with ThreadPoolExecutor(max_workers=min(self.concurrency, len(context.regions))) as pool:
-            futures = {pool.submit(scan_region, region): region for region in context.regions}
+        unique_regions = sorted({region for region, _service in self._service_scan_targets(context)})
+        with ThreadPoolExecutor(max_workers=min(self.concurrency, len(unique_regions))) as pool:
+            futures = {pool.submit(scan_region, region): region for region in unique_regions}
             for future in as_completed(futures):
                 regional_nodes, regional_pending_edges, regional_groups, _warnings, regional_errors = future.result()
                 nodes.extend(regional_nodes)
@@ -654,6 +697,7 @@ class AWSLiveScanner:
         dns_index: dict[str, str] = {}
 
         for node in nodes:
+            id_index[node.id] = node.id
             if isinstance(node.properties.get("arn"), str):
                 arn_index[str(node.properties["arn"])] = node.id
             for key in ("id", "name", "function_name", "bucket", "url", "domain_name", "dns_name"):
@@ -667,6 +711,9 @@ class AWSLiveScanner:
                 region = str(node.metadata.get("region") or "")
                 if region:
                     bucket_name_index[f"{bucket_name}.s3.{region}.amazonaws.com"] = node.id
+                regional_domain = node.properties.get("bucket_regional_domain_name")
+                if isinstance(regional_domain, str) and regional_domain:
+                    bucket_name_index[regional_domain] = node.id
             if isinstance(node.properties.get("dns_name"), str):
                 dns_index[str(node.properties["dns_name"])] = node.id
 
@@ -697,6 +744,37 @@ class AWSLiveScanner:
                 )
             )
 
+        group_map = {group.id: group for group in groups}
+        child_sets: dict[str, set[str]] = {group.id: set(group.children) for group in groups}
+        for node in nodes:
+            account_id = str(node.metadata.get("account_id") or context.account_id)
+            region = str(node.metadata.get("region") or "global")
+            vpc_id = node.properties.get("vpc_id")
+            if isinstance(vpc_id, str) and vpc_id:
+                vpc_group_id = _group_id("vpc", account_id, region, vpc_id)
+                if vpc_group_id in group_map:
+                    child_sets.setdefault(vpc_group_id, set()).add(node.id)
+            subnet_id = node.properties.get("subnet_id")
+            if isinstance(subnet_id, str) and subnet_id:
+                subnet_group_id = _group_id("subnet", account_id, region, subnet_id)
+                if subnet_group_id in group_map:
+                    child_sets.setdefault(subnet_group_id, set()).add(node.id)
+            subnet_ids = node.properties.get("subnet_ids")
+            if isinstance(subnet_ids, list):
+                for subnet in subnet_ids:
+                    if not isinstance(subnet, str) or not subnet:
+                        continue
+                    subnet_group_id = _group_id("subnet", account_id, region, subnet)
+                    if subnet_group_id in group_map:
+                        child_sets.setdefault(subnet_group_id, set()).add(node.id)
+
+        normalized_groups: list[StackMapGroup] = []
+        for group in groups:
+            group.children = sorted(child_sets.get(group.id, set()))
+            if group.group_type in {"vpc", "subnet"} and not group.children:
+                continue
+            normalized_groups.append(group)
+
         ir = StackMapIR(
             metadata={
                 "source_type": "aws_live",
@@ -724,10 +802,10 @@ class AWSLiveScanner:
             },
             nodes=nodes,
             edges=edges,
-            groups=groups,
+            groups=normalized_groups,
         )
         overlay_organization_groups(ir, org=load_organization_document(self.org_file) if self.org_file else None, strict=False)
-        infer_cross_account_edges(ir)
+        ir.metadata["cross_account_edges"] = infer_cross_account_edges(ir)
         return ir
 
     def _collect_service(
@@ -1090,6 +1168,31 @@ class AWSLiveScanner:
                 },
             )
             nodes.append(node)
+            resources = executor.call_optional(
+                "apigateway",
+                "get_resources",
+                region=region,
+                swallow_codes={"NotFoundException", "BadRequestException"},
+                restApiId=api_id,
+                limit=500,
+            ) or {}
+            for resource in resources.get("items", []):
+                resource_methods = resource.get("resourceMethods", {}) or {}
+                for http_method in resource_methods:
+                    integration = executor.call_optional(
+                        "apigateway",
+                        "get_integration",
+                        region=region,
+                        swallow_codes={"NotFoundException", "BadRequestException"},
+                        restApiId=api_id,
+                        resourceId=resource["id"],
+                        httpMethod=http_method,
+                    ) or {}
+                    uri = integration.get("uri")
+                    if not uri:
+                        continue
+                    edge_type = EdgeType.TRIGGERS if ":lambda:" in uri else EdgeType.ROUTES_TO
+                    pending.append((node.id, uri, f"{http_method} integration", edge_type))
 
         v2 = executor.call("apigatewayv2", "get_apis", region=region) or {}
         for api in v2.get("Items", []):
@@ -1252,7 +1355,13 @@ class AWSLiveScanner:
             table = table_resp.get("Table")
             if not table:
                 continue
-            tags_resp = executor.call("dynamodb", "list_tags_of_resource", region=region, ResourceArn=table["TableArn"]) or {}
+            tags_resp = executor.call_optional(
+                "dynamodb",
+                "list_tags_of_resource",
+                region=region,
+                swallow_codes={"AccessDeniedException", "ResourceNotFoundException", "ValidationException"},
+                ResourceArn=table["TableArn"],
+            ) or {}
             node = _build_live_node(
                 account_id=account_id,
                 region=region,
@@ -1279,12 +1388,32 @@ class AWSLiveScanner:
         buckets_resp = executor.call("s3", "list_buckets", region=region) or {}
         for bucket in buckets_resp.get("Buckets", []):
             bucket_name = bucket["Name"]
-            loc_resp = executor.call("s3", "get_bucket_location", region=region, Bucket=bucket_name) or {}
+            loc_resp = executor.call_optional(
+                "s3",
+                "get_bucket_location",
+                region=region,
+                swallow_codes={"AccessDenied", "AccessDeniedException", "NoSuchBucket"},
+                Bucket=bucket_name,
+            ) or {}
             bucket_region = loc_resp.get("LocationConstraint") or "us-east-1"
+            if bucket_region == "EU":
+                bucket_region = "eu-west-1"
             if bucket_region != region:
                 continue
-            tag_resp = executor.call("s3", "get_bucket_tagging", region=region, Bucket=bucket_name) or {}
-            policy_resp = executor.call("s3", "get_bucket_policy", region=region, Bucket=bucket_name) or {}
+            tag_resp = executor.call_optional(
+                "s3",
+                "get_bucket_tagging",
+                region=region,
+                swallow_codes={"NoSuchTagSet", "NoSuchBucket", "AccessDenied", "AccessDeniedException"},
+                Bucket=bucket_name,
+            ) or {}
+            policy_resp = executor.call_optional(
+                "s3",
+                "get_bucket_policy",
+                region=region,
+                swallow_codes={"NoSuchBucketPolicy", "NoSuchBucket", "AccessDenied", "AccessDeniedException"},
+                Bucket=bucket_name,
+            ) or {}
             node = _build_live_node(
                 account_id=account_id,
                 region=region,
@@ -1415,6 +1544,22 @@ class AWSLiveScanner:
             nodes.append(node)
             if isinstance(node.properties.get("policy"), str):
                 self._append_policy_arn_refs(node.id, node.properties["policy"], pending)
+            subscriptions = executor.call_optional(
+                "sns",
+                "list_subscriptions_by_topic",
+                region=region,
+                swallow_codes={"AuthorizationError", "AuthorizationErrorException", "NotFoundException"},
+                TopicArn=arn,
+            ) or {}
+            for subscription in subscriptions.get("Subscriptions", []):
+                endpoint = subscription.get("Endpoint")
+                protocol = subscription.get("Protocol")
+                if not isinstance(endpoint, str):
+                    continue
+                if not (endpoint.startswith("arn:") or endpoint.startswith("https://")):
+                    continue
+                edge_type = EdgeType.TRIGGERS if protocol in {"lambda", "sqs"} else EdgeType.ROUTES_TO
+                pending.append((node.id, endpoint, "subscription", edge_type))
         return nodes, pending, []
 
     def _collect_iam(self, region: str, executor: AWSAPIExecutor) -> tuple[list[StackMapNode], list[tuple[str, str | None, str, EdgeType]], list[StackMapGroup]]:
