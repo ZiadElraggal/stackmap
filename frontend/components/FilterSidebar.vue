@@ -34,6 +34,18 @@
           >
             Raw
           </button>
+          <button
+            v-if="store.hasOrganizationData"
+            class="px-2 py-1 transition border-l border-white/10 flex items-center gap-1"
+            :class="store.viewMode === 'organization' ? 'bg-blue-500/20 text-blue-400' : 'bg-transparent text-gray-400 hover:bg-white/5'"
+            @click="store.setViewMode('organization')"
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+              <rect x="9" y="2" width="6" height="4" rx="1.5"/><rect x="2" y="11" width="6" height="4" rx="1.5"/><rect x="16" y="11" width="6" height="4" rx="1.5"/>
+              <path d="M12 6v3M5 11V9h14v2"/>
+            </svg>
+            Org
+          </button>
         </div>
       </section>
 
@@ -85,19 +97,108 @@
         </div>
       </section>
 
-      <section v-if="store.groups.length > 0" class="py-4 border-b border-white/5">
+      <section v-if="store.graphGroups.length > 0" class="py-4 border-b border-white/5">
         <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">Groups</h3>
         <div class="space-y-1">
           <div
             v-for="group in topGroups"
             :key="group.id"
-            class="text-xs text-gray-400 px-1 py-1"
+            class="flex items-center gap-2 text-xs text-gray-400 px-1 py-1"
           >
-            <span class="text-gray-500">{{ group.group_type }}:</span>
-            {{ group.name }}
-            <span class="text-gray-600">({{ group.children.length }})</span>
+            <span class="h-1.5 w-1.5 rounded-full shrink-0" :style="{ backgroundColor: groupDotColor(group.group_type) }" />
+            <span class="text-gray-500 shrink-0 capitalize">{{ group.group_type }}</span>
+            <span class="truncate flex-1">{{ group.name }}</span>
+            <span class="text-gray-600 shrink-0">{{ group.children.length }}</span>
           </div>
         </div>
+      </section>
+
+      <section v-if="store.hasOrganizationData" class="py-4 border-b border-white/5">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-1.5">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.7">
+              <path d="M4 21V8l8-5 8 5v13M9 21v-5h6v5"/>
+            </svg>
+            <h3 class="text-xs uppercase tracking-wider text-gray-500">Accounts</h3>
+          </div>
+          <span class="text-[10px] font-mono text-gray-600">{{ accountCount }}</span>
+        </div>
+        <div class="space-y-0.5">
+          <button
+            class="w-full text-left text-xs rounded px-2 py-1 transition flex items-center gap-2"
+            :class="store.activeAccountId === null && store.activeOrgGroupId === null ? 'bg-white/5 text-white' : 'text-gray-400 hover:bg-white/5'"
+            @click="clearOrganizationScope"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.5">
+              <circle cx="12" cy="12" r="9"/>
+              <path d="M3 12h18M12 3C8 7 8 17 12 21M12 3c4 4 4 14 0 18"/>
+            </svg>
+            <span class="flex-1">All accounts</span>
+            <span class="text-[10px] font-mono text-gray-600">{{ accountCount }}</span>
+          </button>
+          <div
+            v-for="(item, idx) in orgTree"
+            :key="item.id"
+            class="relative"
+          >
+            <!-- Vertical tree line: connects to siblings below -->
+            <span
+              v-if="item.depth > 0"
+              class="pointer-events-none absolute"
+              :style="{
+                left: `${8 + (item.depth - 1) * 14 + 5}px`,
+                top: '-2px',
+                bottom: hasNextSibling(idx, item.depth) ? '-2px' : '50%',
+                width: '1px',
+                background: item.depth === 1 ? 'rgba(245,158,11,0.18)' : 'rgba(34,211,238,0.14)',
+              }"
+            />
+            <!-- Horizontal connector nub -->
+            <span
+              v-if="item.depth > 0"
+              class="pointer-events-none absolute"
+              :style="{
+                left: `${8 + (item.depth - 1) * 14 + 5}px`,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: '9px',
+                height: '1px',
+                background: item.depth === 1 ? 'rgba(245,158,11,0.18)' : 'rgba(34,211,238,0.14)',
+              }"
+            />
+            <button
+              class="w-full text-left text-xs rounded py-1 transition flex items-center gap-1.5"
+              :class="[
+                item.account_id && store.activeAccountId === item.account_id
+                  ? 'bg-cyan-500/10 text-cyan-300'
+                  : store.activeOrgGroupId === item.id
+                    ? 'bg-amber-500/10 text-amber-300'
+                    : 'text-gray-400 hover:bg-white/5',
+              ]"
+              :style="{ paddingLeft: `${8 + item.depth * 14}px`, paddingRight: '8px' }"
+              @click="onOrgTreeClick(item)"
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" :style="{ color: orgTypeColor(item.group_type) }" class="shrink-0">
+                <g v-html="orgTypeIcon(item.group_type)" />
+              </svg>
+              <span class="truncate flex-1">{{ item.name }}</span>
+              <span v-if="item.account_id" class="text-[9px] font-mono text-gray-600 shrink-0">·{{ item.account_id.slice(-6) }}</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="store.hasOrganizationData" class="py-4 border-b border-white/5">
+        <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">Cross-account</h3>
+        <button
+          class="w-full flex items-center justify-between text-xs rounded px-2 py-1 transition hover:bg-white/5"
+          @click="store.setShowCrossAccountEdges(!store.showCrossAccountEdges)"
+        >
+          <span class="text-gray-300">Show cross-account links</span>
+          <span class="toggle" :class="{ on: store.showCrossAccountEdges }" style="--toggle-color: #f97316">
+            <span class="knob" />
+          </span>
+        </button>
       </section>
 
       <section class="pt-4">
@@ -136,7 +237,49 @@ const categories = computed(() => {
     .sort((a, b) => b.count - a.count)
 })
 
-const topGroups = computed(() => store.groups.filter(g => g.parent === null))
+const topGroups = computed(() => store.graphGroups.filter(g => g.parent === null))
+const orgTree = computed(() => store.organizationTree)
+const accountCount = computed(() => orgTree.value.filter(i => i.group_type === 'account').length)
+
+const ORG_ICONS: Record<string, string> = {
+  account:
+    '<path d="M4 21V8l8-5 8 5v13M9 21v-5h6v5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
+  ou:
+    '<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" stroke="currentColor" stroke-width="1.5" fill="none"/>',
+  organization_root:
+    '<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M3 12h18M12 3C8 7 8 17 12 21M12 3c4 4 4 14 0 18" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>',
+}
+
+const ORG_TYPE_COLORS: Record<string, string> = {
+  account: '#22d3ee',
+  ou: '#f59e0b',
+  organization_root: '#38bdf8',
+}
+
+function orgTypeIcon(groupType: string): string {
+  return ORG_ICONS[groupType] ?? ORG_ICONS.account
+}
+
+function orgTypeColor(groupType: string): string {
+  return ORG_TYPE_COLORS[groupType] ?? '#9ca3af'
+}
+
+function hasNextSibling(idx: number, depth: number): boolean {
+  for (let i = idx + 1; i < orgTree.value.length; i++) {
+    if (orgTree.value[i].depth === depth) return true
+    if (orgTree.value[i].depth < depth) return false
+  }
+  return false
+}
+
+function groupDotColor(groupType: string): string {
+  if (groupType === 'vpc') return CATEGORY_COLORS.network
+  if (groupType === 'subnet') return '#4b5563'
+  if (groupType === 'account') return '#22d3ee'
+  if (groupType === 'ou') return '#f59e0b'
+  if (groupType === 'organization_root') return '#38bdf8'
+  return '#6b7280'
+}
 
 const sliderX = computed(() => 8 + ((minWeight.value - 1) / 4) * 224)
 const sliderFill = computed(() => Math.max(0, sliderX.value - 8))
@@ -174,6 +317,25 @@ function resetFilters() {
   minWeight.value = 1
   store.setMinWeight(1)
   store.setSearch('')
+}
+
+function clearOrganizationScope() {
+  store.setActiveOrgGroup(null)
+  store.setActiveAccount(null)
+}
+
+function onOrgTreeClick(item: { id: string; account_id?: string }) {
+  if (item.account_id) {
+    if (store.viewMode === 'organization') {
+      store.enterAccountArchitecture(item.account_id)
+      return
+    }
+    store.setActiveAccount(item.account_id)
+    return
+  }
+  if (store.viewMode === 'organization') {
+    store.setActiveOrgGroup(item.id)
+  }
 }
 
 // Drag listeners are cleaned up via their own mouseup handlers.

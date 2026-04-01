@@ -38,11 +38,16 @@
           >{{ node.category }}</span>
           <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] text-gray-500 bg-white/5">{{ node.provider }}</span>
           <span v-if="node.position_hint?.tier" class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] text-gray-500 bg-white/5">{{ node.position_hint.tier }}</span>
+          <span v-if="node.metadata?.account_id" class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] text-cyan-300 bg-cyan-500/10">{{ node.metadata.account_id }}</span>
+          <span v-if="node.metadata?.region" class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] text-gray-500 bg-white/5">{{ node.metadata.region }}</span>
           <span
             v-if="diffStatus"
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold"
             :style="{ backgroundColor: `${diffStatusColor}20`, color: diffStatusColor }"
           >{{ diffBadgeLabel }}</span>
+        </div>
+        <div v-if="node.metadata?.org_path" class="mt-2 text-[11px] font-mono text-gray-500">
+          {{ node.metadata.org_path }}
         </div>
       </div>
 
