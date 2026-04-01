@@ -19,7 +19,7 @@
     "warnings": [],
     "errors": [],
     "dry_run": false,
-    "api_calls": 16,
+    "api_calls": 34,
     "planned_api_calls": [
       {
         "account_id": "992382509624",
@@ -27,6 +27,310 @@
         "service": "apigateway",
         "operation": "get_rest_apis",
         "params": {}
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_resources",
+        "params": {
+          "restApiId": "68kkd3xobi",
+          "limit": 500
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_integration",
+        "params": {
+          "restApiId": "68kkd3xobi",
+          "resourceId": "zn012t",
+          "httpMethod": "GET"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_resources",
+        "params": {
+          "restApiId": "h88z2rcc5l",
+          "limit": 500
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_integration",
+        "params": {
+          "restApiId": "h88z2rcc5l",
+          "resourceId": "0pjmsj",
+          "httpMethod": "POST"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_integration",
+        "params": {
+          "restApiId": "h88z2rcc5l",
+          "resourceId": "4dq8hy",
+          "httpMethod": "POST"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_integration",
+        "params": {
+          "restApiId": "h88z2rcc5l",
+          "resourceId": "5w64e2",
+          "httpMethod": "POST"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_integration",
+        "params": {
+          "restApiId": "h88z2rcc5l",
+          "resourceId": "bi1lrh",
+          "httpMethod": "POST"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_integration",
+        "params": {
+          "restApiId": "h88z2rcc5l",
+          "resourceId": "d6t6yn",
+          "httpMethod": "POST"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_integration",
+        "params": {
+          "restApiId": "h88z2rcc5l",
+          "resourceId": "gk8fyc",
+          "httpMethod": "POST"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_integration",
+        "params": {
+          "restApiId": "h88z2rcc5l",
+          "resourceId": "jvjmia",
+          "httpMethod": "POST"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_integration",
+        "params": {
+          "restApiId": "h88z2rcc5l",
+          "resourceId": "k4zkbg",
+          "httpMethod": "POST"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_integration",
+        "params": {
+          "restApiId": "h88z2rcc5l",
+          "resourceId": "k8ovp1",
+          "httpMethod": "POST"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_integration",
+        "params": {
+          "restApiId": "h88z2rcc5l",
+          "resourceId": "kolyvi",
+          "httpMethod": "POST"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_integration",
+        "params": {
+          "restApiId": "h88z2rcc5l",
+          "resourceId": "mdxwy7",
+          "httpMethod": "POST"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_integration",
+        "params": {
+          "restApiId": "h88z2rcc5l",
+          "resourceId": "naef9g",
+          "httpMethod": "POST"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_integration",
+        "params": {
+          "restApiId": "h88z2rcc5l",
+          "resourceId": "nt68kf",
+          "httpMethod": "POST"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_integration",
+        "params": {
+          "restApiId": "h88z2rcc5l",
+          "resourceId": "p11wzg",
+          "httpMethod": "POST"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_integration",
+        "params": {
+          "restApiId": "h88z2rcc5l",
+          "resourceId": "un0t70",
+          "httpMethod": "POST"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_integration",
+        "params": {
+          "restApiId": "h88z2rcc5l",
+          "resourceId": "z6gr7o",
+          "httpMethod": "POST"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_resources",
+        "params": {
+          "restApiId": "o1bmsr80rf",
+          "limit": 500
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_integration",
+        "params": {
+          "restApiId": "o1bmsr80rf",
+          "resourceId": "et7y43ud56",
+          "httpMethod": "OPTIONS"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_integration",
+        "params": {
+          "restApiId": "o1bmsr80rf",
+          "resourceId": "myjnam",
+          "httpMethod": "ANY"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_integration",
+        "params": {
+          "restApiId": "o1bmsr80rf",
+          "resourceId": "myjnam",
+          "httpMethod": "OPTIONS"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_resources",
+        "params": {
+          "restApiId": "xyr3ozs4gb",
+          "limit": 500
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_integration",
+        "params": {
+          "restApiId": "xyr3ozs4gb",
+          "resourceId": "5y5w0k",
+          "httpMethod": "GET"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_integration",
+        "params": {
+          "restApiId": "xyr3ozs4gb",
+          "resourceId": "atvct5",
+          "httpMethod": "POST"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_integration",
+        "params": {
+          "restApiId": "xyr3ozs4gb",
+          "resourceId": "lshw56",
+          "httpMethod": "POST"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_integration",
+        "params": {
+          "restApiId": "xyr3ozs4gb",
+          "resourceId": "yjbv39",
+          "httpMethod": "POST"
+        }
       },
       {
         "account_id": "992382509624",
@@ -76,6 +380,15 @@
         "account_id": "992382509624",
         "region": "us-east-1",
         "service": "sns",
+        "operation": "list_subscriptions_by_topic",
+        "params": {
+          "TopicArn": "arn:aws:sns:us-east-1:992382509624:config-topic-992382509624"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "sns",
         "operation": "get_topic_attributes",
         "params": {
           "TopicArn": "arn:aws:sns:us-east-1:992382509624:research-provenance-textract-complete"
@@ -85,7 +398,25 @@
         "account_id": "992382509624",
         "region": "us-east-1",
         "service": "sns",
+        "operation": "list_subscriptions_by_topic",
+        "params": {
+          "TopicArn": "arn:aws:sns:us-east-1:992382509624:research-provenance-textract-complete"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "sns",
         "operation": "get_topic_attributes",
+        "params": {
+          "TopicArn": "arn:aws:sns:us-east-1:992382509624:six-pillars-events-SNSTopic6pillars-Vx6xLb3ofUHe"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "sns",
+        "operation": "list_subscriptions_by_topic",
         "params": {
           "TopicArn": "arn:aws:sns:us-east-1:992382509624:six-pillars-events-SNSTopic6pillars-Vx6xLb3ofUHe"
         }
@@ -142,7 +473,8 @@
       "unmapped_account_ids": [],
       "unscanned_account_ids": []
     },
-    "scanned_at": "2026-04-01T02:45:55.499014+00:00",
+    "cross_account_edges": 0,
+    "scanned_at": "2026-04-01T03:32:47.401483+00:00",
     "source_path": "stackmap-aws-output.json"
   },
   "nodes": [
@@ -2434,11 +2766,172 @@
   ],
   "edges": [
     {
+      "id": "aws:992382509624:us-east-1:aws_subnet:subnet-09303c42f648140ac->aws:992382509624:us-east-1:aws_vpc:vpc-039f12c6acae93682:references",
+      "source": "aws:992382509624:us-east-1:aws_subnet:subnet-09303c42f648140ac",
+      "target": "aws:992382509624:us-east-1:aws_vpc:vpc-039f12c6acae93682",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_subnet:subnet-00eb4a84819e001d7->aws:992382509624:us-east-1:aws_vpc:vpc-039f12c6acae93682:references",
+      "source": "aws:992382509624:us-east-1:aws_subnet:subnet-00eb4a84819e001d7",
+      "target": "aws:992382509624:us-east-1:aws_vpc:vpc-039f12c6acae93682",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_subnet:subnet-0e68d5a0c09774b23->aws:992382509624:us-east-1:aws_vpc:vpc-039f12c6acae93682:references",
+      "source": "aws:992382509624:us-east-1:aws_subnet:subnet-0e68d5a0c09774b23",
+      "target": "aws:992382509624:us-east-1:aws_vpc:vpc-039f12c6acae93682",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_subnet:subnet-05a1d15b484a26718->aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b:references",
+      "source": "aws:992382509624:us-east-1:aws_subnet:subnet-05a1d15b484a26718",
+      "target": "aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_subnet:subnet-085553ddcb0d5ec20->aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b:references",
+      "source": "aws:992382509624:us-east-1:aws_subnet:subnet-085553ddcb0d5ec20",
+      "target": "aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_subnet:subnet-0c63d0ef0e327bfd6->aws:992382509624:us-east-1:aws_vpc:vpc-039f12c6acae93682:references",
+      "source": "aws:992382509624:us-east-1:aws_subnet:subnet-0c63d0ef0e327bfd6",
+      "target": "aws:992382509624:us-east-1:aws_vpc:vpc-039f12c6acae93682",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_subnet:subnet-0e7cfab0ad146ed02->aws:992382509624:us-east-1:aws_vpc:vpc-039f12c6acae93682:references",
+      "source": "aws:992382509624:us-east-1:aws_subnet:subnet-0e7cfab0ad146ed02",
+      "target": "aws:992382509624:us-east-1:aws_vpc:vpc-039f12c6acae93682",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_subnet:subnet-061e26a72335d70f3->aws:992382509624:us-east-1:aws_vpc:vpc-039f12c6acae93682:references",
+      "source": "aws:992382509624:us-east-1:aws_subnet:subnet-061e26a72335d70f3",
+      "target": "aws:992382509624:us-east-1:aws_vpc:vpc-039f12c6acae93682",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_subnet:subnet-0437c26e4112eb822->aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b:references",
+      "source": "aws:992382509624:us-east-1:aws_subnet:subnet-0437c26e4112eb822",
+      "target": "aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_subnet:subnet-07dfbfd029af608cc->aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b:references",
+      "source": "aws:992382509624:us-east-1:aws_subnet:subnet-07dfbfd029af608cc",
+      "target": "aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_security_group:sg-0183b56eb4815699f->aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b:references",
+      "source": "aws:992382509624:us-east-1:aws_security_group:sg-0183b56eb4815699f",
+      "target": "aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_security_group:sg-0025b418cc39a11d9->aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b:references",
+      "source": "aws:992382509624:us-east-1:aws_security_group:sg-0025b418cc39a11d9",
+      "target": "aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_security_group:sg-0dc1fee4d66ebd46e->aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b:references",
+      "source": "aws:992382509624:us-east-1:aws_security_group:sg-0dc1fee4d66ebd46e",
+      "target": "aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_security_group:sg-029b167caa25db0fd->aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b:references",
+      "source": "aws:992382509624:us-east-1:aws_security_group:sg-029b167caa25db0fd",
+      "target": "aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_security_group:sg-00754bcba03f63104->aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b:references",
+      "source": "aws:992382509624:us-east-1:aws_security_group:sg-00754bcba03f63104",
+      "target": "aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_security_group:sg-082651a05033c207c->aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b:references",
+      "source": "aws:992382509624:us-east-1:aws_security_group:sg-082651a05033c207c",
+      "target": "aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_security_group:sg-0aeb73fcacf055e0c->aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b:references",
+      "source": "aws:992382509624:us-east-1:aws_security_group:sg-0aeb73fcacf055e0c",
+      "target": "aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_security_group:sg-007bb331f9da5b294->aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b:references",
+      "source": "aws:992382509624:us-east-1:aws_security_group:sg-007bb331f9da5b294",
+      "target": "aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_security_group:sg-01114a7b50e4c6fb5->aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b:references",
+      "source": "aws:992382509624:us-east-1:aws_security_group:sg-01114a7b50e4c6fb5",
+      "target": "aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_security_group:sg-02aa45bdcf8126983->aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b:references",
+      "source": "aws:992382509624:us-east-1:aws_security_group:sg-02aa45bdcf8126983",
+      "target": "aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_security_group:sg-06078e76a7d15e709->aws:992382509624:us-east-1:aws_vpc:vpc-039f12c6acae93682:references",
+      "source": "aws:992382509624:us-east-1:aws_security_group:sg-06078e76a7d15e709",
+      "target": "aws:992382509624:us-east-1:aws_vpc:vpc-039f12c6acae93682",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_instance:i-0b61c3ddef5897273->aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b:references",
+      "source": "aws:992382509624:us-east-1:aws_instance:i-0b61c3ddef5897273",
+      "target": "aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
       "id": "aws:992382509624:us-east-1:aws_instance:i-0b61c3ddef5897273->aws:992382509624:us-east-1:aws_subnet:subnet-085553ddcb0d5ec20:references",
       "source": "aws:992382509624:us-east-1:aws_instance:i-0b61c3ddef5897273",
       "target": "aws:992382509624:us-east-1:aws_subnet:subnet-085553ddcb0d5ec20",
       "edge_type": "references",
       "label": "in subnet"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_instance:i-020c8b15c1df19545->aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b:references",
+      "source": "aws:992382509624:us-east-1:aws_instance:i-020c8b15c1df19545",
+      "target": "aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b",
+      "edge_type": "references",
+      "label": "in vpc"
     },
     {
       "id": "aws:992382509624:us-east-1:aws_instance:i-020c8b15c1df19545->aws:992382509624:us-east-1:aws_subnet:subnet-07dfbfd029af608cc:references",
@@ -2502,6 +2995,13 @@
       "target": "aws:992382509624:us-east-1:aws_sqs_queue:MESO_SimulationJobQueue",
       "edge_type": "reads_from",
       "label": "reads from"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_sns_topic:research-provenance-textract-complete->aws:992382509624:us-east-1:aws_lambda_function:research-provenance-ingest-finisher:triggers",
+      "source": "aws:992382509624:us-east-1:aws_sns_topic:research-provenance-textract-complete",
+      "target": "aws:992382509624:us-east-1:aws_lambda_function:research-provenance-ingest-finisher",
+      "edge_type": "triggers",
+      "label": "subscription"
     }
   ],
   "groups": [
@@ -2509,47 +3009,57 @@
       "id": "group:vpc:992382509624:us-east-1:vpc-07ce3cdd64f64e75b",
       "name": "MESO-vpc",
       "group_type": "vpc",
-      "children": [],
-      "parent": null,
-      "metadata": {}
+      "children": [
+        "aws:992382509624:us-east-1:aws_instance:i-020c8b15c1df19545",
+        "aws:992382509624:us-east-1:aws_instance:i-0b61c3ddef5897273",
+        "aws:992382509624:us-east-1:aws_lambda_function:RDS_migration",
+        "aws:992382509624:us-east-1:aws_security_group:sg-0025b418cc39a11d9",
+        "aws:992382509624:us-east-1:aws_security_group:sg-00754bcba03f63104",
+        "aws:992382509624:us-east-1:aws_security_group:sg-007bb331f9da5b294",
+        "aws:992382509624:us-east-1:aws_security_group:sg-01114a7b50e4c6fb5",
+        "aws:992382509624:us-east-1:aws_security_group:sg-0183b56eb4815699f",
+        "aws:992382509624:us-east-1:aws_security_group:sg-029b167caa25db0fd",
+        "aws:992382509624:us-east-1:aws_security_group:sg-02aa45bdcf8126983",
+        "aws:992382509624:us-east-1:aws_security_group:sg-082651a05033c207c",
+        "aws:992382509624:us-east-1:aws_security_group:sg-0aeb73fcacf055e0c",
+        "aws:992382509624:us-east-1:aws_security_group:sg-0dc1fee4d66ebd46e",
+        "aws:992382509624:us-east-1:aws_subnet:subnet-0437c26e4112eb822",
+        "aws:992382509624:us-east-1:aws_subnet:subnet-05a1d15b484a26718",
+        "aws:992382509624:us-east-1:aws_subnet:subnet-07dfbfd029af608cc",
+        "aws:992382509624:us-east-1:aws_subnet:subnet-085553ddcb0d5ec20"
+      ],
+      "parent": "group:account:992382509624",
+      "metadata": {
+        "account_id": "992382509624",
+        "source_kind": "scan"
+      }
     },
     {
       "id": "group:vpc:992382509624:us-east-1:vpc-039f12c6acae93682",
       "name": "vpc-039f12c6acae93682",
       "group_type": "vpc",
-      "children": [],
-      "parent": null,
-      "metadata": {}
-    },
-    {
-      "id": "group:subnet:992382509624:us-east-1:subnet-09303c42f648140ac",
-      "name": "subnet-09303c42f648140ac",
-      "group_type": "subnet",
-      "children": [],
-      "parent": "group:vpc:992382509624:us-east-1:vpc-039f12c6acae93682",
-      "metadata": {}
-    },
-    {
-      "id": "group:subnet:992382509624:us-east-1:subnet-00eb4a84819e001d7",
-      "name": "subnet-00eb4a84819e001d7",
-      "group_type": "subnet",
-      "children": [],
-      "parent": "group:vpc:992382509624:us-east-1:vpc-039f12c6acae93682",
-      "metadata": {}
-    },
-    {
-      "id": "group:subnet:992382509624:us-east-1:subnet-0e68d5a0c09774b23",
-      "name": "subnet-0e68d5a0c09774b23",
-      "group_type": "subnet",
-      "children": [],
-      "parent": "group:vpc:992382509624:us-east-1:vpc-039f12c6acae93682",
-      "metadata": {}
+      "children": [
+        "aws:992382509624:us-east-1:aws_security_group:sg-06078e76a7d15e709",
+        "aws:992382509624:us-east-1:aws_subnet:subnet-00eb4a84819e001d7",
+        "aws:992382509624:us-east-1:aws_subnet:subnet-061e26a72335d70f3",
+        "aws:992382509624:us-east-1:aws_subnet:subnet-09303c42f648140ac",
+        "aws:992382509624:us-east-1:aws_subnet:subnet-0c63d0ef0e327bfd6",
+        "aws:992382509624:us-east-1:aws_subnet:subnet-0e68d5a0c09774b23",
+        "aws:992382509624:us-east-1:aws_subnet:subnet-0e7cfab0ad146ed02"
+      ],
+      "parent": "group:account:992382509624",
+      "metadata": {
+        "account_id": "992382509624",
+        "source_kind": "scan"
+      }
     },
     {
       "id": "group:subnet:992382509624:us-east-1:subnet-05a1d15b484a26718",
       "name": "MESO-subnet-public1-us-east-1a",
       "group_type": "subnet",
-      "children": [],
+      "children": [
+        "aws:992382509624:us-east-1:aws_lambda_function:RDS_migration"
+      ],
       "parent": "group:vpc:992382509624:us-east-1:vpc-07ce3cdd64f64e75b",
       "metadata": {}
     },
@@ -2557,39 +3067,20 @@
       "id": "group:subnet:992382509624:us-east-1:subnet-085553ddcb0d5ec20",
       "name": "MESO-subnet-private2-us-east-1b",
       "group_type": "subnet",
-      "children": [],
+      "children": [
+        "aws:992382509624:us-east-1:aws_instance:i-0b61c3ddef5897273",
+        "aws:992382509624:us-east-1:aws_lambda_function:RDS_migration"
+      ],
       "parent": "group:vpc:992382509624:us-east-1:vpc-07ce3cdd64f64e75b",
-      "metadata": {}
-    },
-    {
-      "id": "group:subnet:992382509624:us-east-1:subnet-0c63d0ef0e327bfd6",
-      "name": "subnet-0c63d0ef0e327bfd6",
-      "group_type": "subnet",
-      "children": [],
-      "parent": "group:vpc:992382509624:us-east-1:vpc-039f12c6acae93682",
-      "metadata": {}
-    },
-    {
-      "id": "group:subnet:992382509624:us-east-1:subnet-0e7cfab0ad146ed02",
-      "name": "subnet-0e7cfab0ad146ed02",
-      "group_type": "subnet",
-      "children": [],
-      "parent": "group:vpc:992382509624:us-east-1:vpc-039f12c6acae93682",
-      "metadata": {}
-    },
-    {
-      "id": "group:subnet:992382509624:us-east-1:subnet-061e26a72335d70f3",
-      "name": "subnet-061e26a72335d70f3",
-      "group_type": "subnet",
-      "children": [],
-      "parent": "group:vpc:992382509624:us-east-1:vpc-039f12c6acae93682",
       "metadata": {}
     },
     {
       "id": "group:subnet:992382509624:us-east-1:subnet-0437c26e4112eb822",
       "name": "MESO-subnet-public2-us-east-1b",
       "group_type": "subnet",
-      "children": [],
+      "children": [
+        "aws:992382509624:us-east-1:aws_lambda_function:RDS_migration"
+      ],
       "parent": "group:vpc:992382509624:us-east-1:vpc-07ce3cdd64f64e75b",
       "metadata": {}
     },
@@ -2597,7 +3088,10 @@
       "id": "group:subnet:992382509624:us-east-1:subnet-07dfbfd029af608cc",
       "name": "MESO-subnet-private1-us-east-1a",
       "group_type": "subnet",
-      "children": [],
+      "children": [
+        "aws:992382509624:us-east-1:aws_instance:i-020c8b15c1df19545",
+        "aws:992382509624:us-east-1:aws_lambda_function:RDS_migration"
+      ],
       "parent": "group:vpc:992382509624:us-east-1:vpc-07ce3cdd64f64e75b",
       "metadata": {}
     },

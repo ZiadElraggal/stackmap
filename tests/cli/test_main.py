@@ -707,8 +707,48 @@ def test_scan_aws_serve_uses_serve_command(monkeypatch, tmp_path: Path) -> None:
     assert called["watch_interval"] == 1.0
 
 
-def test_scan_aws_org_scan_requires_org_file() -> None:
-    result = runner.invoke(app, ["scan-aws", "--org-scan"])
+def test_scan_aws_org_scan_can_run_without_org_file(monkeypatch, tmp_path: Path) -> None:
+    from stackmap.parsers.base import StackMapIR
 
-    assert result.exit_code == 1
-    assert "--org-scan requires --org-file" in result.output
+    class FakeScanner:
+        def __init__(self, **kwargs):  # type: ignore[no-untyped-def]
+            assert kwargs["org_scan"] is True
+            assert kwargs["org_file"] is None
+
+        def startup_summary(self):  # type: ignore[no-untyped-def]
+            return {
+                "account_id": "123456789012",
+                "regions": ["us-east-1"],
+                "auth_description": "profile 'sandbox'",
+                "org_scan": True,
+                "services": ["ec2"],
+            }
+
+        def scan(self):  # type: ignore[no-untyped-def]
+            return StackMapIR(
+                metadata={
+                    "source_type": "aws_live",
+                    "scan_mode": "organization",
+                    "regions": ["us-east-1"],
+                    "selected_services": ["ec2"],
+                    "warnings": [],
+                    "errors": [],
+                }
+            )
+
+    monkeypatch.setattr("stackmap.cli.main.AWSLiveScanner", FakeScanner)
+    out = tmp_path / "org-live.json"
+    result = runner.invoke(
+        app,
+        [
+            "scan-aws",
+            "--org-scan",
+            "--services",
+            "ec2",
+            "--output",
+            str(out),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert out.exists()
