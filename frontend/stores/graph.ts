@@ -66,6 +66,24 @@ interface OrgTreeItem {
   account_id?: string
 }
 
+export interface ComponentSummary {
+  id: string
+  name: string
+  kind: 'service_component' | 'weakly_linked' | 'unlinked' | 'unlinked_bucket'
+  nodeIds: string[]
+  edgeIds: string[]
+  resourceCount: number
+  edgeCount: number
+  dominantCategories: string[]
+  entrypoints: string[]
+  accountIds: string[]
+  regions: string[]
+  usefulnessScore: number
+  helperRatio: number
+  mostlyNetwork: boolean
+  summary: string
+}
+
 const HELPER_RESOURCE_TYPES = new Set([
   'aws_iam_role',
   'aws_iam_policy',
@@ -160,6 +178,20 @@ const PRIMARY_CATEGORY_PRIORITY: Record<string, number> = {
 
 const ARCH_DROPPED_EDGE_TYPES = new Set(['authenticates', 'contains'])
 const ORG_GROUP_TYPES = new Set(['organization_root', 'ou', 'account'])
+const COMPONENT_ENTRY_CATEGORIES = new Set(['cdn', 'dns', 'integration', 'network'])
+const COMPONENT_CORE_CATEGORIES = new Set(['serverless', 'compute', 'container', 'queue', 'database', 'storage'])
+const NETWORK_HEAVY_RESOURCE_TYPES = new Set([
+  'aws_vpc',
+  'aws_subnet',
+  'aws_security_group',
+  'aws_route_table',
+  'aws_route_table_association',
+  'aws_nat_gateway',
+  'aws_internet_gateway',
+  'aws_eip',
+])
+const UNLINKED_COMPONENT_ID = '__unlinked_resources__'
+const COMPONENT_VIEW_THRESHOLD_DEFAULT = 35
 
 const REFERENCE_TYPE_ALLOWLIST = new Set([
   'aws_ecs_service->aws_ecs_cluster',
@@ -215,6 +247,147 @@ function buildAdjacency(edges: StackMapEdge[]): Map<string, Set<string>> {
     adjacency.get(edge.target)?.add(edge.source)
   }
   return adjacency
+}
+
+function slugifyName(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function pickSharedServiceTag(nodes: StackMapNode[]): string | null {
+  const keys = ['service', 'Service', 'app', 'App', 'application', 'Application', 'project', 'Project']
+  for (const key of keys) {
+    const values = [...new Set(
+      nodes
+        .map(node => node.tags?.[key])
+        .filter((value): value is string => Boolean(value && value.trim()))
+        .map(value => value.trim())
+    )]
+    if (values.length === 1) return values[0]
+  }
+  return null
+}
+
+function serviceTagForNode(node: StackMapNode): string | null {
+  const keys = ['service', 'Service', 'app', 'App', 'application', 'Application', 'project', 'Project']
+  for (const key of keys) {
+    const value = node.tags?.[key]
+    if (value && value.trim()) return value.trim()
+  }
+  return null
+}
+
+function isMeaningfulServiceTag(tag: string | null): tag is string {
+  if (!tag) return false
+  const normalized = slugifyName(tag)
+  return normalized.length >= 3 && !['default', 'main', 'primary', 'shared'].includes(normalized)
+}
+
+function topCategoriesForNodes(nodes: StackMapNode[]): string[] {
+  const counts: Record<string, number> = {}
+  for (const node of nodes) {
+    counts[node.category] = (counts[node.category] || 0) + 1
+  }
+  return Object.entries(counts)
+    .sort((a, b) => {
+      if (b[1] !== a[1]) return b[1] - a[1]
+      const pa = PRIMARY_CATEGORY_PRIORITY[a[0]] ?? 100
+      const pb = PRIMARY_CATEGORY_PRIORITY[b[0]] ?? 100
+      return pa - pb
+    })
+    .slice(0, 3)
+    .map(([category]) => category)
+}
+
+function componentAnchorName(nodes: StackMapNode[], adjacency: Map<string, Set<string>>): string {
+  const sharedTag = pickSharedServiceTag(nodes)
+  if (sharedTag) return sharedTag
+
+  const candidates = [...nodes].sort((a, b) => {
+    const aIsEntry = COMPONENT_ENTRY_CATEGORIES.has(a.category) ? 1 : 0
+    const bIsEntry = COMPONENT_ENTRY_CATEGORIES.has(b.category) ? 1 : 0
+    if (aIsEntry !== bIsEntry) return bIsEntry - aIsEntry
+    const aIsCore = COMPONENT_CORE_CATEGORIES.has(a.category) ? 1 : 0
+    const bIsCore = COMPONENT_CORE_CATEGORIES.has(b.category) ? 1 : 0
+    if (aIsCore !== bIsCore) return bIsCore - aIsCore
+    const ad = adjacency.get(a.id)?.size || 0
+    const bd = adjacency.get(b.id)?.size || 0
+    if (ad !== bd) return bd - ad
+    const pa = PRIMARY_CATEGORY_PRIORITY[a.category] ?? 100
+    const pb = PRIMARY_CATEGORY_PRIORITY[b.category] ?? 100
+    if (pa !== pb) return pa - pb
+    return a.name.localeCompare(b.name)
+  })
+  return candidates[0]?.name || 'component'
+}
+
+function describeComponent(
+  nodes: StackMapNode[],
+  edges: StackMapEdge[],
+  adjacency: Map<string, Set<string>>
+): Omit<ComponentSummary, 'id'> {
+  const resourceCount = nodes.length
+  const edgeCount = edges.length
+  const helperCount = nodes.filter(isHelperNode).length
+  const helperRatio = resourceCount > 0 ? helperCount / resourceCount : 0
+  const networkCount = nodes.filter(node => node.category === 'network' || NETWORK_HEAVY_RESOURCE_TYPES.has(node.resource_type)).length
+  const entrypoints = nodes
+    .filter(node => COMPONENT_ENTRY_CATEGORIES.has(node.category))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .slice(0, 3)
+    .map(node => node.name)
+  const coreCount = nodes.filter(node => COMPONENT_CORE_CATEGORIES.has(node.category)).length
+  const accountIds = [...new Set(nodes.map(node => accountIdForNode(node)).filter((value): value is string => Boolean(value)))].sort()
+  const regions = [...new Set(nodes.map(node => node.metadata?.region || node.position_hint?.region).filter((value): value is string => Boolean(value)))].sort()
+  const dominantCategories = topCategoriesForNodes(nodes)
+  const mostlyNetwork = resourceCount > 0 && networkCount / resourceCount >= 0.6
+  const connectivityBonus = Math.max(0, edgeCount - resourceCount + 1)
+  const usefulnessScore =
+    entrypoints.length * 4 +
+    coreCount * 3 +
+    connectivityBonus * 2 +
+    (mostlyNetwork ? -4 : 0) +
+    Math.round((1 - helperRatio) * 4) -
+    Math.max(0, 2 - resourceCount)
+
+  let kind: ComponentSummary['kind'] = 'service_component'
+  if (
+    resourceCount <= 1 ||
+    (mostlyNetwork && coreCount === 0) ||
+    usefulnessScore < 4 ||
+    (entrypoints.length === 0 && coreCount <= 1 && resourceCount <= 3)
+  ) {
+    kind = 'unlinked'
+  } else if (usefulnessScore < 8 || (mostlyNetwork && coreCount <= 1) || resourceCount <= 3) {
+    kind = 'weakly_linked'
+  }
+
+  const anchor = componentAnchorName(nodes, adjacency)
+  const slug = slugifyName(anchor)
+  const summaryBits = [
+    dominantCategories.slice(0, 2).join(' + '),
+    entrypoints.length ? `${entrypoints.length} entrypoint${entrypoints.length === 1 ? '' : 's'}` : 'internal',
+    accountIds.length > 1 ? `${accountIds.length} accounts` : `${regions.length || 1} region${regions.length === 1 ? '' : 's'}`,
+  ].filter(Boolean)
+
+  return {
+    name: slug || anchor || 'component',
+    kind,
+    nodeIds: nodes.map(node => node.id),
+    edgeIds: edges.map(edge => edge.id),
+    resourceCount,
+    edgeCount,
+    dominantCategories,
+    entrypoints,
+    accountIds,
+    regions,
+    usefulnessScore,
+    helperRatio,
+    mostlyNetwork,
+    summary: summaryBits.join(' · '),
+  }
 }
 
 function rankPrimary(nodesById: Map<string, StackMapNode>, id: string): number {
@@ -485,6 +658,193 @@ function flattenOrganizationTree(groups: StackMapGroup[]): OrgTreeItem[] {
   return result
 }
 
+function buildComponentSummaries(nodes: StackMapNode[], edges: StackMapEdge[]): ComponentSummary[] {
+  const nodeById = new Map(nodes.map(node => [node.id, node]))
+  const adjacency = buildAdjacency(edges)
+  const seen = new Set<string>()
+  const summaries: ComponentSummary[] = []
+
+  for (const node of nodes) {
+    if (seen.has(node.id)) continue
+    const queue = [node.id]
+    const componentNodeIds: string[] = []
+    seen.add(node.id)
+
+    while (queue.length > 0) {
+      const current = queue.shift() as string
+      componentNodeIds.push(current)
+      for (const neighbor of adjacency.get(current) || []) {
+        if (seen.has(neighbor)) continue
+        seen.add(neighbor)
+        queue.push(neighbor)
+      }
+    }
+
+    const componentNodes = componentNodeIds
+      .map(id => nodeById.get(id))
+      .filter((value): value is StackMapNode => Boolean(value))
+    const componentIdSet = new Set(componentNodeIds)
+    const componentEdges = edges.filter(edge => componentIdSet.has(edge.source) && componentIdSet.has(edge.target))
+
+    const tagSeeds = new Map<string, Set<string>>()
+    for (const componentNode of componentNodes) {
+      const tag = serviceTagForNode(componentNode)
+      if (!isMeaningfulServiceTag(tag)) continue
+      if (!tagSeeds.has(tag)) tagSeeds.set(tag, new Set())
+      tagSeeds.get(tag)?.add(componentNode.id)
+    }
+
+    const strongTags = [...tagSeeds.entries()]
+      .filter(([_, ids]) => ids.size >= 2)
+      .map(([tag]) => tag)
+
+    if (strongTags.length >= 2) {
+      const nodeAssignments = new Map<string, string>()
+      for (const tag of strongTags) {
+        for (const nodeId of tagSeeds.get(tag) || []) {
+          nodeAssignments.set(nodeId, tag)
+        }
+      }
+
+      const orderedNodeIds = [...componentNodeIds].sort((a, b) => {
+        const aNode = nodeById.get(a)
+        const bNode = nodeById.get(b)
+        const aHelper = aNode && isHelperNode(aNode) ? 1 : 0
+        const bHelper = bNode && isHelperNode(bNode) ? 1 : 0
+        if (aHelper !== bHelper) return aHelper - bHelper
+        return (adjacency.get(b)?.size || 0) - (adjacency.get(a)?.size || 0)
+      })
+
+      for (let pass = 0; pass < 3; pass += 1) {
+        let changed = false
+        for (const nodeId of orderedNodeIds) {
+          if (nodeAssignments.has(nodeId)) continue
+          const node = nodeById.get(nodeId)
+          if (!node) continue
+
+          const neighborTags = [...new Set(
+            [...(adjacency.get(nodeId) || [])]
+              .map(neighborId => nodeAssignments.get(neighborId))
+              .filter((value): value is string => Boolean(value))
+          )]
+
+          const logicalParent = node.position_hint?.logical_parent
+          const parentTag = logicalParent ? nodeAssignments.get(logicalParent) : null
+
+          if (parentTag && neighborTags.length <= 1) {
+            nodeAssignments.set(nodeId, parentTag)
+            changed = true
+            continue
+          }
+
+          if (neighborTags.length === 1) {
+            nodeAssignments.set(nodeId, neighborTags[0])
+            changed = true
+          }
+        }
+        if (!changed) break
+      }
+
+      const subcomponentNodeIds = new Map<string, Set<string>>()
+      for (const tag of strongTags) subcomponentNodeIds.set(tag, new Set())
+      const leftoverNodeIds = new Set<string>()
+
+      for (const nodeId of componentNodeIds) {
+        const assignedTag = nodeAssignments.get(nodeId)
+        if (assignedTag && subcomponentNodeIds.has(assignedTag)) {
+          subcomponentNodeIds.get(assignedTag)?.add(nodeId)
+        } else {
+          leftoverNodeIds.add(nodeId)
+        }
+      }
+
+      for (const [tag, ids] of subcomponentNodeIds.entries()) {
+        if (ids.size === 0) continue
+        const subNodes = [...ids]
+          .map(id => nodeById.get(id))
+          .filter((value): value is StackMapNode => Boolean(value))
+        const subIdSet = new Set(ids)
+        const subEdges = componentEdges.filter(edge => subIdSet.has(edge.source) && subIdSet.has(edge.target))
+        const described = describeComponent(subNodes, subEdges, adjacency)
+        summaries.push({
+          id: `component:${slugifyName(tag) || described.name || subNodes[0]?.id || summaries.length}`,
+          ...described,
+          name: slugifyName(tag) || described.name,
+        })
+      }
+
+      if (leftoverNodeIds.size > 0) {
+        const leftoverNodes = [...leftoverNodeIds]
+          .map(id => nodeById.get(id))
+          .filter((value): value is StackMapNode => Boolean(value))
+        const leftoverIdSet = new Set(leftoverNodeIds)
+        const leftoverEdges = componentEdges.filter(edge => leftoverIdSet.has(edge.source) && leftoverIdSet.has(edge.target))
+        const described = describeComponent(leftoverNodes, leftoverEdges, adjacency)
+        summaries.push({
+          id: `component:${described.name || leftoverNodes[0]?.id || summaries.length}`,
+          ...described,
+        })
+      }
+
+      continue
+    }
+
+    const described = describeComponent(componentNodes, componentEdges, adjacency)
+    summaries.push({
+      id: `component:${described.name || componentNodes[0]?.id || summaries.length}`,
+      ...described,
+    })
+  }
+
+  const visibleSummaries: ComponentSummary[] = []
+  const unlinkedNodeIds = new Set<string>()
+  const unlinkedEdgeIds = new Set<string>()
+
+  for (const summary of summaries) {
+    if (summary.kind === 'service_component' || summary.kind === 'weakly_linked') {
+      visibleSummaries.push(summary)
+      continue
+    }
+    for (const nodeId of summary.nodeIds) unlinkedNodeIds.add(nodeId)
+    for (const edgeId of summary.edgeIds) unlinkedEdgeIds.add(edgeId)
+  }
+
+  if (unlinkedNodeIds.size > 0) {
+    const unlinkedNodes = [...unlinkedNodeIds]
+      .map(id => nodeById.get(id))
+      .filter((value): value is StackMapNode => Boolean(value))
+    const unlinkedEdges = edges.filter(edge => unlinkedEdgeIds.has(edge.id))
+    const categories = topCategoriesForNodes(unlinkedNodes)
+    const accounts = [...new Set(unlinkedNodes.map(node => accountIdForNode(node)).filter((value): value is string => Boolean(value)))].sort()
+    const regions = [...new Set(unlinkedNodes.map(node => node.metadata?.region || node.position_hint?.region).filter((value): value is string => Boolean(value)))].sort()
+    visibleSummaries.push({
+      id: UNLINKED_COMPONENT_ID,
+      name: 'unlinked-resources',
+      kind: 'unlinked_bucket',
+      nodeIds: [...unlinkedNodeIds],
+      edgeIds: [...unlinkedEdgeIds],
+      resourceCount: unlinkedNodes.length,
+      edgeCount: unlinkedEdges.length,
+      dominantCategories: categories,
+      entrypoints: [],
+      accountIds: accounts,
+      regions,
+      usefulnessScore: 0,
+      helperRatio: unlinkedNodes.length > 0 ? unlinkedNodes.filter(isHelperNode).length / unlinkedNodes.length : 0,
+      mostlyNetwork: unlinkedNodes.length > 0 && unlinkedNodes.every(node => node.category === 'network' || NETWORK_HEAVY_RESOURCE_TYPES.has(node.resource_type)),
+      summary: `${categories.slice(0, 2).join(' + ') || 'mixed'} · ${accounts.length || 1} account${accounts.length === 1 ? '' : 's'}`,
+    })
+  }
+
+  return visibleSummaries.sort((a, b) => {
+    if (a.kind === 'unlinked_bucket' && b.kind !== 'unlinked_bucket') return 1
+    if (b.kind === 'unlinked_bucket' && a.kind !== 'unlinked_bucket') return -1
+    if (b.usefulnessScore !== a.usefulnessScore) return b.usefulnessScore - a.usefulnessScore
+    if (b.resourceCount !== a.resourceCount) return b.resourceCount - a.resourceCount
+    return a.name.localeCompare(b.name)
+  })
+}
+
 export const useGraphStore = defineStore('graph', {
   state: () => ({
     nodes: [] as StackMapNode[],
@@ -498,13 +858,18 @@ export const useGraphStore = defineStore('graph', {
     minWeight: 1,
     hopLimit: 0,
     searchQuery: '',
-    viewMode: 'architecture' as 'architecture' | 'raw' | 'organization',
+    viewMode: 'architecture' as 'architecture' | 'raw' | 'organization' | 'components',
     loaded: false,
     diffMode: false as boolean,
     diffSlider: 0.5 as number,
     showOnlyChanges: false as boolean,
     activeAccountId: null as string | null,
     activeOrgGroupId: null as string | null,
+    activeComponentId: null as string | null,
+    componentViewThreshold: COMPONENT_VIEW_THRESHOLD_DEFAULT,
+    showUnlinkedResources: true as boolean,
+    showWeaklyLinkedComponents: false as boolean,
+    collapseNetworkScaffolding: true as boolean,
     showCrossAccountEdges: true as boolean,
   }),
 
@@ -518,6 +883,20 @@ export const useGraphStore = defineStore('graph', {
 
     hasOrganizationData(state): boolean {
       return state.groups.some(group => group.group_type === 'account')
+    },
+
+    isOrganizationOverview(state): boolean {
+      return state.metadata?.scan_mode === 'organization' && this.hasOrganizationData && !state.activeAccountId
+    },
+
+    isLargeLiveScan(state): boolean {
+      return state.metadata?.source_type === 'aws_live' && state.nodes.length > state.componentViewThreshold
+    },
+
+    shouldUseComponentLanding(): boolean {
+      if (!this.isLargeLiveScan) return false
+      if (this.isOrganizationOverview) return false
+      return true
     },
 
     helperParentMap(state): Map<string, string> {
@@ -574,14 +953,7 @@ export const useGraphStore = defineStore('graph', {
       return buildOrganizationEdges(state.nodes, state.edges, state.showCrossAccountEdges)
     },
 
-    graphNodes(state): StackMapNode[] {
-      if (state.viewMode === 'organization') return this.organizationNodes
-      if (state.viewMode === 'raw') {
-        return state.activeAccountId
-          ? state.nodes.filter(node => accountIdForNode(node) === state.activeAccountId)
-          : state.nodes
-      }
-
+    architectureSourceNodes(state): StackMapNode[] {
       const parentMap = this.helperParentMap
       let graphNodes = state.nodes.filter(n => !parentMap.has(n.id) && !isHelperNode(n))
       if (state.activeAccountId) {
@@ -590,24 +962,10 @@ export const useGraphStore = defineStore('graph', {
       return graphNodes
     },
 
-    graphEdges(state): StackMapEdge[] {
-      if (state.viewMode === 'organization') {
-        return this.organizationEdges
-      }
-
+    architectureSourceEdges(state): StackMapEdge[] {
       let baseEdges = state.edges
       if (!state.showCrossAccountEdges) {
         baseEdges = baseEdges.filter(edge => edge.edge_type !== 'cross_account_reference')
-      }
-
-      if (state.viewMode === 'raw') {
-        if (!state.activeAccountId) return baseEdges
-        const visibleIds = new Set(
-          state.nodes
-            .filter(node => accountIdForNode(node) === state.activeAccountId)
-            .map(node => node.id)
-        )
-        return baseEdges.filter(edge => visibleIds.has(edge.source) && visibleIds.has(edge.target))
       }
 
       const parentMap = this.helperParentMap
@@ -631,30 +989,159 @@ export const useGraphStore = defineStore('graph', {
         })
       }
 
-      if (state.viewMode === 'architecture') {
-        const nodeById = new Map(state.nodes.map(n => [n.id, n]))
-        remapped = remapped.filter(edge => {
-          if (ARCH_DROPPED_EDGE_TYPES.has(edge.edge_type)) return false
-          if (edge.edge_type === 'cross_account_reference') return true
-          if (edge.edge_type !== 'references') return true
-          return shouldKeepReferenceEdge(nodeById.get(edge.source), nodeById.get(edge.target))
-        })
-      }
-
+      const nodeById = new Map(state.nodes.map(n => [n.id, n]))
+      remapped = remapped.filter(edge => {
+        if (ARCH_DROPPED_EDGE_TYPES.has(edge.edge_type)) return false
+        if (edge.edge_type === 'cross_account_reference') return true
+        if (edge.edge_type !== 'references') return true
+        return shouldKeepReferenceEdge(nodeById.get(edge.source), nodeById.get(edge.target))
+      })
       if (state.activeAccountId) {
-        const visibleIds = new Set(this.graphNodes.map(node => node.id))
+        const visibleIds = new Set(this.architectureSourceNodes.map(node => node.id))
         remapped = remapped.filter(edge => visibleIds.has(edge.source) && visibleIds.has(edge.target))
       }
 
       return remapped
     },
 
+    rawSourceNodes(state): StackMapNode[] {
+      return state.activeAccountId
+        ? state.nodes.filter(node => accountIdForNode(node) === state.activeAccountId)
+        : state.nodes
+    },
+
+    rawSourceEdges(state): StackMapEdge[] {
+      let baseEdges = state.edges
+      if (!state.showCrossAccountEdges) {
+        baseEdges = baseEdges.filter(edge => edge.edge_type !== 'cross_account_reference')
+      }
+      if (!state.activeAccountId) return baseEdges
+      const visibleIds = new Set(this.rawSourceNodes.map(node => node.id))
+      return baseEdges.filter(edge => visibleIds.has(edge.source) && visibleIds.has(edge.target))
+    },
+
+    componentSummaries(state): ComponentSummary[] {
+      const summaries = buildComponentSummaries(this.architectureSourceNodes, this.architectureSourceEdges)
+      if (state.showWeaklyLinkedComponents) return summaries
+      const explicit = summaries.filter(summary => summary.kind !== 'weakly_linked' && summary.kind !== 'unlinked_bucket')
+      const hiddenWeakly = summaries.filter(summary => summary.kind === 'weakly_linked')
+      const bucket = summaries.find(summary => summary.kind === 'unlinked_bucket')
+      if (!hiddenWeakly.length) return summaries
+
+      const nodeIds = new Set<string>(bucket?.nodeIds || [])
+      const edgeIds = new Set<string>(bucket?.edgeIds || [])
+      for (const summary of hiddenWeakly) {
+        for (const nodeId of summary.nodeIds) nodeIds.add(nodeId)
+        for (const edgeId of summary.edgeIds) edgeIds.add(edgeId)
+      }
+
+      const mergedBucket: ComponentSummary = {
+        id: UNLINKED_COMPONENT_ID,
+        name: 'unlinked-resources',
+        kind: 'unlinked_bucket',
+        nodeIds: [...nodeIds],
+        edgeIds: [...edgeIds],
+        resourceCount: [...nodeIds].length,
+        edgeCount: [...edgeIds].length,
+        dominantCategories: bucket?.dominantCategories || ['other'],
+        entrypoints: [],
+        accountIds: bucket?.accountIds || [],
+        regions: bucket?.regions || [],
+        usefulnessScore: 0,
+        helperRatio: bucket?.helperRatio || 0,
+        mostlyNetwork: bucket?.mostlyNetwork || false,
+        summary: bucket?.summary || 'mixed',
+      }
+
+      return [...explicit, mergedBucket].sort((a, b) => {
+        if (a.kind === 'unlinked_bucket' && b.kind !== 'unlinked_bucket') return 1
+        if (b.kind === 'unlinked_bucket' && a.kind !== 'unlinked_bucket') return -1
+        if (b.usefulnessScore !== a.usefulnessScore) return b.usefulnessScore - a.usefulnessScore
+        if (b.resourceCount !== a.resourceCount) return b.resourceCount - a.resourceCount
+        return a.name.localeCompare(b.name)
+      })
+    },
+
+    activeComponentSummary(state): ComponentSummary | null {
+      if (!state.activeComponentId) return null
+      return this.componentSummaries.find(component => component.id === state.activeComponentId) || null
+    },
+
+    activeComponentNodeIds(state): Set<string> | null {
+      if (!state.activeComponentId) return null
+      const component = this.activeComponentSummary
+      if (!component) return null
+      return new Set(component.nodeIds)
+    },
+
+    graphNodes(state): StackMapNode[] {
+      if (state.viewMode === 'organization') return this.organizationNodes
+      if (state.viewMode === 'components') return []
+      if (state.viewMode === 'raw') {
+        return this.rawSourceNodes
+      }
+
+      let nodes = this.architectureSourceNodes
+      if (state.activeComponentId) {
+        const activeIds = this.activeComponentNodeIds
+        if (activeIds) nodes = nodes.filter(node => activeIds.has(node.id))
+      } else if (this.shouldUseComponentLanding && !state.showUnlinkedResources) {
+        const unlinked = this.componentSummaries.find(component => component.id === UNLINKED_COMPONENT_ID)
+        if (unlinked) {
+          const unlinkedIds = new Set(unlinked.nodeIds)
+          nodes = nodes.filter(node => !unlinkedIds.has(node.id))
+        }
+      }
+      return nodes
+    },
+
+    graphEdges(state): StackMapEdge[] {
+      if (state.viewMode === 'organization') return this.organizationEdges
+      if (state.viewMode === 'components') return []
+      if (state.viewMode === 'raw') return this.rawSourceEdges
+
+      let edges = this.architectureSourceEdges
+      if (state.activeComponentId) {
+        const activeIds = this.activeComponentNodeIds
+        if (activeIds) edges = edges.filter(edge => activeIds.has(edge.source) && activeIds.has(edge.target))
+      } else if (this.shouldUseComponentLanding && !state.showUnlinkedResources) {
+        const unlinked = this.componentSummaries.find(component => component.id === UNLINKED_COMPONENT_ID)
+        if (unlinked) {
+          const unlinkedIds = new Set(unlinked.nodeIds)
+          edges = edges.filter(edge => !unlinkedIds.has(edge.source) && !unlinkedIds.has(edge.target))
+        }
+      }
+      return edges
+    },
+
     graphGroups(state): StackMapGroup[] {
       if (state.viewMode === 'organization') return this.organizationGroups
-      if (!state.activeAccountId) return state.groups
-
       const nodesById = new Map(state.nodes.map(node => [node.id, node]))
-      return state.groups.filter(group => groupTouchesAccount(group, nodesById, state.activeAccountId as string))
+      const visibleNodeIds = new Set(this.graphNodes.map(node => node.id))
+      let groups = !state.activeAccountId
+        ? state.groups
+        : state.groups.filter(group => groupTouchesAccount(group, nodesById, state.activeAccountId as string))
+
+      groups = groups
+        .map(group => ({
+          ...group,
+          children: group.children.filter(child => visibleNodeIds.has(child)),
+        }))
+        .filter(group => group.children.length > 0)
+
+      if (state.viewMode === 'architecture' && state.collapseNetworkScaffolding) {
+        groups = groups.filter(group => {
+          if (!['vpc', 'subnet'].includes(group.group_type)) return true
+          return group.children.some(childId => {
+            const node = nodesById.get(childId)
+            if (!node) return false
+            if (isHelperNode(node)) return false
+            return node.category !== 'network' && !NETWORK_HEAVY_RESOURCE_TYPES.has(node.resource_type)
+          })
+        })
+      }
+
+      return groups
     },
 
     organizationTree(): OrgTreeItem[] {
@@ -736,8 +1223,12 @@ export const useGraphStore = defineStore('graph', {
       if (!state.activeAccountId) return []
       const accountNode = this.organizationNodes.find(node => node.metadata?.account_id === state.activeAccountId)
       const path = String(accountNode?.metadata?.org_path || '').trim()
-      if (!path) return [accountNode?.name || state.activeAccountId]
-      return path.split('/').filter(Boolean).concat(accountNode?.name || [])
+      const breadcrumb = !path ? [accountNode?.name || state.activeAccountId] : path.split('/').filter(Boolean).concat(accountNode?.name || [])
+      if (state.activeComponentId) {
+        const component = this.activeComponentSummary
+        if (component) breadcrumb.push(component.name)
+      }
+      return breadcrumb
     },
 
     visibleNodes(state): StackMapNode[] {
@@ -790,6 +1281,15 @@ export const useGraphStore = defineStore('graph', {
         this.diffSlider = 0.5
       }
 
+      this.activeComponentId = null
+      if (this.metadata?.source_type === 'aws_live' && this.metadata?.scan_mode === 'organization' && this.hasOrganizationData) {
+        this.viewMode = 'organization'
+      } else if (this.shouldUseComponentLanding) {
+        this.viewMode = 'components'
+      } else {
+        this.viewMode = 'architecture'
+      }
+
       this.loaded = true
     },
 
@@ -838,20 +1338,24 @@ export const useGraphStore = defineStore('graph', {
       this.searchQuery = query
     },
 
-    setViewMode(mode: 'architecture' | 'raw' | 'organization') {
+    setViewMode(mode: 'architecture' | 'raw' | 'organization' | 'components') {
       this.viewMode = mode
       if (mode === 'architecture' && this.selectedNodeId) {
         const parent = this.helperParentMap.get(this.selectedNodeId)
         if (parent) this.selectedNodeId = parent
       }
-      if (mode === 'organization') {
+      if (mode === 'organization' || mode === 'components') {
         this.selectedNodeId = null
+      }
+      if (mode !== 'architecture') {
+        this.activeComponentId = null
       }
     },
 
     setActiveAccount(accountId: string | null) {
       this.activeAccountId = accountId
       this.activeOrgGroupId = null
+      this.activeComponentId = null
       this.selectedNodeId = null
       this.hopLimit = 0
     },
@@ -859,7 +1363,8 @@ export const useGraphStore = defineStore('graph', {
     enterAccountArchitecture(accountId: string) {
       this.activeAccountId = accountId
       this.activeOrgGroupId = null
-      this.viewMode = 'architecture'
+      this.activeComponentId = null
+      this.viewMode = this.shouldUseComponentLanding ? 'components' : 'architecture'
       this.selectedNodeId = null
       this.hopLimit = 0
     },
@@ -873,6 +1378,39 @@ export const useGraphStore = defineStore('graph', {
       this.showCrossAccountEdges = show
     },
 
+    openComponent(componentId: string) {
+      this.activeComponentId = componentId
+      this.viewMode = 'architecture'
+      this.selectedNodeId = null
+      this.hopLimit = 0
+    },
+
+    returnToComponents() {
+      this.activeComponentId = null
+      this.selectedNodeId = null
+      this.hopLimit = 0
+      this.viewMode = 'components'
+    },
+
+    focusSelectedNodeComponent() {
+      if (!this.selectedNodeId) return
+      const component = this.componentSummaries.find(summary => summary.nodeIds.includes(this.selectedNodeId as string))
+      if (!component) return
+      this.openComponent(component.id)
+    },
+
+    setShowUnlinkedResources(show: boolean) {
+      this.showUnlinkedResources = show
+    },
+
+    setShowWeaklyLinkedComponents(show: boolean) {
+      this.showWeaklyLinkedComponents = show
+    },
+
+    setCollapseNetworkScaffolding(show: boolean) {
+      this.collapseNetworkScaffolding = show
+    },
+
     resetFilters() {
       for (const category of Object.keys(this.categoryFilters)) {
         this.categoryFilters[category] = true
@@ -882,6 +1420,10 @@ export const useGraphStore = defineStore('graph', {
       this.searchQuery = ''
       this.activeAccountId = null
       this.activeOrgGroupId = null
+      this.activeComponentId = null
+      this.showUnlinkedResources = true
+      this.showWeaklyLinkedComponents = false
+      this.collapseNetworkScaffolding = true
       this.showCrossAccountEdges = true
     },
   },

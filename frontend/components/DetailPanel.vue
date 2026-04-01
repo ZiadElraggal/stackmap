@@ -72,6 +72,18 @@
       </div>
 
       <div class="p-4 border-b border-white/10">
+        <div v-if="componentLabel" class="mb-3 flex items-center justify-between rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2">
+          <div>
+            <div class="text-[10px] uppercase tracking-widest text-gray-600">Component</div>
+            <div class="mt-1 text-xs font-mono text-gray-300">{{ componentLabel }}</div>
+          </div>
+          <button
+            class="rounded-md border border-cyan-400/20 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-mono text-cyan-300 transition hover:bg-cyan-500/15"
+            @click="store.focusSelectedNodeComponent()"
+          >
+            Focus component
+          </button>
+        </div>
         <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">Properties</h3>
         <dl>
           <div
@@ -242,6 +254,11 @@ const rawJsonText = computed(() => {
   const pretty = JSON.stringify(normalizeEmbeddedJson(node.value.properties), null, 2)
   // Keep raw viewer human-readable even when upstream stores escaped newline text.
   return pretty.replace(/\\n/g, '\n')
+})
+const componentLabel = computed(() => {
+  if (!node.value) return null
+  const component = store.componentSummaries.find(summary => summary.nodeIds.includes(node.value!.id))
+  return component ? component.name.replace(/-/g, ' ') : null
 })
 
 const SKIP_KEYS = new Set([

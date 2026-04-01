@@ -21,6 +21,14 @@
         <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">View</h3>
         <div class="inline-flex rounded border border-white/10 overflow-hidden text-xs">
           <button
+            v-if="store.shouldUseComponentLanding || store.activeAccountId"
+            class="px-2 py-1 transition"
+            :class="store.viewMode === 'components' ? 'bg-blue-500/20 text-blue-400' : 'bg-transparent text-gray-400 hover:bg-white/5'"
+            @click="store.setViewMode('components')"
+          >
+            Components
+          </button>
+          <button
             class="px-2 py-1 transition"
             :class="store.viewMode === 'architecture' ? 'bg-blue-500/20 text-blue-400' : 'bg-transparent text-gray-400 hover:bg-white/5'"
             @click="store.setViewMode('architecture')"
@@ -201,6 +209,39 @@
         </button>
       </section>
 
+      <section v-if="store.shouldUseComponentLanding || store.activeComponentId" class="py-4 border-b border-white/5">
+        <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">Components</h3>
+        <div class="space-y-2">
+          <button
+            class="w-full flex items-center justify-between text-xs rounded px-2 py-1 transition hover:bg-white/5"
+            @click="store.setShowUnlinkedResources(!store.showUnlinkedResources)"
+          >
+            <span class="text-gray-300">Show unlinked resources</span>
+            <span class="toggle" :class="{ on: store.showUnlinkedResources }" style="--toggle-color: #38bdf8">
+              <span class="knob" />
+            </span>
+          </button>
+          <button
+            class="w-full flex items-center justify-between text-xs rounded px-2 py-1 transition hover:bg-white/5"
+            @click="store.setShowWeaklyLinkedComponents(!store.showWeaklyLinkedComponents)"
+          >
+            <span class="text-gray-300">Show weakly linked cards</span>
+            <span class="toggle" :class="{ on: store.showWeaklyLinkedComponents }" style="--toggle-color: #f59e0b">
+              <span class="knob" />
+            </span>
+          </button>
+          <button
+            class="w-full flex items-center justify-between text-xs rounded px-2 py-1 transition hover:bg-white/5"
+            @click="store.setCollapseNetworkScaffolding(!store.collapseNetworkScaffolding)"
+          >
+            <span class="text-gray-300">Collapse network scaffolding</span>
+            <span class="toggle" :class="{ on: store.collapseNetworkScaffolding }" style="--toggle-color: #818cf8">
+              <span class="knob" />
+            </span>
+          </button>
+        </div>
+      </section>
+
       <section class="pt-4">
         <button
           class="w-full text-xs text-gray-500 hover:text-gray-300 border border-white/[0.08] rounded-md px-2 py-1.5 transition-all hover:bg-white/[0.03] active:scale-[0.98]"
@@ -225,7 +266,8 @@ const sliderRef = ref<SVGElement>()
 
 const categories = computed(() => {
   const counts: Record<string, number> = {}
-  for (const n of store.graphNodes) {
+  const sourceNodes = store.viewMode === 'components' ? store.architectureSourceNodes : store.graphNodes
+  for (const n of sourceNodes) {
     counts[n.category] = (counts[n.category] || 0) + 1
   }
   return Object.entries(counts)
@@ -320,8 +362,18 @@ function resetFilters() {
 }
 
 function clearOrganizationScope() {
+  store.activeComponentId = null
   store.setActiveOrgGroup(null)
   store.setActiveAccount(null)
+  if (store.hasOrganizationData && store.metadata?.scan_mode === 'organization') {
+    store.setViewMode('organization')
+    return
+  }
+  if (store.shouldUseComponentLanding) {
+    store.setViewMode('components')
+    return
+  }
+  store.setViewMode('architecture')
 }
 
 function onOrgTreeClick(item: { id: string; account_id?: string }) {
