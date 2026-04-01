@@ -77,6 +77,7 @@ export function getNodeProminence(node: StackMapNode): NodeProminence {
 }
 
 export function getNodeWidth(node: StackMapNode): number {
+  if (node.position_hint?.view_kind === 'account_summary') return 220
   const prominence = getNodeProminence(node)
   if (prominence === 'primary') {
     return Math.max(200, Math.min(280, node.name.length * 8.5 + 80))
@@ -88,6 +89,7 @@ export function getNodeWidth(node: StackMapNode): number {
 }
 
 export function getNodeHeight(node: StackMapNode): number {
+  if (node.position_hint?.view_kind === 'account_summary') return 84
   const prominence = getNodeProminence(node)
   if (prominence === 'primary') return 58
   if (prominence === 'secondary') return 46
