@@ -16,7 +16,8 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from stackmap.aws_live import AWSLiveScanner, build_policy_document
+from stackmap.aws_live import AWSLiveScanner, build_policy_document, build_stackmap_role_template
+from stackmap.aws_live.org_setup import print_setup_instructions
 from stackmap.organizations import build_org_document_from_aws, load_organization_document
 from stackmap.parsers.base import BaseParser, StackMapIR
 from stackmap.parsers.registry import (
@@ -653,6 +654,55 @@ def aws_policy(
     console.print_json(json.dumps(build_policy_document(normalized)))
 
 
+@app.command("setup-org-role")
+def setup_org_role(
+    management_account_id: str = typer.Option(
+        ..., "--management-account", help="Your AWS management (root) account ID"
+    ),
+    role_name: str = typer.Option("StackMapReadOnly", help="Name for the read-only role"),
+    service_set: str = typer.Option("broad", help="Policy breadth: core or broad"),
+    external_id: str | None = typer.Option(None, help="Optional STS external ID for extra security"),
+    output: str = typer.Option("stackmap-role.cfn.json", help="Output path for CloudFormation template"),
+    show_instructions: bool = typer.Option(True, "--instructions/--no-instructions", help="Print deployment instructions"),
+) -> None:
+    """Generate a CloudFormation template for the StackMap org-scan read-only role.
+
+    Creates a minimal IAM role with ONLY read permissions (Describe*, List*, Get*).
+    Deploy via CloudFormation StackSets to enable org-wide scanning.
+    """
+    if service_set.lower() not in {"core", "broad"}:
+        console.print("[red]Error:[/red] --service-set must be 'core' or 'broad'.")
+        raise typer.Exit(1)
+
+    template = build_stackmap_role_template(
+        role_name=role_name,
+        management_account_id=management_account_id,
+        service_set=service_set.lower(),
+        external_id=external_id,
+    )
+
+    out_path = Path(output)
+    out_path.write_text(json.dumps(template, indent=2))
+    console.print(f"[green]✓[/green] CloudFormation template written to: {output}")
+    console.print()
+    console.print("[bold]What this template creates:[/bold]")
+    console.print(f"  - IAM role: [cyan]{role_name}[/cyan]")
+    console.print(f"  - Trusts: [cyan]{management_account_id}[/cyan] (your management account only)")
+    console.print(f"  - Permissions: [cyan]{service_set}[/cyan] read-only ({len(template['Resources']['StackMapReadOnlyRole']['Properties']['Policies'][0]['PolicyDocument']['Statement'][0]['Action'])} actions)")
+    console.print("  - Write/Delete/Modify: [green]NONE[/green]")
+    if external_id:
+        console.print(f"  - External ID: [cyan]{external_id}[/cyan]")
+    console.print()
+    console.print("[dim]Review the template before deploying. All permissions are read-only.[/dim]")
+
+    if show_instructions:
+        console.print(print_setup_instructions(
+            management_account_id=management_account_id,
+            role_name=role_name,
+            template_path=output,
+        ))
+
+
 @app.command("scan-aws")
 def scan_aws(
     profile: str | None = typer.Option(None, help="AWS profile name"),
@@ -668,6 +718,7 @@ def scan_aws(
     org_file: str | None = typer.Option(None, help="Optional normalized AWS Organizations JSON export"),
     org_scan: bool = typer.Option(False, help="Scan all accounts from the provided org file"),
     role_name: str = typer.Option("StackMapReadOnly", help="Role name to assume during org scans"),
+    try_current_creds: bool = typer.Option(False, "--try-current-creds", help="Fall back to current credentials if assume-role fails (useful for management account)"),
     cache_dir: str | None = typer.Option(None, help="Cache directory for raw AWS API responses"),
     no_cache: bool = typer.Option(False, help="Disable response caching"),
     serve_after: bool = typer.Option(False, "--serve", help="Open the interactive viewer after scanning"),
@@ -698,6 +749,7 @@ def scan_aws(
         org_file=org_file,
         org_scan=org_scan,
         role_name=role_name,
+        try_current_creds=try_current_creds,
         cache_dir=cache_dir,
         no_cache=no_cache,
         partial_write_path=output if output_format == "json" and not dry_run else None,
@@ -754,15 +806,76 @@ def scan_aws(
     console.print()
     console.print(table)
 
+    # Per-service resource count + denied warnings
     warnings = ir.metadata.get("warnings", [])
     errors = ir.metadata.get("errors", [])
-    if warnings:
+    denied_services: set[str] = set()
+    for w in warnings:
+        if "denied:" in w:
+            # Format: "account:region:service.operation denied: code"
+            parts = w.split(":")
+            if len(parts) >= 3:
+                denied_services.add(parts[2].split(".")[0])
+
+    from collections import Counter
+    type_counts: Counter[str] = Counter()
+    for node in ir.nodes:
+        # Map resource_type to service name for display
+        rt = node.resource_type
+        if rt.startswith("aws_"):
+            rt = rt[4:]
+        service_label = rt.split("_")[0] if "_" in rt else rt
+        type_counts[service_label] += 1
+
+    selected = ir.metadata.get("selected_services", [])
+    if selected:
+        svc_table = Table(title="Per-Service Scan Summary", show_header=True)
+        svc_table.add_column("Service", style="bold")
+        svc_table.add_column("Resources", style="cyan", justify="right")
+        svc_table.add_column("Status")
+        # Map service names to approximate resource type prefixes
+        _SERVICE_TYPE_PREFIXES: dict[str, list[str]] = {
+            "ec2": ["vpc", "subnet", "security", "instance"],
+            "elbv2": ["lb"],
+            "lambda": ["lambda"],
+            "apigateway": ["api"],
+            "ecs": ["ecs"],
+            "rds": ["db", "rds"],
+            "dynamodb": ["dynamodb"],
+            "s3": ["s3"],
+            "cloudfront": ["cloudfront"],
+            "route53": ["route53"],
+            "sqs": ["sqs"],
+            "sns": ["sns"],
+            "iam": ["iam"],
+            "elasticache": ["elasticache"],
+            "secretsmanager": ["secretsmanager"],
+            "eventbridge": ["cloudwatch"],
+            "cognito": ["cognito"],
+            "stepfunctions": ["sfn"],
+            "ecr": ["ecr"],
+            "appsync": ["appsync"],
+        }
+        for svc in selected:
+            prefixes = _SERVICE_TYPE_PREFIXES.get(svc, [svc])
+            count = sum(c for label, c in type_counts.items() if any(label.startswith(p) for p in prefixes))
+            if svc in denied_services:
+                status = "[red]ACCESS DENIED[/red]"
+            elif count == 0:
+                status = "[dim]no resources found[/dim]"
+            else:
+                status = "[green]OK[/green]"
+            svc_table.add_row(svc, str(count), status)
         console.print()
-        console.print("[yellow]Warnings:[/yellow]")
-        for warning in warnings[:15]:
-            console.print(f"- {warning}")
-        if len(warnings) > 15:
-            console.print(f"- ... and {len(warnings) - 15} more")
+        console.print(svc_table)
+
+    if denied_services:
+        console.print()
+        console.print(
+            f"[yellow]Warning:[/yellow] {len(denied_services)} service(s) returned AccessDenied. "
+            "Run [bold]stackmap aws-policy[/bold] to generate the required IAM policy."
+        )
+
     if errors:
         console.print()
         console.print("[yellow]Partial failures:[/yellow]")
