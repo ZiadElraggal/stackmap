@@ -1,0 +1,2679 @@
+{
+  "metadata": {
+    "source_type": "aws_live",
+    "source_kind": "live_scan",
+    "scan_mode": "single_account",
+    "account_id": "992382509624",
+    "account_name": null,
+    "regions": [
+      "us-east-1"
+    ],
+    "selected_services": [
+      "apigateway",
+      "ec2",
+      "lambda",
+      "sns",
+      "sqs"
+    ],
+    "auth_mode": "profile 'meso-ziad' via sso",
+    "warnings": [],
+    "errors": [],
+    "dry_run": false,
+    "api_calls": 16,
+    "planned_api_calls": [
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigateway",
+        "operation": "get_rest_apis",
+        "params": {}
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "apigatewayv2",
+        "operation": "get_apis",
+        "params": {}
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "ec2",
+        "operation": "describe_vpcs",
+        "params": {}
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "ec2",
+        "operation": "describe_subnets",
+        "params": {}
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "ec2",
+        "operation": "describe_security_groups",
+        "params": {}
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "ec2",
+        "operation": "describe_instances",
+        "params": {}
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "sns",
+        "operation": "get_topic_attributes",
+        "params": {
+          "TopicArn": "arn:aws:sns:us-east-1:992382509624:config-topic-992382509624"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "sns",
+        "operation": "get_topic_attributes",
+        "params": {
+          "TopicArn": "arn:aws:sns:us-east-1:992382509624:research-provenance-textract-complete"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "sns",
+        "operation": "get_topic_attributes",
+        "params": {
+          "TopicArn": "arn:aws:sns:us-east-1:992382509624:six-pillars-events-SNSTopic6pillars-Vx6xLb3ofUHe"
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "sqs",
+        "operation": "list_queues",
+        "params": {}
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "sqs",
+        "operation": "get_queue_attributes",
+        "params": {
+          "QueueUrl": "https://sqs.us-east-1.amazonaws.com/992382509624/MESO_SimulationJobQueue",
+          "AttributeNames": [
+            "All"
+          ]
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "sqs",
+        "operation": "get_queue_attributes",
+        "params": {
+          "QueueUrl": "https://sqs.us-east-1.amazonaws.com/992382509624/meso-ingestion-dlq",
+          "AttributeNames": [
+            "All"
+          ]
+        }
+      },
+      {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "service": "sqs",
+        "operation": "get_queue_attributes",
+        "params": {
+          "QueueUrl": "https://sqs.us-east-1.amazonaws.com/992382509624/meso-ingestion-queue",
+          "AttributeNames": [
+            "All"
+          ]
+        }
+      }
+    ],
+    "organization": null,
+    "organization_overlay": {
+      "mapped_account_ids": [
+        "992382509624"
+      ],
+      "unmapped_account_ids": [],
+      "unscanned_account_ids": []
+    },
+    "scanned_at": "2026-04-01T02:45:55.499014+00:00",
+    "source_path": "stackmap-aws-output.json"
+  },
+  "nodes": [
+    {
+      "id": "aws:992382509624:us-east-1:aws_api_gateway_rest_api:68kkd3xobi",
+      "name": "sam-demo",
+      "resource_type": "aws_api_gateway_rest_api",
+      "provider": "aws",
+      "category": "integration",
+      "properties": {
+        "id": "68kkd3xobi",
+        "arn": "arn:aws:execute-api:us-east-1:992382509624:68kkd3xobi",
+        "name": "sam-demo",
+        "description": null
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_api_gateway_rest_api:h88z2rcc5l",
+      "name": "meso-sam",
+      "resource_type": "aws_api_gateway_rest_api",
+      "provider": "aws",
+      "category": "integration",
+      "properties": {
+        "id": "h88z2rcc5l",
+        "arn": "arn:aws:execute-api:us-east-1:992382509624:h88z2rcc5l",
+        "name": "meso-sam",
+        "description": null
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_api_gateway_rest_api:o1bmsr80rf",
+      "name": "research-provenance-api-dev",
+      "resource_type": "aws_api_gateway_rest_api",
+      "provider": "aws",
+      "category": "integration",
+      "properties": {
+        "id": "o1bmsr80rf",
+        "arn": "arn:aws:execute-api:us-east-1:992382509624:o1bmsr80rf",
+        "name": "research-provenance-api-dev",
+        "description": null
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_api_gateway_rest_api:xyr3ozs4gb",
+      "name": "process",
+      "resource_type": "aws_api_gateway_rest_api",
+      "provider": "aws",
+      "category": "integration",
+      "properties": {
+        "id": "xyr3ozs4gb",
+        "arn": "arn:aws:execute-api:us-east-1:992382509624:xyr3ozs4gb",
+        "name": "process",
+        "description": null
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b",
+      "name": "MESO-vpc",
+      "resource_type": "aws_vpc",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "vpc-07ce3cdd64f64e75b",
+        "arn": "arn:aws:ec2:us-east-1:992382509624:vpc/vpc-07ce3cdd64f64e75b",
+        "cidr_block": "10.0.96.0/20",
+        "state": "available"
+      },
+      "tags": {
+        "Name": "MESO-vpc"
+      },
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 3,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_vpc:vpc-039f12c6acae93682",
+      "name": "vpc-039f12c6acae93682",
+      "resource_type": "aws_vpc",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "vpc-039f12c6acae93682",
+        "arn": "arn:aws:ec2:us-east-1:992382509624:vpc/vpc-039f12c6acae93682",
+        "cidr_block": "172.31.0.0/16",
+        "state": "available"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 3,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_subnet:subnet-09303c42f648140ac",
+      "name": "subnet-09303c42f648140ac",
+      "resource_type": "aws_subnet",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "subnet-09303c42f648140ac",
+        "arn": "arn:aws:ec2:us-east-1:992382509624:subnet/subnet-09303c42f648140ac",
+        "vpc_id": "vpc-039f12c6acae93682",
+        "cidr_block": "172.31.64.0/20",
+        "availability_zone": "us-east-1f"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_subnet:subnet-00eb4a84819e001d7",
+      "name": "subnet-00eb4a84819e001d7",
+      "resource_type": "aws_subnet",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "subnet-00eb4a84819e001d7",
+        "arn": "arn:aws:ec2:us-east-1:992382509624:subnet/subnet-00eb4a84819e001d7",
+        "vpc_id": "vpc-039f12c6acae93682",
+        "cidr_block": "172.31.80.0/20",
+        "availability_zone": "us-east-1c"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_subnet:subnet-0e68d5a0c09774b23",
+      "name": "subnet-0e68d5a0c09774b23",
+      "resource_type": "aws_subnet",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "subnet-0e68d5a0c09774b23",
+        "arn": "arn:aws:ec2:us-east-1:992382509624:subnet/subnet-0e68d5a0c09774b23",
+        "vpc_id": "vpc-039f12c6acae93682",
+        "cidr_block": "172.31.48.0/20",
+        "availability_zone": "us-east-1e"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_subnet:subnet-05a1d15b484a26718",
+      "name": "MESO-subnet-public1-us-east-1a",
+      "resource_type": "aws_subnet",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "subnet-05a1d15b484a26718",
+        "arn": "arn:aws:ec2:us-east-1:992382509624:subnet/subnet-05a1d15b484a26718",
+        "vpc_id": "vpc-07ce3cdd64f64e75b",
+        "cidr_block": "10.0.96.0/24",
+        "availability_zone": "us-east-1a"
+      },
+      "tags": {
+        "Name": "MESO-subnet-public1-us-east-1a"
+      },
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_subnet:subnet-085553ddcb0d5ec20",
+      "name": "MESO-subnet-private2-us-east-1b",
+      "resource_type": "aws_subnet",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "subnet-085553ddcb0d5ec20",
+        "arn": "arn:aws:ec2:us-east-1:992382509624:subnet/subnet-085553ddcb0d5ec20",
+        "vpc_id": "vpc-07ce3cdd64f64e75b",
+        "cidr_block": "10.0.105.0/24",
+        "availability_zone": "us-east-1b"
+      },
+      "tags": {
+        "Name": "MESO-subnet-private2-us-east-1b"
+      },
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_subnet:subnet-0c63d0ef0e327bfd6",
+      "name": "subnet-0c63d0ef0e327bfd6",
+      "resource_type": "aws_subnet",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "subnet-0c63d0ef0e327bfd6",
+        "arn": "arn:aws:ec2:us-east-1:992382509624:subnet/subnet-0c63d0ef0e327bfd6",
+        "vpc_id": "vpc-039f12c6acae93682",
+        "cidr_block": "172.31.32.0/20",
+        "availability_zone": "us-east-1a"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_subnet:subnet-0e7cfab0ad146ed02",
+      "name": "subnet-0e7cfab0ad146ed02",
+      "resource_type": "aws_subnet",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "subnet-0e7cfab0ad146ed02",
+        "arn": "arn:aws:ec2:us-east-1:992382509624:subnet/subnet-0e7cfab0ad146ed02",
+        "vpc_id": "vpc-039f12c6acae93682",
+        "cidr_block": "172.31.0.0/20",
+        "availability_zone": "us-east-1b"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_subnet:subnet-061e26a72335d70f3",
+      "name": "subnet-061e26a72335d70f3",
+      "resource_type": "aws_subnet",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "subnet-061e26a72335d70f3",
+        "arn": "arn:aws:ec2:us-east-1:992382509624:subnet/subnet-061e26a72335d70f3",
+        "vpc_id": "vpc-039f12c6acae93682",
+        "cidr_block": "172.31.16.0/20",
+        "availability_zone": "us-east-1d"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_subnet:subnet-0437c26e4112eb822",
+      "name": "MESO-subnet-public2-us-east-1b",
+      "resource_type": "aws_subnet",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "subnet-0437c26e4112eb822",
+        "arn": "arn:aws:ec2:us-east-1:992382509624:subnet/subnet-0437c26e4112eb822",
+        "vpc_id": "vpc-07ce3cdd64f64e75b",
+        "cidr_block": "10.0.97.0/24",
+        "availability_zone": "us-east-1b"
+      },
+      "tags": {
+        "Name": "MESO-subnet-public2-us-east-1b"
+      },
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_subnet:subnet-07dfbfd029af608cc",
+      "name": "MESO-subnet-private1-us-east-1a",
+      "resource_type": "aws_subnet",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "subnet-07dfbfd029af608cc",
+        "arn": "arn:aws:ec2:us-east-1:992382509624:subnet/subnet-07dfbfd029af608cc",
+        "vpc_id": "vpc-07ce3cdd64f64e75b",
+        "cidr_block": "10.0.104.0/24",
+        "availability_zone": "us-east-1a"
+      },
+      "tags": {
+        "Name": "MESO-subnet-private1-us-east-1a"
+      },
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_security_group:sg-0183b56eb4815699f",
+      "name": "CloudFrontSG-awseb--AWSEB-0jSgYTQs1eXl-ed4c0ed8-138c-4b3d-9355-32149b750862",
+      "resource_type": "aws_security_group",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "sg-0183b56eb4815699f",
+        "arn": "arn:aws:ec2:us-east-1:992382509624:security-group/sg-0183b56eb4815699f",
+        "vpc_id": "vpc-07ce3cdd64f64e75b",
+        "description": "Allow traffic from CloudFront"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_security_group:sg-0025b418cc39a11d9",
+      "name": "CloudFrontSG-awseb--AWSEB-rT5nUO5Fiw9E-9c7f5bee-65f2-44e6-90e0-9aa727a4eb6c",
+      "resource_type": "aws_security_group",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "sg-0025b418cc39a11d9",
+        "arn": "arn:aws:ec2:us-east-1:992382509624:security-group/sg-0025b418cc39a11d9",
+        "vpc_id": "vpc-07ce3cdd64f64e75b",
+        "description": "Allow traffic from CloudFront"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_security_group:sg-0dc1fee4d66ebd46e",
+      "name": "awseb-e-bttjdqmwpf-stack-AWSEBSecurityGroup-oMczMdlI7lqw",
+      "resource_type": "aws_security_group",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "sg-0dc1fee4d66ebd46e",
+        "arn": "arn:aws:ec2:us-east-1:992382509624:security-group/sg-0dc1fee4d66ebd46e",
+        "vpc_id": "vpc-07ce3cdd64f64e75b",
+        "description": "VPC Security Group"
+      },
+      "tags": {
+        "Name": "Meso-QA-env",
+        "elasticbeanstalk:environment-id": "e-bttjdqmwpf",
+        "aws:cloudformation:stack-name": "awseb-e-bttjdqmwpf-stack",
+        "aws:cloudformation:logical-id": "AWSEBSecurityGroup",
+        "aws:cloudformation:stack-id": "arn:aws:cloudformation:us-east-1:992382509624:stack/awseb-e-bttjdqmwpf-stack/ae6294d0-3599-11f0-b4f1-0affce58d717",
+        "elasticbeanstalk:environment-name": "Meso-QA-env"
+      },
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_security_group:sg-029b167caa25db0fd",
+      "name": "awseb-e-pxmuram4tz-stack-AWSEBSecurityGroup-AOJumr1h218D",
+      "resource_type": "aws_security_group",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "sg-029b167caa25db0fd",
+        "arn": "arn:aws:ec2:us-east-1:992382509624:security-group/sg-029b167caa25db0fd",
+        "vpc_id": "vpc-07ce3cdd64f64e75b",
+        "description": "VPC Security Group"
+      },
+      "tags": {
+        "aws:cloudformation:logical-id": "AWSEBSecurityGroup",
+        "aws:cloudformation:stack-name": "awseb-e-pxmuram4tz-stack",
+        "aws:cloudformation:stack-id": "arn:aws:cloudformation:us-east-1:992382509624:stack/awseb-e-pxmuram4tz-stack/d2ee06d0-26dc-11ef-8d78-0afff2063e1f",
+        "elasticbeanstalk:environment-name": "Meso-env",
+        "elasticbeanstalk:environment-id": "e-pxmuram4tz",
+        "Name": "Meso-env"
+      },
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_security_group:sg-00754bcba03f63104",
+      "name": "awseb-e-pxmuram4tz-stack-AWSEBLoadBalancerSecurityGroup-CD5S0N3G4Nvc",
+      "resource_type": "aws_security_group",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "sg-00754bcba03f63104",
+        "arn": "arn:aws:ec2:us-east-1:992382509624:security-group/sg-00754bcba03f63104",
+        "vpc_id": "vpc-07ce3cdd64f64e75b",
+        "description": "Load Balancer Security Group"
+      },
+      "tags": {
+        "aws:cloudformation:stack-id": "arn:aws:cloudformation:us-east-1:992382509624:stack/awseb-e-pxmuram4tz-stack/d2ee06d0-26dc-11ef-8d78-0afff2063e1f",
+        "elasticbeanstalk:environment-id": "e-pxmuram4tz",
+        "elasticbeanstalk:environment-name": "Meso-env",
+        "aws:cloudformation:stack-name": "awseb-e-pxmuram4tz-stack",
+        "aws:cloudformation:logical-id": "AWSEBLoadBalancerSecurityGroup",
+        "Name": "Meso-env"
+      },
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_security_group:sg-082651a05033c207c",
+      "name": "default",
+      "resource_type": "aws_security_group",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "sg-082651a05033c207c",
+        "arn": "arn:aws:ec2:us-east-1:992382509624:security-group/sg-082651a05033c207c",
+        "vpc_id": "vpc-07ce3cdd64f64e75b",
+        "description": "default VPC security group"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_security_group:sg-0aeb73fcacf055e0c",
+      "name": "awseb-e-bttjdqmwpf-stack-AWSEBLoadBalancerSecurityGroup-X70SyjnkEJ9b",
+      "resource_type": "aws_security_group",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "sg-0aeb73fcacf055e0c",
+        "arn": "arn:aws:ec2:us-east-1:992382509624:security-group/sg-0aeb73fcacf055e0c",
+        "vpc_id": "vpc-07ce3cdd64f64e75b",
+        "description": "Load Balancer Security Group"
+      },
+      "tags": {
+        "Name": "Meso-QA-env",
+        "aws:cloudformation:logical-id": "AWSEBLoadBalancerSecurityGroup",
+        "aws:cloudformation:stack-id": "arn:aws:cloudformation:us-east-1:992382509624:stack/awseb-e-bttjdqmwpf-stack/ae6294d0-3599-11f0-b4f1-0affce58d717",
+        "elasticbeanstalk:environment-name": "Meso-QA-env",
+        "aws:cloudformation:stack-name": "awseb-e-bttjdqmwpf-stack",
+        "elasticbeanstalk:environment-id": "e-bttjdqmwpf"
+      },
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_security_group:sg-007bb331f9da5b294",
+      "name": "meso_db",
+      "resource_type": "aws_security_group",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "sg-007bb331f9da5b294",
+        "arn": "arn:aws:ec2:us-east-1:992382509624:security-group/sg-007bb331f9da5b294",
+        "vpc_id": "vpc-07ce3cdd64f64e75b",
+        "description": "Created by RDS management console"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_security_group:sg-01114a7b50e4c6fb5",
+      "name": "meso_backend",
+      "resource_type": "aws_security_group",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "sg-01114a7b50e4c6fb5",
+        "arn": "arn:aws:ec2:us-east-1:992382509624:security-group/sg-01114a7b50e4c6fb5",
+        "vpc_id": "vpc-07ce3cdd64f64e75b",
+        "description": "meso containers"
+      },
+      "tags": {
+        "aws:cloudformation:logical-id": "SecurityGroup",
+        "aws:cloudformation:stack-id": "arn:aws:cloudformation:us-east-1:992382509624:stack/ECS-Console-V2-Service-meso-meso-a3c416d2/7796f030-26c8-11ef-a7c8-0afff0d8fc69",
+        "aws:cloudformation:stack-name": "ECS-Console-V2-Service-meso-meso-a3c416d2"
+      },
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_security_group:sg-02aa45bdcf8126983",
+      "name": "meso_load_balancer",
+      "resource_type": "aws_security_group",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "sg-02aa45bdcf8126983",
+        "arn": "arn:aws:ec2:us-east-1:992382509624:security-group/sg-02aa45bdcf8126983",
+        "vpc_id": "vpc-07ce3cdd64f64e75b",
+        "description": "For meso load balancer"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_security_group:sg-06078e76a7d15e709",
+      "name": "default",
+      "resource_type": "aws_security_group",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "sg-06078e76a7d15e709",
+        "arn": "arn:aws:ec2:us-east-1:992382509624:security-group/sg-06078e76a7d15e709",
+        "vpc_id": "vpc-039f12c6acae93682",
+        "description": "default VPC security group"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_instance:i-0b61c3ddef5897273",
+      "name": "Meso-env",
+      "resource_type": "aws_instance",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "i-0b61c3ddef5897273",
+        "arn": "arn:aws:ec2:us-east-1:992382509624:instance/i-0b61c3ddef5897273",
+        "instance_type": "t4g.large",
+        "state": "running",
+        "vpc_id": "vpc-07ce3cdd64f64e75b",
+        "subnet_id": "subnet-085553ddcb0d5ec20",
+        "security_group_ids": [
+          "sg-029b167caa25db0fd"
+        ]
+      },
+      "tags": {
+        "elasticbeanstalk:environment-id": "e-pxmuram4tz",
+        "aws:cloudformation:logical-id": "AWSEBAutoScalingGroup",
+        "Name": "Meso-env",
+        "aws:cloudformation:stack-name": "awseb-e-pxmuram4tz-stack",
+        "aws:autoscaling:groupName": "awseb-e-pxmuram4tz-stack-AWSEBAutoScalingGroup-GY0E9xINYdFf",
+        "aws:cloudformation:stack-id": "arn:aws:cloudformation:us-east-1:992382509624:stack/awseb-e-pxmuram4tz-stack/d2ee06d0-26dc-11ef-8d78-0afff2063e1f",
+        "elasticbeanstalk:environment-name": "Meso-env"
+      },
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 2,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_instance:i-020c8b15c1df19545",
+      "name": "Meso-QA-env",
+      "resource_type": "aws_instance",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "i-020c8b15c1df19545",
+        "arn": "arn:aws:ec2:us-east-1:992382509624:instance/i-020c8b15c1df19545",
+        "instance_type": "t4g.large",
+        "state": "running",
+        "vpc_id": "vpc-07ce3cdd64f64e75b",
+        "subnet_id": "subnet-07dfbfd029af608cc",
+        "security_group_ids": [
+          "sg-0dc1fee4d66ebd46e"
+        ]
+      },
+      "tags": {
+        "aws:cloudformation:stack-id": "arn:aws:cloudformation:us-east-1:992382509624:stack/awseb-e-bttjdqmwpf-stack/ae6294d0-3599-11f0-b4f1-0affce58d717",
+        "aws:cloudformation:stack-name": "awseb-e-bttjdqmwpf-stack",
+        "elasticbeanstalk:environment-id": "e-bttjdqmwpf",
+        "aws:autoscaling:groupName": "awseb-e-bttjdqmwpf-stack-AWSEBAutoScalingGroup-0IkuWmpWtokC",
+        "elasticbeanstalk:environment-name": "Meso-QA-env",
+        "Name": "Meso-QA-env",
+        "aws:cloudformation:logical-id": "AWSEBAutoScalingGroup"
+      },
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 2,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:meso-dcaes-simulation",
+      "name": "meso-dcaes-simulation",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "meso-dcaes-simulation",
+        "function_name": "meso-dcaes-simulation",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:meso-dcaes-simulation",
+        "runtime": "python3.12",
+        "handler": "app.lambda_handler",
+        "role_arn": "arn:aws:iam::992382509624:role/meso-sam-DCAESSimulationFunctionRole-4qdOHRNnaZ2U",
+        "memory_size": 4096,
+        "timeout": 900,
+        "vpc_id": "",
+        "subnet_ids": [],
+        "security_group_ids": [],
+        "environment": {
+          "S3_BUCKET": "meso-simulation-result",
+          "MESO_ENV": "QA",
+          "APP_ENV": "",
+          "CACHE_DYNAMODB_TABLE_NAME": "meso-cache",
+          "DYNAMODB_ENDPOINT_URL": "",
+          "S3_ENDPOINT_URL": "",
+          "MINIO_ACCESS_KEY": "",
+          "DYNAMODB_TABLE_NAME": "meso-simulation-metadata",
+          "RIVER_METADATA_TABLE_NAME": "meso-river-metadata",
+          "MINIO_SECRET_KEY": "",
+          "LAMBDA_API_URL": "https://h88z2rcc5l.execute-api.us-east-1.amazonaws.com/Stage"
+        },
+        "last_modified": "2026-03-31T15:18:02.000+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:meso-hydroelectric-api",
+      "name": "meso-hydroelectric-api",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "meso-hydroelectric-api",
+        "function_name": "meso-hydroelectric-api",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:meso-hydroelectric-api",
+        "runtime": null,
+        "handler": null,
+        "role_arn": "arn:aws:iam::992382509624:role/meso-sam-HydroelectricApiFunctionRole-MiiwJdOjYn7Y",
+        "memory_size": 4096,
+        "timeout": 900,
+        "vpc_id": "",
+        "subnet_ids": [],
+        "security_group_ids": [],
+        "environment": {
+          "S3_BUCKET": "meso-climate-data-prod",
+          "MESO_ENV": "QA",
+          "APP_ENV": "",
+          "CACHE_DYNAMODB_TABLE_NAME": "meso-cache",
+          "DYNAMODB_ENDPOINT_URL": "",
+          "S3_ENDPOINT_URL": "",
+          "MINIO_ACCESS_KEY": "",
+          "DYNAMODB_TABLE_NAME": "meso-simulation-metadata",
+          "RIVER_METADATA_TABLE_NAME": "meso-river-metadata",
+          "MINIO_SECRET_KEY": "",
+          "LAMBDA_API_URL": "https://h88z2rcc5l.execute-api.us-east-1.amazonaws.com/Stage"
+        },
+        "last_modified": "2026-03-31T15:17:58.000+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:process-ACAESFunction-WjiXvBOp8b4e",
+      "name": "process-ACAESFunction-WjiXvBOp8b4e",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "process-ACAESFunction-WjiXvBOp8b4e",
+        "function_name": "process-ACAESFunction-WjiXvBOp8b4e",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:process-ACAESFunction-WjiXvBOp8b4e",
+        "runtime": "python3.13",
+        "handler": "app.lambda_handler",
+        "role_arn": "arn:aws:iam::992382509624:role/process-ACAESFunctionRole-jFbT6BcW6HLj",
+        "memory_size": 128,
+        "timeout": 3,
+        "vpc_id": "",
+        "subnet_ids": [],
+        "security_group_ids": [],
+        "environment": {},
+        "last_modified": "2025-06-17T18:10:40.000+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:manual-meso-input-resolver",
+      "name": "manual-meso-input-resolver",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "manual-meso-input-resolver",
+        "function_name": "manual-meso-input-resolver",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:manual-meso-input-resolver",
+        "runtime": "python3.14",
+        "handler": "lambda_function.lambda_handler",
+        "role_arn": "arn:aws:iam::992382509624:role/service-role/manual-meso-input-resolver-role-75nw891w",
+        "memory_size": 128,
+        "timeout": 300,
+        "vpc_id": null,
+        "subnet_ids": [],
+        "security_group_ids": [],
+        "environment": {},
+        "last_modified": "2026-03-16T15:19:27.000+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:meso-hydroelectric-simulation",
+      "name": "meso-hydroelectric-simulation",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "meso-hydroelectric-simulation",
+        "function_name": "meso-hydroelectric-simulation",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:meso-hydroelectric-simulation",
+        "runtime": "python3.12",
+        "handler": "app.lambda_handler",
+        "role_arn": "arn:aws:iam::992382509624:role/meso-sam-HydroelectricSimulationFunctionRole-nFQr31v4sK43",
+        "memory_size": 4096,
+        "timeout": 900,
+        "vpc_id": "",
+        "subnet_ids": [],
+        "security_group_ids": [],
+        "environment": {
+          "S3_BUCKET": "meso-simulation-result",
+          "MESO_ENV": "QA",
+          "APP_ENV": "",
+          "CACHE_DYNAMODB_TABLE_NAME": "meso-cache",
+          "DYNAMODB_ENDPOINT_URL": "",
+          "S3_ENDPOINT_URL": "",
+          "MINIO_ACCESS_KEY": "",
+          "DYNAMODB_TABLE_NAME": "meso-simulation-metadata",
+          "RIVER_METADATA_TABLE_NAME": "meso-river-metadata",
+          "MINIO_SECRET_KEY": "",
+          "LAMBDA_API_URL": "https://h88z2rcc5l.execute-api.us-east-1.amazonaws.com/Stage"
+        },
+        "last_modified": "2026-03-31T15:18:04.000+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:meso-data-source-comparison",
+      "name": "meso-data-source-comparison",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "meso-data-source-comparison",
+        "function_name": "meso-data-source-comparison",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:meso-data-source-comparison",
+        "runtime": "python3.12",
+        "handler": "app.lambda_handler",
+        "role_arn": "arn:aws:iam::992382509624:role/meso-sam-DataSourceComparisonFunctionRole-WaUx0AoYjM85",
+        "memory_size": 4096,
+        "timeout": 900,
+        "vpc_id": "",
+        "subnet_ids": [],
+        "security_group_ids": [],
+        "environment": {
+          "S3_BUCKET": "",
+          "MESO_ENV": "QA",
+          "APP_ENV": "",
+          "CACHE_DYNAMODB_TABLE_NAME": "meso-cache",
+          "DYNAMODB_ENDPOINT_URL": "",
+          "S3_ENDPOINT_URL": "",
+          "MINIO_ACCESS_KEY": "",
+          "DYNAMODB_TABLE_NAME": "meso-simulation-metadata",
+          "RIVER_METADATA_TABLE_NAME": "meso-river-metadata",
+          "MINIO_SECRET_KEY": "",
+          "LAMBDA_API_URL": "https://h88z2rcc5l.execute-api.us-east-1.amazonaws.com/Stage"
+        },
+        "last_modified": "2026-03-31T15:18:00.000+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:RDS_migration",
+      "name": "RDS_migration",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "RDS_migration",
+        "function_name": "RDS_migration",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:RDS_migration",
+        "runtime": "python3.12",
+        "handler": "lambda_function.lambda_handler",
+        "role_arn": "arn:aws:iam::992382509624:role/service-role/RDS_migration-role-2lhavs8u",
+        "memory_size": 10240,
+        "timeout": 900,
+        "vpc_id": "vpc-07ce3cdd64f64e75b",
+        "subnet_ids": [
+          "subnet-05a1d15b484a26718",
+          "subnet-07dfbfd029af608cc",
+          "subnet-085553ddcb0d5ec20",
+          "subnet-0437c26e4112eb822"
+        ],
+        "security_group_ids": [
+          "sg-007bb331f9da5b294",
+          "sg-01114a7b50e4c6fb5"
+        ],
+        "environment": {},
+        "last_modified": "2026-03-09T15:54:50.000+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:meso-solar-data-source-comparison",
+      "name": "meso-solar-data-source-comparison",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "meso-solar-data-source-comparison",
+        "function_name": "meso-solar-data-source-comparison",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:meso-solar-data-source-comparison",
+        "runtime": "python3.12",
+        "handler": "app.lambda_handler",
+        "role_arn": "arn:aws:iam::992382509624:role/meso-sam-SolarDataSourceComparisonFunctionRole-7EtrPFGYWEgq",
+        "memory_size": 4096,
+        "timeout": 900,
+        "vpc_id": "",
+        "subnet_ids": [],
+        "security_group_ids": [],
+        "environment": {
+          "S3_BUCKET": "",
+          "MESO_ENV": "QA",
+          "APP_ENV": "",
+          "CACHE_DYNAMODB_TABLE_NAME": "meso-cache",
+          "DYNAMODB_ENDPOINT_URL": "",
+          "S3_ENDPOINT_URL": "",
+          "MINIO_ACCESS_KEY": "",
+          "DYNAMODB_TABLE_NAME": "meso-simulation-metadata",
+          "RIVER_METADATA_TABLE_NAME": "meso-river-metadata",
+          "API_DATA_BUCKET": "meso-api-data",
+          "MINIO_SECRET_KEY": "",
+          "LAMBDA_API_URL": "https://h88z2rcc5l.execute-api.us-east-1.amazonaws.com/Stage"
+        },
+        "last_modified": "2026-03-31T15:18:04.000+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:meso-wind-layout-optimizer",
+      "name": "meso-wind-layout-optimizer",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "meso-wind-layout-optimizer",
+        "function_name": "meso-wind-layout-optimizer",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:meso-wind-layout-optimizer",
+        "runtime": "python3.12",
+        "handler": "app.lambda_handler",
+        "role_arn": "arn:aws:iam::992382509624:role/meso-sam-WindLayoutOptimizerFunctionRole-6JZvtQLqBtli",
+        "memory_size": 4096,
+        "timeout": 900,
+        "vpc_id": null,
+        "subnet_ids": [],
+        "security_group_ids": [],
+        "environment": {
+          "S3_BUCKET": "",
+          "MESO_ENV": "QA",
+          "APP_ENV": "",
+          "CACHE_DYNAMODB_TABLE_NAME": "meso-cache",
+          "DYNAMODB_ENDPOINT_URL": "",
+          "S3_ENDPOINT_URL": "",
+          "MINIO_ACCESS_KEY": "",
+          "DYNAMODB_TABLE_NAME": "meso-simulation-metadata",
+          "RIVER_METADATA_TABLE_NAME": "meso-river-metadata",
+          "MINIO_SECRET_KEY": "",
+          "LAMBDA_API_URL": "https://h88z2rcc5l.execute-api.us-east-1.amazonaws.com/Stage"
+        },
+        "last_modified": "2026-03-31T15:17:59.000+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:meso-wind-simulation",
+      "name": "meso-wind-simulation",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "meso-wind-simulation",
+        "function_name": "meso-wind-simulation",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:meso-wind-simulation",
+        "runtime": "python3.12",
+        "handler": "app.lambda_handler",
+        "role_arn": "arn:aws:iam::992382509624:role/meso-sam-WindSimulationFunctionRole-DNG18fzSUit7",
+        "memory_size": 4096,
+        "timeout": 900,
+        "vpc_id": "",
+        "subnet_ids": [],
+        "security_group_ids": [],
+        "environment": {
+          "S3_BUCKET": "meso-simulation-result",
+          "MESO_ENV": "QA",
+          "APP_ENV": "",
+          "CACHE_DYNAMODB_TABLE_NAME": "meso-cache",
+          "DYNAMODB_ENDPOINT_URL": "",
+          "S3_ENDPOINT_URL": "",
+          "MINIO_ACCESS_KEY": "",
+          "DYNAMODB_TABLE_NAME": "meso-simulation-metadata",
+          "RIVER_METADATA_TABLE_NAME": "meso-river-metadata",
+          "MINIO_SECRET_KEY": "",
+          "LAMBDA_API_URL": "https://h88z2rcc5l.execute-api.us-east-1.amazonaws.com/Stage"
+        },
+        "last_modified": "2026-03-31T15:18:02.000+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:process-DCAESFunction-QZzo6MWzCLJH",
+      "name": "process-DCAESFunction-QZzo6MWzCLJH",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "process-DCAESFunction-QZzo6MWzCLJH",
+        "function_name": "process-DCAESFunction-QZzo6MWzCLJH",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:process-DCAESFunction-QZzo6MWzCLJH",
+        "runtime": "python3.13",
+        "handler": "app.lambda_handler",
+        "role_arn": "arn:aws:iam::992382509624:role/process-DCAESFunctionRole-bIOMsI7PDnzA",
+        "memory_size": 128,
+        "timeout": 3,
+        "vpc_id": "",
+        "subnet_ids": [],
+        "security_group_ids": [],
+        "environment": {},
+        "last_modified": "2025-06-17T18:10:40.000+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:MESO-ClimateDataAvailabilityChecker",
+      "name": "MESO-ClimateDataAvailabilityChecker",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "MESO-ClimateDataAvailabilityChecker",
+        "function_name": "MESO-ClimateDataAvailabilityChecker",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:MESO-ClimateDataAvailabilityChecker",
+        "runtime": "python3.14",
+        "handler": "lambda_function.lambda_handler",
+        "role_arn": "arn:aws:iam::992382509624:role/service-role/MESO-ClimateDataAvailabilityChecker-role-bbz8xzhv",
+        "memory_size": 128,
+        "timeout": 3,
+        "vpc_id": null,
+        "subnet_ids": [],
+        "security_group_ids": [],
+        "environment": {},
+        "last_modified": "2025-12-16T18:11:36.000+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:meso-load-simulation",
+      "name": "meso-load-simulation",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "meso-load-simulation",
+        "function_name": "meso-load-simulation",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:meso-load-simulation",
+        "runtime": "python3.12",
+        "handler": "app.lambda_handler",
+        "role_arn": "arn:aws:iam::992382509624:role/meso-sam-LoadSimulationFunctionRole-kVgFjbDrgfH1",
+        "memory_size": 4096,
+        "timeout": 900,
+        "vpc_id": "",
+        "subnet_ids": [],
+        "security_group_ids": [],
+        "environment": {
+          "S3_BUCKET": "meso-simulation-result",
+          "MESO_ENV": "QA",
+          "APP_ENV": "",
+          "CACHE_DYNAMODB_TABLE_NAME": "meso-cache",
+          "DYNAMODB_ENDPOINT_URL": "",
+          "S3_ENDPOINT_URL": "",
+          "MINIO_ACCESS_KEY": "",
+          "DYNAMODB_TABLE_NAME": "meso-simulation-metadata",
+          "RIVER_METADATA_TABLE_NAME": "meso-river-metadata",
+          "MINIO_SECRET_KEY": "",
+          "LAMBDA_API_URL": "https://h88z2rcc5l.execute-api.us-east-1.amazonaws.com/Stage"
+        },
+        "last_modified": "2026-03-31T15:18:03.000+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:meso-acaes-simulation",
+      "name": "meso-acaes-simulation",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "meso-acaes-simulation",
+        "function_name": "meso-acaes-simulation",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:meso-acaes-simulation",
+        "runtime": "python3.12",
+        "handler": "app.lambda_handler",
+        "role_arn": "arn:aws:iam::992382509624:role/meso-sam-ACAESSimulationFunctionRole-O6EvsV0rh2kT",
+        "memory_size": 4096,
+        "timeout": 900,
+        "vpc_id": "",
+        "subnet_ids": [],
+        "security_group_ids": [],
+        "environment": {
+          "S3_BUCKET": "meso-simulation-result",
+          "MESO_ENV": "QA",
+          "APP_ENV": "",
+          "CACHE_DYNAMODB_TABLE_NAME": "meso-cache",
+          "DYNAMODB_ENDPOINT_URL": "",
+          "S3_ENDPOINT_URL": "",
+          "MINIO_ACCESS_KEY": "",
+          "DYNAMODB_TABLE_NAME": "meso-simulation-metadata",
+          "RIVER_METADATA_TABLE_NAME": "meso-river-metadata",
+          "MINIO_SECRET_KEY": "",
+          "LAMBDA_API_URL": "https://h88z2rcc5l.execute-api.us-east-1.amazonaws.com/Stage"
+        },
+        "last_modified": "2026-03-31T15:18:02.000+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:research-provenance-ingest-starter",
+      "name": "research-provenance-ingest-starter",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "research-provenance-ingest-starter",
+        "function_name": "research-provenance-ingest-starter",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:research-provenance-ingest-starter",
+        "runtime": "python3.12",
+        "handler": "ingest_starter.lambda_handler",
+        "role_arn": "arn:aws:iam::992382509624:role/research-provenance-api-d-IngestStarterFunctionRole-4b7j3fd9yQoq",
+        "memory_size": 1024,
+        "timeout": 30,
+        "vpc_id": null,
+        "subnet_ids": [],
+        "security_group_ids": [],
+        "environment": {
+          "STATUS_TABLE": "research-provenance-upload-status",
+          "SNS_TOPIC_ARN": "arn:aws:sns:us-east-1:992382509624:research-provenance-textract-complete",
+          "TEXTRACT_ROLE_ARN": "arn:aws:iam::992382509624:role/research-provenance-textract-publish-sns",
+          "UPLOAD_PREFIX": "esrf/uploads/",
+          "BUCKET_NAME": "angler-research-provenance",
+          "MAX_BYTES": "209715200"
+        },
+        "last_modified": "2026-03-11T13:33:18.143+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:meso-dg-simulation",
+      "name": "meso-dg-simulation",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "meso-dg-simulation",
+        "function_name": "meso-dg-simulation",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:meso-dg-simulation",
+        "runtime": "python3.12",
+        "handler": "app.lambda_handler",
+        "role_arn": "arn:aws:iam::992382509624:role/meso-sam-DGSimulationFunctionRole-Z0uj6wTaTjd1",
+        "memory_size": 4096,
+        "timeout": 900,
+        "vpc_id": "",
+        "subnet_ids": [],
+        "security_group_ids": [],
+        "environment": {
+          "S3_BUCKET": "meso-simulation-result",
+          "MESO_ENV": "QA",
+          "APP_ENV": "",
+          "CACHE_DYNAMODB_TABLE_NAME": "meso-cache",
+          "DYNAMODB_ENDPOINT_URL": "",
+          "S3_ENDPOINT_URL": "",
+          "MINIO_ACCESS_KEY": "",
+          "DYNAMODB_TABLE_NAME": "meso-simulation-metadata",
+          "RIVER_METADATA_TABLE_NAME": "meso-river-metadata",
+          "MINIO_SECRET_KEY": "",
+          "LAMBDA_API_URL": "https://h88z2rcc5l.execute-api.us-east-1.amazonaws.com/Stage"
+        },
+        "last_modified": "2026-03-31T15:18:02.000+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:sam-demo-HelloWorldFunction-AJIJkvUCdJee",
+      "name": "sam-demo-HelloWorldFunction-AJIJkvUCdJee",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "sam-demo-HelloWorldFunction-AJIJkvUCdJee",
+        "function_name": "sam-demo-HelloWorldFunction-AJIJkvUCdJee",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:sam-demo-HelloWorldFunction-AJIJkvUCdJee",
+        "runtime": "python3.13",
+        "handler": "app.lambda_handler",
+        "role_arn": "arn:aws:iam::992382509624:role/sam-demo-HelloWorldFunctionRole-EvpE1SFdwMOv",
+        "memory_size": 128,
+        "timeout": 3,
+        "vpc_id": null,
+        "subnet_ids": [],
+        "security_group_ids": [],
+        "environment": {},
+        "last_modified": "2025-01-14T19:24:35.484+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:meso-psh-simulation",
+      "name": "meso-psh-simulation",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "meso-psh-simulation",
+        "function_name": "meso-psh-simulation",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:meso-psh-simulation",
+        "runtime": "python3.12",
+        "handler": "app.lambda_handler",
+        "role_arn": "arn:aws:iam::992382509624:role/meso-sam-PSHSimulationFunctionRole-EmvWm26u2wyg",
+        "memory_size": 4096,
+        "timeout": 900,
+        "vpc_id": "",
+        "subnet_ids": [],
+        "security_group_ids": [],
+        "environment": {
+          "S3_BUCKET": "meso-simulation-result",
+          "MESO_ENV": "QA",
+          "APP_ENV": "",
+          "CACHE_DYNAMODB_TABLE_NAME": "meso-cache",
+          "DYNAMODB_ENDPOINT_URL": "",
+          "S3_ENDPOINT_URL": "",
+          "MINIO_ACCESS_KEY": "",
+          "DYNAMODB_TABLE_NAME": "meso-simulation-metadata",
+          "RIVER_METADATA_TABLE_NAME": "meso-river-metadata",
+          "MINIO_SECRET_KEY": "",
+          "LAMBDA_API_URL": "https://h88z2rcc5l.execute-api.us-east-1.amazonaws.com/Stage"
+        },
+        "last_modified": "2026-03-31T15:18:04.000+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:MESO_ClimateIngestor",
+      "name": "MESO_ClimateIngestor",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "MESO_ClimateIngestor",
+        "function_name": "MESO_ClimateIngestor",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:MESO_ClimateIngestor",
+        "runtime": null,
+        "handler": null,
+        "role_arn": "arn:aws:iam::992382509624:role/MESO_ClimateIngestorS3",
+        "memory_size": 1024,
+        "timeout": 45,
+        "vpc_id": null,
+        "subnet_ids": [],
+        "security_group_ids": [],
+        "environment": {},
+        "last_modified": "2026-01-12T15:46:44.000+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:meso-hydrogen-simulation",
+      "name": "meso-hydrogen-simulation",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "meso-hydrogen-simulation",
+        "function_name": "meso-hydrogen-simulation",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:meso-hydrogen-simulation",
+        "runtime": "python3.12",
+        "handler": "app.lambda_handler",
+        "role_arn": "arn:aws:iam::992382509624:role/meso-sam-HydrogenSimulationFunctionRole-7o65jWtUsJuT",
+        "memory_size": 4096,
+        "timeout": 900,
+        "vpc_id": "",
+        "subnet_ids": [],
+        "security_group_ids": [],
+        "environment": {
+          "S3_BUCKET": "meso-simulation-result",
+          "MESO_ENV": "QA",
+          "APP_ENV": "",
+          "CACHE_DYNAMODB_TABLE_NAME": "meso-cache",
+          "DYNAMODB_ENDPOINT_URL": "",
+          "S3_ENDPOINT_URL": "",
+          "MINIO_ACCESS_KEY": "",
+          "DYNAMODB_TABLE_NAME": "meso-simulation-metadata",
+          "RIVER_METADATA_TABLE_NAME": "meso-river-metadata",
+          "MINIO_SECRET_KEY": "",
+          "LAMBDA_API_URL": "https://h88z2rcc5l.execute-api.us-east-1.amazonaws.com/Stage"
+        },
+        "last_modified": "2026-03-31T15:18:03.000+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:meso-wind-api",
+      "name": "meso-wind-api",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "meso-wind-api",
+        "function_name": "meso-wind-api",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:meso-wind-api",
+        "runtime": null,
+        "handler": null,
+        "role_arn": "arn:aws:iam::992382509624:role/meso-sam-WindApiFunctionRole-JqNDoSMktRti",
+        "memory_size": 1024,
+        "timeout": 120,
+        "vpc_id": "",
+        "subnet_ids": [],
+        "security_group_ids": [],
+        "environment": {
+          "S3_BUCKET": "meso-climate-data-prod",
+          "MESO_ENV": "QA",
+          "APP_ENV": "",
+          "CACHE_DYNAMODB_TABLE_NAME": "meso-cache",
+          "DYNAMODB_ENDPOINT_URL": "",
+          "S3_ENDPOINT_URL": "",
+          "MINIO_ACCESS_KEY": "",
+          "DYNAMODB_TABLE_NAME": "meso-simulation-metadata",
+          "RIVER_METADATA_TABLE_NAME": "meso-river-metadata",
+          "MINIO_SECRET_KEY": "",
+          "LAMBDA_API_URL": "https://h88z2rcc5l.execute-api.us-east-1.amazonaws.com/Stage"
+        },
+        "last_modified": "2026-03-31T15:17:58.000+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:MESO_SimulationWorker",
+      "name": "MESO_SimulationWorker",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "MESO_SimulationWorker",
+        "function_name": "MESO_SimulationWorker",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:MESO_SimulationWorker",
+        "runtime": "python3.12",
+        "handler": "lambda_function.lambda_handler",
+        "role_arn": "arn:aws:iam::992382509624:role/MESO_WorkerRole",
+        "memory_size": 128,
+        "timeout": 3,
+        "vpc_id": null,
+        "subnet_ids": [],
+        "security_group_ids": [],
+        "environment": {},
+        "last_modified": "2025-11-24T17:01:10.339+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:meso-bess-simulation",
+      "name": "meso-bess-simulation",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "meso-bess-simulation",
+        "function_name": "meso-bess-simulation",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:meso-bess-simulation",
+        "runtime": "python3.12",
+        "handler": "app.lambda_handler",
+        "role_arn": "arn:aws:iam::992382509624:role/meso-sam-BESSSimulationFunctionRole-dTEe3LtEo6Vj",
+        "memory_size": 4096,
+        "timeout": 900,
+        "vpc_id": "",
+        "subnet_ids": [],
+        "security_group_ids": [],
+        "environment": {
+          "S3_BUCKET": "meso-simulation-result",
+          "MESO_ENV": "QA",
+          "APP_ENV": "",
+          "CACHE_DYNAMODB_TABLE_NAME": "meso-cache",
+          "DYNAMODB_ENDPOINT_URL": "",
+          "S3_ENDPOINT_URL": "",
+          "MINIO_ACCESS_KEY": "",
+          "DYNAMODB_TABLE_NAME": "meso-simulation-metadata",
+          "RIVER_METADATA_TABLE_NAME": "meso-river-metadata",
+          "MINIO_SECRET_KEY": "",
+          "LAMBDA_API_URL": "https://h88z2rcc5l.execute-api.us-east-1.amazonaws.com/Stage"
+        },
+        "last_modified": "2026-03-31T15:18:02.000+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:research-provenance-ingest-finisher",
+      "name": "research-provenance-ingest-finisher",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "research-provenance-ingest-finisher",
+        "function_name": "research-provenance-ingest-finisher",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:research-provenance-ingest-finisher",
+        "runtime": "python3.12",
+        "handler": "ingest_finisher.lambda_handler",
+        "role_arn": "arn:aws:iam::992382509624:role/research-provenance-api-d-IngestFinisherFunctionRol-6wfecDTWbtDS",
+        "memory_size": 2048,
+        "timeout": 300,
+        "vpc_id": null,
+        "subnet_ids": [],
+        "security_group_ids": [],
+        "environment": {
+          "STATUS_TABLE": "research-provenance-upload-status",
+          "OPENSEARCH_HOST": "search-research-provenance-dev-c7t3sztiut5g3mjb5auhnq4wzm.us-east-1.es.amazonaws.com",
+          "OPENSEARCH_SECRET_ARN": "arn:aws:secretsmanager:us-east-1:992382509624:secret:research-provenance/opensearch/master-Bsrjz1",
+          "BUCKET_NAME": "angler-research-provenance",
+          "OPENSEARCH_INDEX": "esrf-papers-dev"
+        },
+        "last_modified": "2026-03-11T13:33:13.294+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:meso-solar-simulation",
+      "name": "meso-solar-simulation",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "meso-solar-simulation",
+        "function_name": "meso-solar-simulation",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:meso-solar-simulation",
+        "runtime": "python3.12",
+        "handler": "app.lambda_handler",
+        "role_arn": "arn:aws:iam::992382509624:role/meso-sam-SolarSimulationFunctionRole-fRrDOxzXIAO8",
+        "memory_size": 4096,
+        "timeout": 900,
+        "vpc_id": "",
+        "subnet_ids": [],
+        "security_group_ids": [],
+        "environment": {
+          "S3_BUCKET": "meso-simulation-result",
+          "MESO_ENV": "QA",
+          "APP_ENV": "",
+          "CACHE_DYNAMODB_TABLE_NAME": "meso-cache",
+          "DYNAMODB_ENDPOINT_URL": "",
+          "S3_ENDPOINT_URL": "",
+          "MINIO_ACCESS_KEY": "",
+          "DYNAMODB_TABLE_NAME": "meso-simulation-metadata",
+          "RIVER_METADATA_TABLE_NAME": "meso-river-metadata",
+          "API_DATA_BUCKET": "meso-api-data",
+          "MINIO_SECRET_KEY": "",
+          "LAMBDA_API_URL": "https://h88z2rcc5l.execute-api.us-east-1.amazonaws.com/Stage"
+        },
+        "last_modified": "2026-03-24T16:50:11.000+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:meso-solar-api",
+      "name": "meso-solar-api",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "meso-solar-api",
+        "function_name": "meso-solar-api",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:meso-solar-api",
+        "runtime": null,
+        "handler": null,
+        "role_arn": "arn:aws:iam::992382509624:role/meso-sam-SolarApiFunctionRole-wlEduJuQT7C7",
+        "memory_size": 4096,
+        "timeout": 900,
+        "vpc_id": "",
+        "subnet_ids": [],
+        "security_group_ids": [],
+        "environment": {
+          "S3_BUCKET": "meso-climate-data-prod",
+          "APP_ENV": "",
+          "CACHE_DYNAMODB_TABLE_NAME": "meso-cache",
+          "RIVER_METADATA_TABLE_NAME": "meso-river-metadata",
+          "API_DATA_BUCKET": "meso-api-data",
+          "FROM_EMAIL": "meso@anglersolutions.ca",
+          "LAMBDA_API_URL": "https://h88z2rcc5l.execute-api.us-east-1.amazonaws.com/Stage",
+          "NREL_API_KEY": "OSDOJxmmcsxmLxruKT4ojVh4bvnidjKhUL3tCtui",
+          "MESO_ENV": "QA",
+          "DYNAMODB_ENDPOINT_URL": "",
+          "S3_ENDPOINT_URL": "",
+          "MINIO_ACCESS_KEY": "",
+          "DYNAMODB_TABLE_NAME": "meso-simulation-metadata",
+          "MINIO_SECRET_KEY": ""
+        },
+        "last_modified": "2026-03-31T15:17:58.000+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:research-provenance-api",
+      "name": "research-provenance-api",
+      "resource_type": "aws_lambda_function",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "research-provenance-api",
+        "function_name": "research-provenance-api",
+        "arn": "arn:aws:lambda:us-east-1:992382509624:function:research-provenance-api",
+        "runtime": "python3.12",
+        "handler": "app.lambda_handler",
+        "role_arn": "arn:aws:iam::992382509624:role/research-provenance-api-d-ProvenanceApiFunctionRole-WPuSjgH2LndR",
+        "memory_size": 1024,
+        "timeout": 30,
+        "vpc_id": "",
+        "subnet_ids": [],
+        "security_group_ids": [],
+        "environment": {
+          "STATUS_TABLE": "research-provenance-upload-status",
+          "OPENSEARCH_HOST": "search-research-provenance-dev-c7t3sztiut5g3mjb5auhnq4wzm.us-east-1.es.amazonaws.com",
+          "OPENSEARCH_SECRET_ARN": "arn:aws:secretsmanager:us-east-1:992382509624:secret:research-provenance/opensearch/master-Bsrjz1",
+          "PROVENANCE_BUCKET": "angler-research-provenance",
+          "UPLOAD_PREFIX": "esrf/uploads/",
+          "OPENSEARCH_INDEX": "esrf-papers-dev"
+        },
+        "last_modified": "2026-03-11T14:50:37.000+0000"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 5,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_sns_topic:config-topic-992382509624",
+      "name": "config-topic-992382509624",
+      "resource_type": "aws_sns_topic",
+      "provider": "aws",
+      "category": "queue",
+      "properties": {
+        "id": "arn:aws:sns:us-east-1:992382509624:config-topic-992382509624",
+        "arn": "arn:aws:sns:us-east-1:992382509624:config-topic-992382509624",
+        "name": "config-topic-992382509624",
+        "policy": "{\"Version\":\"2008-10-17\",\"Statement\":[{\"Sid\":\"AWSConfigSNSPolicy\",\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"config.amazonaws.com\"},\"Action\":\"sns:Publish\",\"Resource\":\"arn:aws:sns:us-east-1:992382509624:config-topic-992382509624\"}]}"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 4,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_sns_topic:research-provenance-textract-complete",
+      "name": "research-provenance-textract-complete",
+      "resource_type": "aws_sns_topic",
+      "provider": "aws",
+      "category": "queue",
+      "properties": {
+        "id": "arn:aws:sns:us-east-1:992382509624:research-provenance-textract-complete",
+        "arn": "arn:aws:sns:us-east-1:992382509624:research-provenance-textract-complete",
+        "name": "research-provenance-textract-complete",
+        "policy": "{\"Version\":\"2008-10-17\",\"Id\":\"__default_policy_ID\",\"Statement\":[{\"Sid\":\"__default_statement_ID\",\"Effect\":\"Allow\",\"Principal\":{\"AWS\":\"*\"},\"Action\":[\"SNS:GetTopicAttributes\",\"SNS:SetTopicAttributes\",\"SNS:AddPermission\",\"SNS:RemovePermission\",\"SNS:DeleteTopic\",\"SNS:Subscribe\",\"SNS:ListSubscriptionsByTopic\",\"SNS:Publish\"],\"Resource\":\"arn:aws:sns:us-east-1:992382509624:research-provenance-textract-complete\",\"Condition\":{\"StringEquals\":{\"AWS:SourceOwner\":\"992382509624\"}}}]}"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 4,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_sns_topic:six-pillars-events-SNSTopic6pillars-Vx6xLb3ofUHe",
+      "name": "six-pillars-events-SNSTopic6pillars-Vx6xLb3ofUHe",
+      "resource_type": "aws_sns_topic",
+      "provider": "aws",
+      "category": "queue",
+      "properties": {
+        "id": "arn:aws:sns:us-east-1:992382509624:six-pillars-events-SNSTopic6pillars-Vx6xLb3ofUHe",
+        "arn": "arn:aws:sns:us-east-1:992382509624:six-pillars-events-SNSTopic6pillars-Vx6xLb3ofUHe",
+        "name": "six-pillars-events-SNSTopic6pillars-Vx6xLb3ofUHe",
+        "policy": "{\"Version\":\"2008-10-17\",\"Id\":\"topicPolicyCustomaction\",\"Statement\":[{\"Sid\":\"1\",\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"events.amazonaws.com\"},\"Action\":\"sns:Publish\",\"Resource\":\"*\"},{\"Sid\":\"2\",\"Effect\":\"Allow\",\"Principal\":{\"AWS\":\"arn:aws:iam::936682280665:root\"},\"Action\":\"SNS:Subscribe\",\"Resource\":\"*\"}]}"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 4,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_sqs_queue:MESO_SimulationJobQueue",
+      "name": "MESO_SimulationJobQueue",
+      "resource_type": "aws_sqs_queue",
+      "provider": "aws",
+      "category": "queue",
+      "properties": {
+        "id": "https://sqs.us-east-1.amazonaws.com/992382509624/MESO_SimulationJobQueue",
+        "url": "https://sqs.us-east-1.amazonaws.com/992382509624/MESO_SimulationJobQueue",
+        "arn": "arn:aws:sqs:us-east-1:992382509624:MESO_SimulationJobQueue",
+        "name": "MESO_SimulationJobQueue",
+        "policy": "{\"Version\":\"2012-10-17\",\"Id\":\"__default_policy_ID\",\"Statement\":[{\"Sid\":\"__owner_statement\",\"Effect\":\"Allow\",\"Principal\":{\"AWS\":\"arn:aws:iam::992382509624:root\"},\"Action\":\"SQS:*\",\"Resource\":\"arn:aws:sqs:us-east-1:992382509624:MESO_SimulationJobQueue\"}]}"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 4,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_sqs_queue:meso-ingestion-dlq",
+      "name": "meso-ingestion-dlq",
+      "resource_type": "aws_sqs_queue",
+      "provider": "aws",
+      "category": "queue",
+      "properties": {
+        "id": "https://sqs.us-east-1.amazonaws.com/992382509624/meso-ingestion-dlq",
+        "url": "https://sqs.us-east-1.amazonaws.com/992382509624/meso-ingestion-dlq",
+        "arn": "arn:aws:sqs:us-east-1:992382509624:meso-ingestion-dlq",
+        "name": "meso-ingestion-dlq",
+        "policy": "{\"Version\":\"2012-10-17\",\"Id\":\"__default_policy_ID\",\"Statement\":[{\"Sid\":\"__owner_statement\",\"Effect\":\"Allow\",\"Principal\":{\"AWS\":\"arn:aws:iam::992382509624:root\"},\"Action\":\"SQS:*\",\"Resource\":\"arn:aws:sqs:us-east-1:992382509624:meso-ingestion-dlq\"}]}"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 4,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_sqs_queue:meso-ingestion-queue",
+      "name": "meso-ingestion-queue",
+      "resource_type": "aws_sqs_queue",
+      "provider": "aws",
+      "category": "queue",
+      "properties": {
+        "id": "https://sqs.us-east-1.amazonaws.com/992382509624/meso-ingestion-queue",
+        "url": "https://sqs.us-east-1.amazonaws.com/992382509624/meso-ingestion-queue",
+        "arn": "arn:aws:sqs:us-east-1:992382509624:meso-ingestion-queue",
+        "name": "meso-ingestion-queue",
+        "policy": "{\"Version\":\"2012-10-17\",\"Id\":\"__default_policy_ID\",\"Statement\":[{\"Sid\":\"__owner_statement\",\"Effect\":\"Allow\",\"Principal\":{\"AWS\":\"arn:aws:iam::992382509624:root\"},\"Action\":\"SQS:*\",\"Resource\":\"arn:aws:sqs:us-east-1:992382509624:meso-ingestion-queue\"}]}"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 4,
+        "account_id": "992382509624",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "aws:992382509624:us-east-1:aws_instance:i-0b61c3ddef5897273->aws:992382509624:us-east-1:aws_subnet:subnet-085553ddcb0d5ec20:references",
+      "source": "aws:992382509624:us-east-1:aws_instance:i-0b61c3ddef5897273",
+      "target": "aws:992382509624:us-east-1:aws_subnet:subnet-085553ddcb0d5ec20",
+      "edge_type": "references",
+      "label": "in subnet"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_instance:i-020c8b15c1df19545->aws:992382509624:us-east-1:aws_subnet:subnet-07dfbfd029af608cc:references",
+      "source": "aws:992382509624:us-east-1:aws_instance:i-020c8b15c1df19545",
+      "target": "aws:992382509624:us-east-1:aws_subnet:subnet-07dfbfd029af608cc",
+      "edge_type": "references",
+      "label": "in subnet"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:RDS_migration->aws:992382509624:us-east-1:aws_subnet:subnet-05a1d15b484a26718:references",
+      "source": "aws:992382509624:us-east-1:aws_lambda_function:RDS_migration",
+      "target": "aws:992382509624:us-east-1:aws_subnet:subnet-05a1d15b484a26718",
+      "edge_type": "references",
+      "label": "in subnet"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:RDS_migration->aws:992382509624:us-east-1:aws_subnet:subnet-07dfbfd029af608cc:references",
+      "source": "aws:992382509624:us-east-1:aws_lambda_function:RDS_migration",
+      "target": "aws:992382509624:us-east-1:aws_subnet:subnet-07dfbfd029af608cc",
+      "edge_type": "references",
+      "label": "in subnet"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:RDS_migration->aws:992382509624:us-east-1:aws_subnet:subnet-085553ddcb0d5ec20:references",
+      "source": "aws:992382509624:us-east-1:aws_lambda_function:RDS_migration",
+      "target": "aws:992382509624:us-east-1:aws_subnet:subnet-085553ddcb0d5ec20",
+      "edge_type": "references",
+      "label": "in subnet"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:RDS_migration->aws:992382509624:us-east-1:aws_subnet:subnet-0437c26e4112eb822:references",
+      "source": "aws:992382509624:us-east-1:aws_lambda_function:RDS_migration",
+      "target": "aws:992382509624:us-east-1:aws_subnet:subnet-0437c26e4112eb822",
+      "edge_type": "references",
+      "label": "in subnet"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:RDS_migration->aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b:references",
+      "source": "aws:992382509624:us-east-1:aws_lambda_function:RDS_migration",
+      "target": "aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:research-provenance-ingest-starter->aws:992382509624:us-east-1:aws_sns_topic:research-provenance-textract-complete:references",
+      "source": "aws:992382509624:us-east-1:aws_lambda_function:research-provenance-ingest-starter",
+      "target": "aws:992382509624:us-east-1:aws_sns_topic:research-provenance-textract-complete",
+      "edge_type": "references",
+      "label": "references"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:MESO_ClimateIngestor->aws:992382509624:us-east-1:aws_sqs_queue:meso-ingestion-queue:reads_from",
+      "source": "aws:992382509624:us-east-1:aws_lambda_function:MESO_ClimateIngestor",
+      "target": "aws:992382509624:us-east-1:aws_sqs_queue:meso-ingestion-queue",
+      "edge_type": "reads_from",
+      "label": "reads from"
+    },
+    {
+      "id": "aws:992382509624:us-east-1:aws_lambda_function:MESO_SimulationWorker->aws:992382509624:us-east-1:aws_sqs_queue:MESO_SimulationJobQueue:reads_from",
+      "source": "aws:992382509624:us-east-1:aws_lambda_function:MESO_SimulationWorker",
+      "target": "aws:992382509624:us-east-1:aws_sqs_queue:MESO_SimulationJobQueue",
+      "edge_type": "reads_from",
+      "label": "reads from"
+    }
+  ],
+  "groups": [
+    {
+      "id": "group:vpc:992382509624:us-east-1:vpc-07ce3cdd64f64e75b",
+      "name": "MESO-vpc",
+      "group_type": "vpc",
+      "children": [],
+      "parent": null,
+      "metadata": {}
+    },
+    {
+      "id": "group:vpc:992382509624:us-east-1:vpc-039f12c6acae93682",
+      "name": "vpc-039f12c6acae93682",
+      "group_type": "vpc",
+      "children": [],
+      "parent": null,
+      "metadata": {}
+    },
+    {
+      "id": "group:subnet:992382509624:us-east-1:subnet-09303c42f648140ac",
+      "name": "subnet-09303c42f648140ac",
+      "group_type": "subnet",
+      "children": [],
+      "parent": "group:vpc:992382509624:us-east-1:vpc-039f12c6acae93682",
+      "metadata": {}
+    },
+    {
+      "id": "group:subnet:992382509624:us-east-1:subnet-00eb4a84819e001d7",
+      "name": "subnet-00eb4a84819e001d7",
+      "group_type": "subnet",
+      "children": [],
+      "parent": "group:vpc:992382509624:us-east-1:vpc-039f12c6acae93682",
+      "metadata": {}
+    },
+    {
+      "id": "group:subnet:992382509624:us-east-1:subnet-0e68d5a0c09774b23",
+      "name": "subnet-0e68d5a0c09774b23",
+      "group_type": "subnet",
+      "children": [],
+      "parent": "group:vpc:992382509624:us-east-1:vpc-039f12c6acae93682",
+      "metadata": {}
+    },
+    {
+      "id": "group:subnet:992382509624:us-east-1:subnet-05a1d15b484a26718",
+      "name": "MESO-subnet-public1-us-east-1a",
+      "group_type": "subnet",
+      "children": [],
+      "parent": "group:vpc:992382509624:us-east-1:vpc-07ce3cdd64f64e75b",
+      "metadata": {}
+    },
+    {
+      "id": "group:subnet:992382509624:us-east-1:subnet-085553ddcb0d5ec20",
+      "name": "MESO-subnet-private2-us-east-1b",
+      "group_type": "subnet",
+      "children": [],
+      "parent": "group:vpc:992382509624:us-east-1:vpc-07ce3cdd64f64e75b",
+      "metadata": {}
+    },
+    {
+      "id": "group:subnet:992382509624:us-east-1:subnet-0c63d0ef0e327bfd6",
+      "name": "subnet-0c63d0ef0e327bfd6",
+      "group_type": "subnet",
+      "children": [],
+      "parent": "group:vpc:992382509624:us-east-1:vpc-039f12c6acae93682",
+      "metadata": {}
+    },
+    {
+      "id": "group:subnet:992382509624:us-east-1:subnet-0e7cfab0ad146ed02",
+      "name": "subnet-0e7cfab0ad146ed02",
+      "group_type": "subnet",
+      "children": [],
+      "parent": "group:vpc:992382509624:us-east-1:vpc-039f12c6acae93682",
+      "metadata": {}
+    },
+    {
+      "id": "group:subnet:992382509624:us-east-1:subnet-061e26a72335d70f3",
+      "name": "subnet-061e26a72335d70f3",
+      "group_type": "subnet",
+      "children": [],
+      "parent": "group:vpc:992382509624:us-east-1:vpc-039f12c6acae93682",
+      "metadata": {}
+    },
+    {
+      "id": "group:subnet:992382509624:us-east-1:subnet-0437c26e4112eb822",
+      "name": "MESO-subnet-public2-us-east-1b",
+      "group_type": "subnet",
+      "children": [],
+      "parent": "group:vpc:992382509624:us-east-1:vpc-07ce3cdd64f64e75b",
+      "metadata": {}
+    },
+    {
+      "id": "group:subnet:992382509624:us-east-1:subnet-07dfbfd029af608cc",
+      "name": "MESO-subnet-private1-us-east-1a",
+      "group_type": "subnet",
+      "children": [],
+      "parent": "group:vpc:992382509624:us-east-1:vpc-07ce3cdd64f64e75b",
+      "metadata": {}
+    },
+    {
+      "id": "group:account:992382509624",
+      "name": "992382509624",
+      "group_type": "account",
+      "children": [
+        "aws:992382509624:us-east-1:aws_api_gateway_rest_api:68kkd3xobi",
+        "aws:992382509624:us-east-1:aws_api_gateway_rest_api:h88z2rcc5l",
+        "aws:992382509624:us-east-1:aws_api_gateway_rest_api:o1bmsr80rf",
+        "aws:992382509624:us-east-1:aws_api_gateway_rest_api:xyr3ozs4gb",
+        "aws:992382509624:us-east-1:aws_instance:i-020c8b15c1df19545",
+        "aws:992382509624:us-east-1:aws_instance:i-0b61c3ddef5897273",
+        "aws:992382509624:us-east-1:aws_lambda_function:MESO-ClimateDataAvailabilityChecker",
+        "aws:992382509624:us-east-1:aws_lambda_function:MESO_ClimateIngestor",
+        "aws:992382509624:us-east-1:aws_lambda_function:MESO_SimulationWorker",
+        "aws:992382509624:us-east-1:aws_lambda_function:RDS_migration",
+        "aws:992382509624:us-east-1:aws_lambda_function:manual-meso-input-resolver",
+        "aws:992382509624:us-east-1:aws_lambda_function:meso-acaes-simulation",
+        "aws:992382509624:us-east-1:aws_lambda_function:meso-bess-simulation",
+        "aws:992382509624:us-east-1:aws_lambda_function:meso-data-source-comparison",
+        "aws:992382509624:us-east-1:aws_lambda_function:meso-dcaes-simulation",
+        "aws:992382509624:us-east-1:aws_lambda_function:meso-dg-simulation",
+        "aws:992382509624:us-east-1:aws_lambda_function:meso-hydroelectric-api",
+        "aws:992382509624:us-east-1:aws_lambda_function:meso-hydroelectric-simulation",
+        "aws:992382509624:us-east-1:aws_lambda_function:meso-hydrogen-simulation",
+        "aws:992382509624:us-east-1:aws_lambda_function:meso-load-simulation",
+        "aws:992382509624:us-east-1:aws_lambda_function:meso-psh-simulation",
+        "aws:992382509624:us-east-1:aws_lambda_function:meso-solar-api",
+        "aws:992382509624:us-east-1:aws_lambda_function:meso-solar-data-source-comparison",
+        "aws:992382509624:us-east-1:aws_lambda_function:meso-solar-simulation",
+        "aws:992382509624:us-east-1:aws_lambda_function:meso-wind-api",
+        "aws:992382509624:us-east-1:aws_lambda_function:meso-wind-layout-optimizer",
+        "aws:992382509624:us-east-1:aws_lambda_function:meso-wind-simulation",
+        "aws:992382509624:us-east-1:aws_lambda_function:process-ACAESFunction-WjiXvBOp8b4e",
+        "aws:992382509624:us-east-1:aws_lambda_function:process-DCAESFunction-QZzo6MWzCLJH",
+        "aws:992382509624:us-east-1:aws_lambda_function:research-provenance-api",
+        "aws:992382509624:us-east-1:aws_lambda_function:research-provenance-ingest-finisher",
+        "aws:992382509624:us-east-1:aws_lambda_function:research-provenance-ingest-starter",
+        "aws:992382509624:us-east-1:aws_lambda_function:sam-demo-HelloWorldFunction-AJIJkvUCdJee",
+        "aws:992382509624:us-east-1:aws_security_group:sg-0025b418cc39a11d9",
+        "aws:992382509624:us-east-1:aws_security_group:sg-00754bcba03f63104",
+        "aws:992382509624:us-east-1:aws_security_group:sg-007bb331f9da5b294",
+        "aws:992382509624:us-east-1:aws_security_group:sg-01114a7b50e4c6fb5",
+        "aws:992382509624:us-east-1:aws_security_group:sg-0183b56eb4815699f",
+        "aws:992382509624:us-east-1:aws_security_group:sg-029b167caa25db0fd",
+        "aws:992382509624:us-east-1:aws_security_group:sg-02aa45bdcf8126983",
+        "aws:992382509624:us-east-1:aws_security_group:sg-06078e76a7d15e709",
+        "aws:992382509624:us-east-1:aws_security_group:sg-082651a05033c207c",
+        "aws:992382509624:us-east-1:aws_security_group:sg-0aeb73fcacf055e0c",
+        "aws:992382509624:us-east-1:aws_security_group:sg-0dc1fee4d66ebd46e",
+        "aws:992382509624:us-east-1:aws_sns_topic:config-topic-992382509624",
+        "aws:992382509624:us-east-1:aws_sns_topic:research-provenance-textract-complete",
+        "aws:992382509624:us-east-1:aws_sns_topic:six-pillars-events-SNSTopic6pillars-Vx6xLb3ofUHe",
+        "aws:992382509624:us-east-1:aws_sqs_queue:MESO_SimulationJobQueue",
+        "aws:992382509624:us-east-1:aws_sqs_queue:meso-ingestion-dlq",
+        "aws:992382509624:us-east-1:aws_sqs_queue:meso-ingestion-queue",
+        "aws:992382509624:us-east-1:aws_subnet:subnet-00eb4a84819e001d7",
+        "aws:992382509624:us-east-1:aws_subnet:subnet-0437c26e4112eb822",
+        "aws:992382509624:us-east-1:aws_subnet:subnet-05a1d15b484a26718",
+        "aws:992382509624:us-east-1:aws_subnet:subnet-061e26a72335d70f3",
+        "aws:992382509624:us-east-1:aws_subnet:subnet-07dfbfd029af608cc",
+        "aws:992382509624:us-east-1:aws_subnet:subnet-085553ddcb0d5ec20",
+        "aws:992382509624:us-east-1:aws_subnet:subnet-09303c42f648140ac",
+        "aws:992382509624:us-east-1:aws_subnet:subnet-0c63d0ef0e327bfd6",
+        "aws:992382509624:us-east-1:aws_subnet:subnet-0e68d5a0c09774b23",
+        "aws:992382509624:us-east-1:aws_subnet:subnet-0e7cfab0ad146ed02",
+        "aws:992382509624:us-east-1:aws_vpc:vpc-039f12c6acae93682",
+        "aws:992382509624:us-east-1:aws_vpc:vpc-07ce3cdd64f64e75b"
+      ],
+      "parent": null,
+      "metadata": {
+        "account_id": "992382509624",
+        "source_kind": "scan"
+      }
+    }
+  ]
+}
