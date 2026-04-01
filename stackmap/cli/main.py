@@ -680,10 +680,6 @@ def scan_aws(
         )
         raise typer.Exit(1)
 
-    if org_scan and not org_file:
-        console.print("[red]Error:[/red] --org-scan requires --org-file.")
-        raise typer.Exit(1)
-
     try:
         selected_services = _parse_live_services(services)
     except typer.BadParameter as exc:

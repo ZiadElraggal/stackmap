@@ -438,27 +438,11 @@ def infer_cross_account_edges(ir: StackMapIR) -> int:
     return added
 
 
-def build_org_document_from_aws(
-    profile: str | None = None,
-    region: str | None = None,
+def build_org_document_from_session(
+    session: Any,
     root_id: str | None = None,
 ) -> OrganizationDocument:
-    try:
-        import boto3  # type: ignore[import-not-found]
-    except Exception as exc:  # pragma: no cover
-        raise RuntimeError(
-            "boto3 is required for `stackmap org-import`. Install it with `pip install boto3`."
-        ) from exc
-
-    session_kwargs: dict[str, Any] = {}
-    if profile:
-        session_kwargs["profile_name"] = profile
-    if region:
-        session_kwargs["region_name"] = region
-
-    session = boto3.session.Session(**session_kwargs)
     client = session.client("organizations")
-
     organization = client.describe_organization()["Organization"]
     roots = client.list_roots()["Roots"]
     if not roots:
@@ -512,3 +496,25 @@ def build_org_document_from_aws(
         ous=ous,
         accounts=accounts,
     )
+
+
+def build_org_document_from_aws(
+    profile: str | None = None,
+    region: str | None = None,
+    root_id: str | None = None,
+) -> OrganizationDocument:
+    try:
+        import boto3  # type: ignore[import-not-found]
+    except Exception as exc:  # pragma: no cover
+        raise RuntimeError(
+            "boto3 is required for `stackmap org-import`. Install it with `pip install boto3`."
+        ) from exc
+
+    session_kwargs: dict[str, Any] = {}
+    if profile:
+        session_kwargs["profile_name"] = profile
+    if region:
+        session_kwargs["region_name"] = region
+
+    session = boto3.session.Session(**session_kwargs)
+    return build_org_document_from_session(session, root_id=root_id)

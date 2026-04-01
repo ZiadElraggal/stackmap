@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import boto3
@@ -14,6 +15,7 @@ from stackmap.aws_live.scanner import (
     AccountScanContext,
     build_policy_document,
 )
+from stackmap.organizations import OrganizationDocument
 from stackmap.parsers.base import EdgeType
 
 
@@ -268,3 +270,130 @@ def test_build_ir_creates_explicit_edges_and_live_metadata() -> None:
     assert ir.metadata["source_kind"] == "live_scan"
     assert len(ir.edges) == 1
     assert ir.edges[0].target == role_node.id
+
+
+def test_build_ir_resolves_direct_node_id_references() -> None:
+    from stackmap.parsers.base import ResourceCategory, StackMapNode
+
+    scanner = AWSLiveScanner(regions=["us-east-1"], services={"ec2"})
+    context = AccountScanContext(
+        session=_FakeSession(),  # type: ignore[arg-type]
+        account_id="123456789012",
+        account_name="prod",
+        auth_description="profile 'sandbox'",
+        role_arn=None,
+        services={"ec2"},
+        regions=["us-east-1"],
+        recorder=APIRecorder(),
+        cache_dir=None,
+        cache_ttl_seconds=3600,
+        dry_run=False,
+        verbose=False,
+    )
+    vpc_node = StackMapNode(
+        id="aws:123456789012:us-east-1:aws_vpc:vpc-1234",
+        name="main",
+        resource_type="aws_vpc",
+        provider="aws",
+        category=ResourceCategory.NETWORK,
+        properties={"id": "vpc-1234", "arn": "arn:aws:ec2:us-east-1:123456789012:vpc/vpc-1234"},
+        metadata={"account_id": "123456789012", "region": "us-east-1"},
+        position_hint={"tier": "frontend"},
+    )
+    subnet_node = StackMapNode(
+        id="aws:123456789012:us-east-1:aws_subnet:subnet-a",
+        name="subnet-a",
+        resource_type="aws_subnet",
+        provider="aws",
+        category=ResourceCategory.NETWORK,
+        properties={"id": "subnet-a", "arn": "arn:aws:ec2:us-east-1:123456789012:subnet/subnet-a", "vpc_id": "vpc-1234"},
+        metadata={"account_id": "123456789012", "region": "us-east-1"},
+        position_hint={"tier": "frontend"},
+    )
+
+    ir = scanner._build_ir(
+        context,
+        [vpc_node, subnet_node],
+        [(subnet_node.id, vpc_node.id, "in vpc", EdgeType.REFERENCES)],
+        [],
+    )
+
+    assert len(ir.edges) == 1
+    assert ir.edges[0].target == vpc_node.id
+
+
+def test_dry_run_org_scan_can_auto_discover_without_org_file(monkeypatch) -> None:
+    scanner = AWSLiveScanner(
+        profile="sandbox",
+        regions=["us-east-1"],
+        services={"ec2"},
+        dry_run=True,
+        org_scan=True,
+        session_factory=lambda **_: _FakeSession(),
+    )
+
+    monkeypatch.setattr(
+        scanner,
+        "_load_or_discover_org",
+        lambda _session: OrganizationDocument(
+            org_id="o-test",
+            root_id="r-root",
+            root_name="Root",
+            ous=[],
+            accounts=[{"id": "210000000001", "name": "prod", "parent": "r-root", "ou_path": "Root"}],
+        ),
+    )
+
+    plan = scanner.dry_run_plan()
+    assert len(plan) > 0
+    assert all(call.account_id == "210000000001" for call in plan)
+
+
+def test_collect_s3_keeps_bucket_when_optional_calls_fail(tmp_path: Path) -> None:
+    session = boto3.session.Session(
+        aws_access_key_id="test",
+        aws_secret_access_key="test",
+        region_name="us-east-1",
+    )
+    s3_client = session.client("s3", region_name="us-east-1")
+    stubber = Stubber(s3_client)
+    stubber.add_response(
+        "list_buckets",
+        {"Buckets": [{"Name": "stackmap-bucket", "CreationDate": datetime(2026, 3, 31, tzinfo=UTC)}]},
+    )
+    stubber.add_response("get_bucket_location", {}, {"Bucket": "stackmap-bucket"})
+    stubber.add_client_error("get_bucket_tagging", service_error_code="NoSuchTagSet", expected_params={"Bucket": "stackmap-bucket"})
+    stubber.add_client_error("get_bucket_policy", service_error_code="NoSuchBucketPolicy", expected_params={"Bucket": "stackmap-bucket"})
+    stubber.activate()
+
+    class _Session:
+        def client(self, service: str, **_: object):  # type: ignore[no-untyped-def]
+            if service != "s3":
+                raise AssertionError(f"Unexpected service: {service}")
+            return s3_client
+
+        region_name = "us-east-1"
+
+    context = AccountScanContext(
+        session=_Session(),  # type: ignore[arg-type]
+        account_id="123456789012",
+        account_name=None,
+        auth_description="test",
+        role_arn=None,
+        services={"s3"},
+        regions=["us-east-1"],
+        recorder=APIRecorder(),
+        cache_dir=tmp_path,
+        cache_ttl_seconds=3600,
+        dry_run=False,
+        verbose=False,
+    )
+    scanner = AWSLiveScanner(regions=["us-east-1"], services={"s3"})
+    nodes, pending, groups = scanner._collect_s3("us-east-1", AWSAPIExecutor(context))
+
+    assert len(nodes) == 1
+    assert nodes[0].resource_type == "aws_s3_bucket"
+    assert pending == []
+    assert groups == []
+
+    stubber.deactivate()
