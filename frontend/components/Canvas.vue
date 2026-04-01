@@ -153,6 +153,8 @@
       </g>
     </svg>
 
+    <ComponentLanding v-if="store.viewMode === 'components'" />
+
     <div class="absolute left-1/2 top-4 z-40 -translate-x-1/2">
       <SearchBar ref="searchBarRef" @pan-to="panToNode" />
     </div>
@@ -166,6 +168,12 @@
           <circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3C8 7 8 17 12 21M12 3c4 4 4 14 0 18"/>
         </svg>
         <button
+          v-if="store.activeComponentId"
+          class="text-[10px] font-mono text-cyan-400 transition-colors hover:text-cyan-300"
+          @click="store.returnToComponents()"
+        >back to components</button>
+        <button
+          v-else
           class="text-[10px] font-mono text-cyan-400 transition-colors hover:text-cyan-300"
           @click="clearBreadcrumbScope"
         >all accounts</button>
@@ -252,8 +260,8 @@
         <span class="font-semibold tracking-wider text-[10px]">StackMap</span>
       </div>
       <span class="h-3 w-px bg-white/[0.06]" />
-      <span>{{ store.visibleNodes.length }}<span class="text-gray-600">/{{ store.nodes.length }}</span> resources</span>
-      <span>{{ store.visibleEdges.length }} connections</span>
+      <span>{{ primaryResourceCount }}<span class="text-gray-600">/{{ store.nodes.length }}</span> resources</span>
+      <span>{{ primaryConnectionCount }} connections</span>
       <span class="text-gray-600">{{ viewModeLabel }}</span>
       <span v-if="store.graphGroups.length > 0" class="text-gray-600">{{ store.graphGroups.length }} groups</span>
       <span v-if="store.metadata.terraform_version" class="text-gray-600">TF v{{ store.metadata.terraform_version }}</span>
@@ -306,6 +314,8 @@ const orderedVisibleNodes = computed(() => {
 const visibleNodeMap = computed(() => new Map(store.visibleNodes.map(n => [n.id, n])))
 const edgeEntryBaseDelay = computed(() => orderedVisibleNodes.value.length * 15 + 200)
 const edgeTypesInGraph = computed(() => [...new Set(store.visibleEdges.map(edge => edge.edge_type))])
+const primaryResourceCount = computed(() => store.viewMode === 'components' ? store.architectureSourceNodes.length : store.visibleNodes.length)
+const primaryConnectionCount = computed(() => store.viewMode === 'components' ? store.architectureSourceEdges.length : store.visibleEdges.length)
 
 const graphBounds = computed(() => {
   const points = Object.values(store.positions)
@@ -416,7 +426,8 @@ const architectureStrip = computed(() => {
     data: 'rgba(16,185,129,0.16)',
   }
   const counts: Record<string, number> = { frontend: 0, api: 0, backend: 0, data: 0 }
-  for (const node of store.visibleNodes) {
+  const sourceNodes = store.viewMode === 'components' ? store.architectureSourceNodes : store.visibleNodes
+  for (const node of sourceNodes) {
     const tier = node.position_hint?.tier || 'backend'
     if (tier in counts) counts[tier] += 1
   }
@@ -431,6 +442,7 @@ const architectureStrip = computed(() => {
 
 const viewModeLabel = computed(() => {
   if (store.viewMode === 'architecture') return 'architecture view'
+  if (store.viewMode === 'components') return 'component landing'
   if (store.viewMode === 'organization') return 'organization view'
   const sourceType = String(store.metadata?.source_type || '').toLowerCase()
   if (sourceType === 'cloudformation') return 'cloudformation raw view'
@@ -535,6 +547,7 @@ watch(
     store.graphEdges.map(e => e.id).join('|'),
     store.graphGroups.map(g => g.id).join('|'),
     store.activeAccountId,
+    store.activeComponentId,
   ],
   () => {
     if (!store.loaded) return
@@ -762,8 +775,18 @@ function updateViewport(transform: d3.ZoomTransform) {
 }
 
 function clearBreadcrumbScope() {
+  store.activeComponentId = null
   store.setActiveOrgGroup(null)
   store.setActiveAccount(null)
+  if (store.hasOrganizationData && store.metadata?.scan_mode === 'organization') {
+    store.setViewMode('organization')
+    return
+  }
+  if (store.shouldUseComponentLanding) {
+    store.setViewMode('components')
+    return
+  }
+  store.setViewMode('architecture')
 }
 
 const emit = defineEmits<{
