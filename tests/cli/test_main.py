@@ -503,7 +503,8 @@ def test_scan_repo_org_strict_rejects_missing_accounts(tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 1
-    assert "missing from the organization file" in result.output
+    normalized_output = " ".join(result.output.split())
+    assert "missing from the organization file" in normalized_output
 
 
 def test_org_import_writes_output(monkeypatch, tmp_path: Path) -> None:
@@ -542,3 +543,172 @@ def test_org_import_writes_output(monkeypatch, tmp_path: Path) -> None:
     payload = json.loads(out.read_text())
     assert payload["org_id"] == "o-test"
     assert payload["accounts"][0]["id"] == "210000000001"
+
+
+def test_aws_policy_prints_json() -> None:
+    result = runner.invoke(app, ["aws-policy", "--service-set", "core"])
+
+    assert result.exit_code == 0
+    assert '"Version": "2012-10-17"' in result.output
+    assert "ec2:Describe*" in result.output
+
+
+def test_scan_aws_dry_run_prints_planned_calls(monkeypatch) -> None:
+    from stackmap.aws_live.scanner import PlannedAPICall
+
+    class FakeScanner:
+        def __init__(self, **kwargs):  # type: ignore[no-untyped-def]
+            self.kwargs = kwargs
+
+        def startup_summary(self):  # type: ignore[no-untyped-def]
+            return {
+                "account_id": "123456789012",
+                "regions": ["us-east-1"],
+                "auth_description": "profile 'sandbox'",
+                "org_scan": False,
+                "services": ["ec2"],
+            }
+
+        def dry_run_plan(self):  # type: ignore[no-untyped-def]
+            return [
+                PlannedAPICall(
+                    account_id="123456789012",
+                    region="us-east-1",
+                    service="ec2",
+                    operation="describe_vpcs",
+                    params={},
+                )
+            ]
+
+    monkeypatch.setattr("stackmap.cli.main.AWSLiveScanner", FakeScanner)
+
+    result = runner.invoke(
+        app,
+        [
+            "scan-aws",
+            "--dry-run",
+            "--services",
+            "ec2",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "read-only mode" in result.output.lower()
+    assert "describe_vpcs" in result.output
+    assert "Planned 1 AWS API calls" in result.output
+
+
+def test_scan_aws_json_writes_output(monkeypatch, tmp_path: Path) -> None:
+    from stackmap.parsers.base import ResourceCategory, StackMapIR, StackMapNode
+
+    class FakeScanner:
+        def __init__(self, **kwargs):  # type: ignore[no-untyped-def]
+            self.kwargs = kwargs
+
+        def startup_summary(self):  # type: ignore[no-untyped-def]
+            return {
+                "account_id": "123456789012",
+                "regions": ["us-east-1"],
+                "auth_description": "profile 'sandbox'",
+                "org_scan": False,
+                "services": ["lambda"],
+            }
+
+        def scan(self):  # type: ignore[no-untyped-def]
+            return StackMapIR(
+                metadata={
+                    "source_type": "aws_live",
+                    "regions": ["us-east-1"],
+                    "selected_services": ["lambda"],
+                    "api_calls": 4,
+                    "warnings": [],
+                    "errors": [],
+                },
+                nodes=[
+                    StackMapNode(
+                        id="aws:123456789012:us-east-1:aws_lambda_function:orders-handler",
+                        name="orders-handler",
+                        resource_type="aws_lambda_function",
+                        provider="aws",
+                        category=ResourceCategory.SERVERLESS,
+                    )
+                ],
+            )
+
+    monkeypatch.setattr("stackmap.cli.main.AWSLiveScanner", FakeScanner)
+
+    out = tmp_path / "aws-live.json"
+    result = runner.invoke(
+        app,
+        [
+            "scan-aws",
+            "--services",
+            "lambda",
+            "--output",
+            str(out),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert out.exists()
+
+    import json
+
+    payload = json.loads(out.read_text())
+    assert payload["metadata"]["source_type"] == "aws_live"
+    assert payload["nodes"][0]["resource_type"] == "aws_lambda_function"
+
+
+def test_scan_aws_serve_uses_serve_command(monkeypatch, tmp_path: Path) -> None:
+    from stackmap.parsers.base import StackMapIR
+
+    called: dict[str, object] = {}
+
+    class FakeScanner:
+        def __init__(self, **kwargs):  # type: ignore[no-untyped-def]
+            self.kwargs = kwargs
+
+        def startup_summary(self):  # type: ignore[no-untyped-def]
+            return {
+                "account_id": "123456789012",
+                "regions": ["us-east-1"],
+                "auth_description": "profile 'sandbox'",
+                "org_scan": False,
+                "services": ["ec2"],
+            }
+
+        def scan(self):  # type: ignore[no-untyped-def]
+            return StackMapIR(metadata={"source_type": "aws_live", "warnings": [], "errors": []})
+
+    def fake_serve(**kwargs):  # type: ignore[no-untyped-def]
+        called.update(kwargs)
+
+    monkeypatch.setattr("stackmap.cli.main.AWSLiveScanner", FakeScanner)
+    monkeypatch.setattr("stackmap.cli.main.serve", fake_serve)
+
+    out = tmp_path / "aws-live.json"
+    result = runner.invoke(
+        app,
+        [
+            "scan-aws",
+            "--services",
+            "ec2",
+            "--output",
+            str(out),
+            "--serve",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert called["source"] == str(out)
+    assert called["host"] == "127.0.0.1"
+    assert called["port"] == 3000
+    assert called["watch"] is False
+    assert called["watch_interval"] == 1.0
+
+
+def test_scan_aws_org_scan_requires_org_file() -> None:
+    result = runner.invoke(app, ["scan-aws", "--org-scan"])
+
+    assert result.exit_code == 1
+    assert "--org-scan requires --org-file" in result.output
