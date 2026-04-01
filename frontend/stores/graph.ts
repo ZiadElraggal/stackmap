@@ -504,6 +504,7 @@ export const useGraphStore = defineStore('graph', {
     diffSlider: 0.5 as number,
     showOnlyChanges: false as boolean,
     activeAccountId: null as string | null,
+    activeOrgGroupId: null as string | null,
     showCrossAccountEdges: true as boolean,
   }),
 
@@ -526,11 +527,47 @@ export const useGraphStore = defineStore('graph', {
 
     organizationNodes(state): StackMapNode[] {
       if (!this.hasOrganizationData) return []
-      return buildOrganizationSummaryNodes(state.nodes, state.groups, state.metadata)
+      const nodes = buildOrganizationSummaryNodes(state.nodes, state.groups, state.metadata)
+      if (!state.activeOrgGroupId) return nodes
+      const scopedGroup = this.organizationGroupsRaw.find(group => group.id === state.activeOrgGroupId)
+      if (!scopedGroup) return nodes
+      const allowedNodeIds = new Set(scopedGroup.children)
+      return nodes.filter(node => allowedNodeIds.has(node.id))
+    },
+
+    organizationGroupsRaw(state): StackMapGroup[] {
+      return buildOrganizationGroups(state.groups, buildOrganizationSummaryNodes(state.nodes, state.groups, state.metadata), state.nodes)
     },
 
     organizationGroups(state): StackMapGroup[] {
-      return buildOrganizationGroups(state.groups, this.organizationNodes, state.nodes)
+      const groups = this.organizationGroupsRaw
+      if (!state.activeOrgGroupId) return groups
+
+      const groupById = new Map(groups.map(group => [group.id, group]))
+      const keep = new Set<string>()
+
+      const addAncestors = (groupId: string | null) => {
+        let cursor = groupId
+        while (cursor) {
+          if (keep.has(cursor)) break
+          keep.add(cursor)
+          cursor = groupById.get(cursor)?.parent || null
+        }
+      }
+
+      const addDescendants = (groupId: string) => {
+        for (const group of groups) {
+          if (group.parent === groupId && !keep.has(group.id)) {
+            keep.add(group.id)
+            addDescendants(group.id)
+          }
+        }
+      }
+
+      addAncestors(state.activeOrgGroupId)
+      keep.add(state.activeOrgGroupId)
+      addDescendants(state.activeOrgGroupId)
+      return groups.filter(group => keep.has(group.id))
     },
 
     organizationEdges(state): StackMapEdge[] {
@@ -684,6 +721,18 @@ export const useGraphStore = defineStore('graph', {
     },
 
     activeBreadcrumb(state): string[] {
+      if (state.viewMode === 'organization' && state.activeOrgGroupId) {
+        const groupById = new Map(this.organizationGroupsRaw.map(group => [group.id, group]))
+        const path: string[] = []
+        let cursor = state.activeOrgGroupId
+        while (cursor) {
+          const group = groupById.get(cursor)
+          if (!group) break
+          path.unshift(group.name)
+          cursor = group.parent
+        }
+        return path
+      }
       if (!state.activeAccountId) return []
       const accountNode = this.organizationNodes.find(node => node.metadata?.account_id === state.activeAccountId)
       const path = String(accountNode?.metadata?.org_path || '').trim()
@@ -802,15 +851,22 @@ export const useGraphStore = defineStore('graph', {
 
     setActiveAccount(accountId: string | null) {
       this.activeAccountId = accountId
+      this.activeOrgGroupId = null
       this.selectedNodeId = null
       this.hopLimit = 0
     },
 
     enterAccountArchitecture(accountId: string) {
       this.activeAccountId = accountId
+      this.activeOrgGroupId = null
       this.viewMode = 'architecture'
       this.selectedNodeId = null
       this.hopLimit = 0
+    },
+
+    setActiveOrgGroup(groupId: string | null) {
+      this.activeOrgGroupId = groupId
+      this.selectedNodeId = null
     },
 
     setShowCrossAccountEdges(show: boolean) {
@@ -825,6 +881,7 @@ export const useGraphStore = defineStore('graph', {
       this.hopLimit = 0
       this.searchQuery = ''
       this.activeAccountId = null
+      this.activeOrgGroupId = null
       this.showCrossAccountEdges = true
     },
   },

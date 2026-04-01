@@ -162,9 +162,12 @@
         v-if="store.activeBreadcrumb.length > 0"
         class="absolute left-1/2 top-16 z-40 -translate-x-1/2 flex items-center gap-2 rounded-xl border border-white/[0.08] bg-[#0e0e18]/95 px-4 py-2 backdrop-blur-md shadow-xl"
       >
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="1.5" stroke-linecap="round" opacity="0.6">
+          <circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3C8 7 8 17 12 21M12 3c4 4 4 14 0 18"/>
+        </svg>
         <button
           class="text-[10px] font-mono text-cyan-400 transition-colors hover:text-cyan-300"
-          @click="store.setActiveAccount(null)"
+          @click="clearBreadcrumbScope"
         >all accounts</button>
         <span class="text-[10px] font-mono text-gray-600">/</span>
         <span class="text-[10px] font-mono text-gray-400">{{ store.activeBreadcrumb.join(' / ') }}</span>
@@ -756,6 +759,11 @@ function updateViewport(transform: d3.ZoomTransform) {
     width: w / transform.k,
     height: h / transform.k,
   }
+}
+
+function clearBreadcrumbScope() {
+  store.setActiveOrgGroup(null)
+  store.setActiveAccount(null)
 }
 
 const emit = defineEmits<{
