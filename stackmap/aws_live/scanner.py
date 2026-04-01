@@ -52,6 +52,10 @@ SERVICE_SET_BROAD: tuple[ServiceName, ...] = SERVICE_SET_CORE + (
     "elasticache",
     "secretsmanager",
     "eventbridge",
+    "cognito",
+    "stepfunctions",
+    "ecr",
+    "appsync",
     "tagging",
     "config",
 )
@@ -89,6 +93,18 @@ POLICY_ACTIONS_BROAD = POLICY_ACTIONS_CORE + [
     "secretsmanager:ListSecrets",
     "events:ListRules",
     "events:ListTargetsByRule",
+    "cognito-idp:ListUserPools",
+    "cognito-idp:DescribeUserPool",
+    "cognito-idp:ListUserPoolClients",
+    "cognito-idp:DescribeUserPoolClient",
+    "cognito-identity:ListIdentityPools",
+    "cognito-identity:DescribeIdentityPool",
+    "states:ListStateMachines",
+    "states:DescribeStateMachine",
+    "ecr:DescribeRepositories",
+    "ecr:ListTagsForResource",
+    "appsync:ListGraphqlApis",
+    "appsync:ListDataSources",
     "tag:GetResources",
     "config:ListDiscoveredResources",
     "config:BatchGetResourceConfig",
@@ -386,6 +402,7 @@ class AWSLiveScanner:
         org_file: str | None = None,
         org_scan: bool = False,
         role_name: str = "StackMapReadOnly",
+        try_current_creds: bool = False,
         cache_dir: str | None = None,
         no_cache: bool = False,
         partial_write_path: str | None = None,
@@ -402,6 +419,7 @@ class AWSLiveScanner:
         self.org_file = org_file
         self.org_scan = org_scan
         self.role_name = role_name
+        self.try_current_creds = try_current_creds
         self.cache_dir = None if no_cache else Path(cache_dir or "~/.stackmap/cache").expanduser()
         self.partial_write_path = Path(partial_write_path) if partial_write_path else None
         self._session_factory = session_factory or boto3.session.Session
@@ -506,14 +524,40 @@ class AWSLiveScanner:
 
         def scan_account(account: dict[str, Any]) -> tuple[dict[str, Any], StackMapIR | None]:
             role_arn = f"arn:aws:iam::{account['id']}:role/{self.role_name}"
+            session = None
+            used_auth = auth_description
+            # Try assume-role first, fall back to current creds if enabled
             try:
                 session = self._assume_role(base_session, role_arn)
+                used_auth = f"{auth_description} -> {role_arn}"
+            except Exception as assume_exc:
+                if self.try_current_creds:
+                    # Fall back to current credentials for this account
+                    try:
+                        caller_account = self._get_account_id(base_session)
+                    except Exception:
+                        caller_account = None
+                    if caller_account == account["id"]:
+                        session = base_session
+                        used_auth = f"{auth_description} (direct, assume-role unavailable)"
+                        merged.metadata.setdefault("warnings", []).append(
+                            f"{account['id']}: assume-role failed ({assume_exc}), using current credentials"
+                        )
+                    else:
+                        merged.metadata["errors"].append(
+                            f"{account['id']}: assume-role failed and current creds belong to {caller_account}, not {account['id']}"
+                        )
+                        return account, None
+                else:
+                    merged.metadata["errors"].append(f"{account['id']}: {assume_exc}")
+                    return account, None
+            try:
                 context = AccountScanContext(
                     session=session,
                     account_id=account["id"],
                     account_name=account.get("name"),
-                    auth_description=auth_description,
-                    role_arn=role_arn,
+                    auth_description=used_auth,
+                    role_arn=role_arn if session is not base_session else None,
                     services=self.services,
                     regions=self._resolve_regions(session),
                     recorder=APIRecorder(dry_run=self.dry_run, verbose=self.verbose),
@@ -529,9 +573,8 @@ class AWSLiveScanner:
                 result_ir.metadata["errors"] = context.errors
                 return account, result_ir
             except Exception as exc:
-                failure_ir = None
                 merged.metadata["errors"].append(f"{account['id']}: {exc}")
-                return account, failure_ir
+                return account, None
 
         with ThreadPoolExecutor(max_workers=self.concurrency) as executor:
             futures = {executor.submit(scan_account, account): account for account in org.accounts}
@@ -768,11 +811,23 @@ class AWSLiveScanner:
                     if subnet_group_id in group_map:
                         child_sets.setdefault(subnet_group_id, set()).add(node.id)
 
+        # Resource types that are VPC infrastructure rather than workloads
+        _VPC_INFRA_TYPES = {"aws_vpc", "aws_subnet", "aws_security_group"}
+
         normalized_groups: list[StackMapGroup] = []
         for group in groups:
             group.children = sorted(child_sets.get(group.id, set()))
             if group.group_type in {"vpc", "subnet"} and not group.children:
                 continue
+            # Suppress VPC groups that only contain infrastructure (subnets/SGs) but no workloads
+            if group.group_type == "vpc" and group.children:
+                has_workload = any(
+                    node_by_id[child].resource_type not in _VPC_INFRA_TYPES
+                    for child in group.children
+                    if child in node_by_id
+                )
+                if not has_workload:
+                    continue
             normalized_groups.append(group)
 
         ir = StackMapIR(
@@ -880,6 +935,19 @@ class AWSLiveScanner:
 
     def _plan_eventbridge(self, region: str, executor: AWSAPIExecutor) -> None:
         executor.call("events", "list_rules", region=region)
+
+    def _plan_cognito(self, region: str, executor: AWSAPIExecutor) -> None:
+        executor.call("cognito-idp", "list_user_pools", region=region, MaxResults=60)
+        executor.call("cognito-identity", "list_identity_pools", region=region, MaxResults=60)
+
+    def _plan_stepfunctions(self, region: str, executor: AWSAPIExecutor) -> None:
+        executor.call("stepfunctions", "list_state_machines", region=region)
+
+    def _plan_ecr(self, region: str, executor: AWSAPIExecutor) -> None:
+        executor.call("ecr", "describe_repositories", region=region)
+
+    def _plan_appsync(self, region: str, executor: AWSAPIExecutor) -> None:
+        executor.call("appsync", "list_graphql_apis", region=region)
 
     def _plan_tagging(self, region: str, executor: AWSAPIExecutor) -> None:
         executor.call("resourcegroupstaggingapi", "get_resources", region=region)
@@ -1016,8 +1084,8 @@ class AWSLiveScanner:
         account_id = executor.context.account_id
         nodes: list[StackMapNode] = []
         pending: list[tuple[str, str | None, str, EdgeType]] = []
-        lbs_resp = executor.call("elbv2", "describe_load_balancers", region=region) or {}
-        tgs_resp = executor.call("elbv2", "describe_target_groups", region=region) or {}
+        lbs_resp = {"LoadBalancers": executor.paginate("elbv2", "describe_load_balancers", "LoadBalancers", region=region)}
+        tgs_resp = {"TargetGroups": executor.paginate("elbv2", "describe_target_groups", "TargetGroups", region=region)}
 
         for lb in lbs_resp.get("LoadBalancers", []):
             lb_arn = lb["LoadBalancerArn"]
@@ -1398,8 +1466,6 @@ class AWSLiveScanner:
             bucket_region = loc_resp.get("LocationConstraint") or "us-east-1"
             if bucket_region == "EU":
                 bucket_region = "eu-west-1"
-            if bucket_region != region:
-                continue
             tag_resp = executor.call_optional(
                 "s3",
                 "get_bucket_tagging",
@@ -1416,7 +1482,7 @@ class AWSLiveScanner:
             ) or {}
             node = _build_live_node(
                 account_id=account_id,
-                region=region,
+                region=bucket_region,
                 resource_type="aws_s3_bucket",
                 resource_id=bucket_name,
                 name=bucket_name,
@@ -1440,8 +1506,14 @@ class AWSLiveScanner:
         account_id = executor.context.account_id
         nodes: list[StackMapNode] = []
         pending: list[tuple[str, str | None, str, EdgeType]] = []
+        items: list[dict[str, Any]] = []
         resp = executor.call("cloudfront", "list_distributions", region=region) or {}
-        items = resp.get("DistributionList", {}).get("Items", [])
+        dist_list = resp.get("DistributionList", {})
+        items.extend(dist_list.get("Items", []))
+        while dist_list.get("IsTruncated") and dist_list.get("NextMarker"):
+            resp = executor.call("cloudfront", "list_distributions", region=region, Marker=dist_list["NextMarker"]) or {}
+            dist_list = resp.get("DistributionList", {})
+            items.extend(dist_list.get("Items", []))
         for dist in items:
             arn = dist.get("ARN") or f"arn:aws:cloudfront::{account_id}:distribution/{dist['Id']}"
             node = _build_live_node(
@@ -1465,8 +1537,13 @@ class AWSLiveScanner:
     def _collect_route53(self, region: str, executor: AWSAPIExecutor) -> tuple[list[StackMapNode], list[tuple[str, str | None, str, EdgeType]], list[StackMapGroup]]:
         account_id = executor.context.account_id
         nodes: list[StackMapNode] = []
+        zones: list[dict[str, Any]] = []
         resp = executor.call("route53", "list_hosted_zones", region=region) or {}
-        for zone in resp.get("HostedZones", []):
+        zones.extend(resp.get("HostedZones", []))
+        while resp.get("IsTruncated") and resp.get("NextMarker"):
+            resp = executor.call("route53", "list_hosted_zones", region=region, Marker=resp["NextMarker"]) or {}
+            zones.extend(resp.get("HostedZones", []))
+        for zone in zones:
             zone_id = zone["Id"].split("/")[-1]
             nodes.append(
                 _build_live_node(
@@ -1488,8 +1565,8 @@ class AWSLiveScanner:
         account_id = executor.context.account_id
         nodes: list[StackMapNode] = []
         pending: list[tuple[str, str | None, str, EdgeType]] = []
-        resp = executor.call("sqs", "list_queues", region=region) or {}
-        for url in resp.get("QueueUrls", []):
+        queue_urls = executor.paginate("sqs", "list_queues", "QueueUrls", region=region)
+        for url in queue_urls:
             attrs = executor.call(
                 "sqs",
                 "get_queue_attributes",
@@ -1629,8 +1706,8 @@ class AWSLiveScanner:
     def _collect_secretsmanager(self, region: str, executor: AWSAPIExecutor) -> tuple[list[StackMapNode], list[tuple[str, str | None, str, EdgeType]], list[StackMapGroup]]:
         account_id = executor.context.account_id
         nodes: list[StackMapNode] = []
-        resp = executor.call("secretsmanager", "list_secrets", region=region) or {}
-        for secret in resp.get("SecretList", []):
+        secrets = executor.paginate("secretsmanager", "list_secrets", "SecretList", region=region)
+        for secret in secrets:
             nodes.append(
                 _build_live_node(
                     account_id=account_id,
@@ -1652,8 +1729,8 @@ class AWSLiveScanner:
         account_id = executor.context.account_id
         nodes: list[StackMapNode] = []
         pending: list[tuple[str, str | None, str, EdgeType]] = []
-        resp = executor.call("events", "list_rules", region=region) or {}
-        for rule in resp.get("Rules", []):
+        rules = executor.paginate("events", "list_rules", "Rules", region=region)
+        for rule in rules:
             arn = rule["Arn"]
             node = _build_live_node(
                 account_id=account_id,
@@ -1671,6 +1748,269 @@ class AWSLiveScanner:
             targets = executor.call("events", "list_targets_by_rule", region=region, Rule=rule["Name"], EventBusName=rule.get("EventBusName")) or {}
             for target in targets.get("Targets", []):
                 pending.append((node.id, target.get("Arn"), "triggers", EdgeType.TRIGGERS))
+        return nodes, pending, []
+
+    def _collect_cognito(self, region: str, executor: AWSAPIExecutor) -> tuple[list[StackMapNode], list[tuple[str, str | None, str, EdgeType]], list[StackMapGroup]]:
+        account_id = executor.context.account_id
+        nodes: list[StackMapNode] = []
+        pending: list[tuple[str, str | None, str, EdgeType]] = []
+
+        # User Pools
+        pools_resp = executor.call("cognito-idp", "list_user_pools", region=region, MaxResults=60) or {}
+        for pool_summary in pools_resp.get("UserPools", []):
+            pool_id = pool_summary["Id"]
+            pool_detail = executor.call_optional(
+                "cognito-idp",
+                "describe_user_pool",
+                region=region,
+                swallow_codes={"AccessDeniedException", "ResourceNotFoundException"},
+                UserPoolId=pool_id,
+            ) or {}
+            pool = pool_detail.get("UserPool", pool_summary)
+            arn = pool.get("Arn") or f"arn:aws:cognito-idp:{region}:{account_id}:userpool/{pool_id}"
+            lambda_config = pool.get("LambdaConfig", {})
+            node = _build_live_node(
+                account_id=account_id,
+                region=region,
+                resource_type="aws_cognito_user_pool",
+                resource_id=pool_id,
+                name=pool.get("Name", pool_id),
+                properties={
+                    "id": pool_id,
+                    "arn": arn,
+                    "name": pool.get("Name"),
+                    "status": pool.get("Status"),
+                    "creation_date": str(pool.get("CreationDate")) if pool.get("CreationDate") else None,
+                    "lambda_config": lambda_config,
+                },
+            )
+            nodes.append(node)
+            # Edges to Lambda triggers
+            for trigger_name, trigger_arn in lambda_config.items():
+                if isinstance(trigger_arn, str) and trigger_arn.startswith("arn:aws:lambda"):
+                    pending.append((node.id, trigger_arn, f"{trigger_name} trigger", EdgeType.TRIGGERS))
+
+            # User Pool Clients
+            clients_resp = executor.call_optional(
+                "cognito-idp",
+                "list_user_pool_clients",
+                region=region,
+                swallow_codes={"AccessDeniedException", "ResourceNotFoundException"},
+                UserPoolId=pool_id,
+                MaxResults=60,
+            ) or {}
+            for client_summary in clients_resp.get("UserPoolClients", []):
+                client_id = client_summary["ClientId"]
+                client_detail = executor.call_optional(
+                    "cognito-idp",
+                    "describe_user_pool_client",
+                    region=region,
+                    swallow_codes={"AccessDeniedException", "ResourceNotFoundException"},
+                    UserPoolId=pool_id,
+                    ClientId=client_id,
+                ) or {}
+                client = client_detail.get("UserPoolClient", client_summary)
+                client_node = _build_live_node(
+                    account_id=account_id,
+                    region=region,
+                    resource_type="aws_cognito_user_pool_client",
+                    resource_id=client_id,
+                    name=client.get("ClientName", client_id),
+                    properties={
+                        "id": client_id,
+                        "name": client.get("ClientName"),
+                        "user_pool_id": pool_id,
+                        "allowed_oauth_flows": client.get("AllowedOAuthFlows", []),
+                        "callback_urls": client.get("CallbackURLs", []),
+                    },
+                )
+                nodes.append(client_node)
+                pending.append((client_node.id, arn, "belongs to", EdgeType.REFERENCES))
+
+        # Identity Pools
+        identity_resp = executor.call_optional(
+            "cognito-identity",
+            "list_identity_pools",
+            region=region,
+            swallow_codes={"AccessDeniedException"},
+            MaxResults=60,
+        ) or {}
+        for ip in identity_resp.get("IdentityPools", []):
+            ip_id = ip["IdentityPoolId"]
+            ip_detail = executor.call_optional(
+                "cognito-identity",
+                "describe_identity_pool",
+                region=region,
+                swallow_codes={"AccessDeniedException", "ResourceNotFoundException"},
+                IdentityPoolId=ip_id,
+            ) or {}
+            pool_data = ip_detail if ip_detail else ip
+            ip_arn = f"arn:aws:cognito-identity:{region}:{account_id}:identitypool/{ip_id}"
+            ip_node = _build_live_node(
+                account_id=account_id,
+                region=region,
+                resource_type="aws_cognito_identity_pool",
+                resource_id=ip_id,
+                name=pool_data.get("IdentityPoolName", ip_id),
+                properties={
+                    "id": ip_id,
+                    "arn": ip_arn,
+                    "name": pool_data.get("IdentityPoolName"),
+                    "allow_unauthenticated": pool_data.get("AllowUnauthenticatedIdentities"),
+                },
+            )
+            nodes.append(ip_node)
+            # Link to Cognito User Pool providers
+            for provider in pool_data.get("CognitoIdentityProviders", []):
+                provider_name = provider.get("ProviderName", "")
+                if "cognito-idp" in provider_name:
+                    pending.append((ip_node.id, provider_name, "federated from", EdgeType.AUTHENTICATES))
+
+        return nodes, pending, []
+
+    def _collect_stepfunctions(self, region: str, executor: AWSAPIExecutor) -> tuple[list[StackMapNode], list[tuple[str, str | None, str, EdgeType]], list[StackMapGroup]]:
+        account_id = executor.context.account_id
+        nodes: list[StackMapNode] = []
+        pending: list[tuple[str, str | None, str, EdgeType]] = []
+        machines = executor.paginate("stepfunctions", "list_state_machines", "stateMachines", region=region)
+        for sm in machines:
+            arn = sm["stateMachineArn"]
+            detail = executor.call_optional(
+                "stepfunctions",
+                "describe_state_machine",
+                region=region,
+                swallow_codes={"AccessDeniedException", "StateMachineDoesNotExist"},
+                stateMachineArn=arn,
+            ) or {}
+            name = detail.get("name") or sm.get("name", _resource_id_from_arn(arn))
+            role_arn = detail.get("roleArn")
+            definition = detail.get("definition", "")
+            node = _build_live_node(
+                account_id=account_id,
+                region=region,
+                resource_type="aws_sfn_state_machine",
+                resource_id=name,
+                name=name,
+                properties={
+                    "id": name,
+                    "arn": arn,
+                    "name": name,
+                    "type": detail.get("type"),
+                    "status": detail.get("status"),
+                    "role_arn": role_arn,
+                    "creation_date": str(detail.get("creationDate")) if detail.get("creationDate") else None,
+                },
+            )
+            nodes.append(node)
+            if role_arn:
+                pending.append((node.id, role_arn, "assumes role", EdgeType.AUTHENTICATES))
+            # Extract ARN references from the state machine definition
+            if isinstance(definition, str):
+                import re
+                for arn_match in re.findall(r'arn:aws:[a-z0-9-]+:[a-z0-9-]*:\d{12}:[^\s"\\}]+', definition):
+                    pending.append((node.id, arn_match.rstrip('",'), "invokes", EdgeType.TRIGGERS))
+        return nodes, pending, []
+
+    def _collect_ecr(self, region: str, executor: AWSAPIExecutor) -> tuple[list[StackMapNode], list[tuple[str, str | None, str, EdgeType]], list[StackMapGroup]]:
+        account_id = executor.context.account_id
+        nodes: list[StackMapNode] = []
+        repos = executor.paginate("ecr", "describe_repositories", "repositories", region=region)
+        for repo in repos:
+            arn = repo["repositoryArn"]
+            name = repo["repositoryName"]
+            node = _build_live_node(
+                account_id=account_id,
+                region=region,
+                resource_type="aws_ecr_repository",
+                resource_id=name,
+                name=name,
+                properties={
+                    "id": name,
+                    "arn": arn,
+                    "name": name,
+                    "uri": repo.get("repositoryUri"),
+                    "created_at": str(repo.get("createdAt")) if repo.get("createdAt") else None,
+                    "image_tag_mutability": repo.get("imageTagMutability"),
+                    "scan_on_push": repo.get("imageScanningConfiguration", {}).get("scanOnPush"),
+                },
+            )
+            nodes.append(node)
+        return nodes, [], []
+
+    def _collect_appsync(self, region: str, executor: AWSAPIExecutor) -> tuple[list[StackMapNode], list[tuple[str, str | None, str, EdgeType]], list[StackMapGroup]]:
+        account_id = executor.context.account_id
+        nodes: list[StackMapNode] = []
+        pending: list[tuple[str, str | None, str, EdgeType]] = []
+        resp = executor.call("appsync", "list_graphql_apis", region=region) or {}
+        for api in resp.get("graphqlApis", []):
+            api_id = api["apiId"]
+            arn = api.get("arn") or f"arn:aws:appsync:{region}:{account_id}:apis/{api_id}"
+            node = _build_live_node(
+                account_id=account_id,
+                region=region,
+                resource_type="aws_appsync_graphql_api",
+                resource_id=api_id,
+                name=api.get("name", api_id),
+                properties={
+                    "id": api_id,
+                    "arn": arn,
+                    "name": api.get("name"),
+                    "authentication_type": api.get("authenticationType"),
+                    "uris": api.get("uris", {}),
+                },
+            )
+            nodes.append(node)
+            # If Cognito auth, link to user pool
+            if api.get("authenticationType") == "AMAZON_COGNITO_USER_POOLS":
+                user_pool_config = api.get("userPoolConfig", {})
+                pool_id = user_pool_config.get("userPoolId")
+                if pool_id:
+                    pool_arn = f"arn:aws:cognito-idp:{user_pool_config.get('awsRegion', region)}:{account_id}:userpool/{pool_id}"
+                    pending.append((node.id, pool_arn, "authenticates via", EdgeType.AUTHENTICATES))
+
+            # Discover data sources
+            ds_resp = executor.call_optional(
+                "appsync",
+                "list_data_sources",
+                region=region,
+                swallow_codes={"AccessDeniedException", "NotFoundException"},
+                apiId=api_id,
+            ) or {}
+            for ds in ds_resp.get("dataSources", []):
+                ds_name = ds["name"]
+                ds_type = ds.get("type", "NONE")
+                ds_node = _build_live_node(
+                    account_id=account_id,
+                    region=region,
+                    resource_type="aws_appsync_datasource",
+                    resource_id=f"{api_id}/{ds_name}",
+                    name=ds_name,
+                    properties={
+                        "id": f"{api_id}/{ds_name}",
+                        "name": ds_name,
+                        "type": ds_type,
+                        "service_role_arn": ds.get("serviceRoleArn"),
+                    },
+                )
+                nodes.append(ds_node)
+                pending.append((ds_node.id, arn, "data source for", EdgeType.REFERENCES))
+                # Link to backing resource
+                if ds_type == "AMAZON_DYNAMODB":
+                    table_name = ds.get("dynamodbConfig", {}).get("tableName")
+                    if table_name:
+                        table_arn = f"arn:aws:dynamodb:{region}:{account_id}:table/{table_name}"
+                        pending.append((ds_node.id, table_arn, "reads/writes", EdgeType.READS_FROM))
+                elif ds_type == "AWS_LAMBDA":
+                    fn_arn = ds.get("lambdaConfig", {}).get("lambdaFunctionArn")
+                    if fn_arn:
+                        pending.append((ds_node.id, fn_arn, "invokes", EdgeType.TRIGGERS))
+                elif ds_type == "HTTP":
+                    endpoint = ds.get("httpConfig", {}).get("endpoint")
+                    if endpoint:
+                        pending.append((ds_node.id, endpoint, "calls", EdgeType.REFERENCES))
+                if ds.get("serviceRoleArn"):
+                    pending.append((ds_node.id, ds.get("serviceRoleArn"), "assumes role", EdgeType.AUTHENTICATES))
+
         return nodes, pending, []
 
     def _collect_tagging(self, region: str, executor: AWSAPIExecutor) -> tuple[list[StackMapNode], list[tuple[str, str | None, str, EdgeType]], list[StackMapGroup]]:
