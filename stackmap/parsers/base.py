@@ -31,6 +31,7 @@ class EdgeType(str, Enum):
     REFERENCES = "references"
     CONTAINS = "contains"
     AUTHENTICATES = "authenticates"
+    CROSS_ACCOUNT_REFERENCE = "cross_account_reference"
 
 
 @dataclass
@@ -42,6 +43,7 @@ class StackMapNode:
     category: ResourceCategory
     properties: dict = field(default_factory=dict)
     tags: dict = field(default_factory=dict)
+    metadata: dict = field(default_factory=dict)
     position_hint: dict = field(default_factory=dict)
 
 
@@ -61,6 +63,7 @@ class StackMapGroup:
     group_type: str
     children: list[str] = field(default_factory=list)
     parent: str | None = None
+    metadata: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -111,6 +114,7 @@ def _node_to_dict(node: StackMapNode) -> dict:
         "category": node.category.value,
         "properties": node.properties,
         "tags": node.tags,
+        "metadata": node.metadata,
         "position_hint": node.position_hint,
     }
 
@@ -124,6 +128,7 @@ def _node_from_dict(data: dict) -> StackMapNode:
         category=ResourceCategory(data["category"]),
         properties=data.get("properties", {}),
         tags=data.get("tags", {}),
+        metadata=data.get("metadata", {}),
         position_hint=data.get("position_hint", {}),
     )
 
@@ -155,6 +160,7 @@ def _group_to_dict(group: StackMapGroup) -> dict:
         "group_type": group.group_type,
         "children": group.children,
         "parent": group.parent,
+        "metadata": group.metadata,
     }
 
 
@@ -165,6 +171,7 @@ def _group_from_dict(data: dict) -> StackMapGroup:
         group_type=data["group_type"],
         children=data.get("children", []),
         parent=data.get("parent"),
+        metadata=data.get("metadata", {}),
     )
 
 

@@ -1,0 +1,81 @@
+{
+  "org_id": "o-stackmap",
+  "root_id": "r-root",
+  "root_name": "Root",
+  "ous": [
+    {
+      "id": "ou-eng",
+      "name": "Engineering",
+      "parent": "r-root",
+      "path": "Root/Engineering"
+    },
+    {
+      "id": "ou-eng-prod",
+      "name": "Production",
+      "parent": "ou-eng",
+      "path": "Root/Engineering/Production"
+    },
+    {
+      "id": "ou-eng-staging",
+      "name": "Staging",
+      "parent": "ou-eng",
+      "path": "Root/Engineering/Staging"
+    },
+    {
+      "id": "ou-platform",
+      "name": "Platform",
+      "parent": "r-root",
+      "path": "Root/Platform"
+    },
+    {
+      "id": "ou-security",
+      "name": "Security",
+      "parent": "r-root",
+      "path": "Root/Security"
+    },
+    {
+      "id": "ou-data",
+      "name": "Data",
+      "parent": "r-root",
+      "path": "Root/Data"
+    }
+  ],
+  "accounts": [
+    {
+      "id": "210000000001",
+      "name": "networking",
+      "parent": "ou-eng-prod",
+      "ou_path": "Root/Engineering/Production"
+    },
+    {
+      "id": "210000000002",
+      "name": "prod-app",
+      "parent": "ou-eng-prod",
+      "ou_path": "Root/Engineering/Production"
+    },
+    {
+      "id": "210000000003",
+      "name": "staging-app",
+      "parent": "ou-eng-staging",
+      "ou_path": "Root/Engineering/Staging"
+    },
+    {
+      "id": "210000000004",
+      "name": "shared-services",
+      "parent": "ou-platform",
+      "ou_path": "Root/Platform"
+    },
+    {
+      "id": "210000000005",
+      "name": "audit",
+      "parent": "ou-security",
+      "ou_path": "Root/Security"
+    },
+    {
+      "id": "210000000006",
+      "name": "data-platform",
+      "parent": "ou-data",
+      "ou_path": "Root/Data"
+    }
+  ]
+}

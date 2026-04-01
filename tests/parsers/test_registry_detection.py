@@ -44,3 +44,19 @@ def test_detect_source_type_rejects_non_template_yaml(tmp_path: Path) -> None:
 
     with pytest.raises(typer.BadParameter):
         detect_source_type(source)
+
+
+def test_detect_source_type_organization_json(tmp_path: Path) -> None:
+    source = tmp_path / "org.json"
+    source.write_text(
+        """
+        {
+          "org_id": "o-example",
+          "root_id": "r-root",
+          "accounts": [{"id": "210000000001", "name": "prod", "ou_path": "Root/Engineering"}],
+          "ous": [{"id": "ou-eng", "name": "Engineering", "parent": "r-root"}]
+        }
+        """
+    )
+
+    assert detect_source_type(source) == "organization"
