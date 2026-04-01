@@ -16,6 +16,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from stackmap.aws_live import AWSLiveScanner, build_policy_document
 from stackmap.organizations import build_org_document_from_aws, load_organization_document
 from stackmap.parsers.base import BaseParser, StackMapIR
 from stackmap.parsers.registry import (
@@ -223,6 +224,76 @@ def _annotate_scan_metadata(ir: StackMapIR, source_path: Path) -> None:
     ir.metadata.setdefault("source_path", str(source_path))
 
 
+def _write_ir_output(ir: StackMapIR, output: str, output_format: str) -> None:
+    if output_format == "json":
+        ir.write_json(output)
+        return
+
+    from stackmap.export import export_ir_to_html
+
+    export_ir_to_html(ir, output)
+
+
+def _parse_live_services(services: str) -> set[str]:
+    normalized = {value.strip().lower() for value in services.split(",") if value.strip()}
+    if not normalized or normalized == {"all"}:
+        return set()
+
+    from stackmap.aws_live.scanner import SERVICE_SET_BROAD
+
+    supported = set(SERVICE_SET_BROAD)
+    invalid = sorted(normalized - supported)
+    if invalid:
+        raise typer.BadParameter(
+            f"Unsupported AWS service(s): {', '.join(invalid)}. "
+            f"Supported services: {', '.join(sorted(supported))}"
+        )
+    return normalized
+
+
+def _print_live_scan_banner(summary: dict[str, Any]) -> None:
+    regions = summary.get("regions", [])
+    region_label = ", ".join(regions[:3])
+    if len(regions) > 3:
+        region_label = f"{region_label} + {len(regions) - 3} more"
+    if not region_label:
+        region_label = "-"
+
+    console.print()
+    console.print("[bold]StackMap AWS Scan[/bold]  [cyan]read-only mode[/cyan]")
+    console.print(
+        f"Account : [cyan]{summary.get('account_id', '-')}[/cyan]"
+        f"{' (organization scan)' if summary.get('org_scan') else ''}"
+    )
+    console.print(f"Regions : [cyan]{region_label}[/cyan]")
+    console.print(f"Auth    : [cyan]{summary.get('auth_description', '-') }[/cyan]")
+    console.print(
+        "Policy  : run [cyan]`stackmap aws-policy`[/cyan] to see the exact permissions required"
+    )
+    console.print()
+    console.print("No resources will be created or modified in your account.")
+
+
+def _print_dry_run_plan(plan: list[Any]) -> None:
+    table = Table(title="Planned AWS API Calls")
+    table.add_column("Account", style="cyan")
+    table.add_column("Region", style="magenta")
+    table.add_column("Service", style="green")
+    table.add_column("Operation", style="yellow")
+    table.add_column("Params", style="white")
+
+    for call in plan:
+        table.add_row(
+            call.account_id,
+            call.region,
+            call.service,
+            call.operation,
+            json.dumps(call.params, default=str, sort_keys=True),
+        )
+    console.print()
+    console.print(table)
+
+
 def _has_dev_only_nuxt_entry(public_dir: Path) -> bool:
     index_path = public_dir / "index.html"
     if not index_path.exists():
@@ -368,16 +439,11 @@ def scan(
             console.print(f"[red]Error:[/red] {exc}")
             raise typer.Exit(1)
 
-    if output_format == "json":
-        ir.write_json(output)
-    elif output_format == "html":
-        from stackmap.export import export_ir_to_html
-
-        try:
-            export_ir_to_html(ir, output)
-        except RuntimeError as exc:
-            console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
+    try:
+        _write_ir_output(ir, output, output_format)
+    except RuntimeError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(1)
 
     table = Table(title="StackMap Scan Results", show_header=False)
     table.add_column("Metric", style="bold")
@@ -481,16 +547,11 @@ def scan_repo(
 
     _annotate_scan_metadata(merged_ir, root_path)
 
-    if output_format == "json":
-        merged_ir.write_json(output)
-    else:
-        from stackmap.export import export_ir_to_html
-
-        try:
-            export_ir_to_html(merged_ir, output)
-        except RuntimeError as exc:
-            console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
+    try:
+        _write_ir_output(merged_ir, output, output_format)
+    except RuntimeError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(1)
 
     type_counts: dict[str, int] = {}
     for src in discovered:
@@ -575,6 +636,168 @@ def org_import(
         f"\n[green]✓[/green] Exported organization hierarchy with "
         f"{len(org.ous)} OUs and {len(org.accounts)} accounts."
     )
+
+
+@app.command("aws-policy")
+def aws_policy(
+    service_set: str = typer.Option(
+        "broad",
+        help="Policy breadth: core or broad.",
+    ),
+) -> None:
+    """Print the least-privilege AWS read-only policy StackMap expects."""
+    normalized = service_set.lower()
+    if normalized not in {"core", "broad"}:
+        console.print("[red]Error:[/red] --service-set must be 'core' or 'broad'.")
+        raise typer.Exit(1)
+    console.print_json(json.dumps(build_policy_document(normalized)))
+
+
+@app.command("scan-aws")
+def scan_aws(
+    profile: str | None = typer.Option(None, help="AWS profile name"),
+    region: list[str] = typer.Option([], "--region", help="AWS region to scan. Repeat to scan multiple regions."),
+    account: str | None = typer.Option(None, help="Account ID hint for labeling/grouping"),
+    role_arn: str | None = typer.Option(None, help="Assume this role before scanning"),
+    output: str = typer.Option("stackmap-aws-output.json", help="Output file path"),
+    format: str = typer.Option("json", help="Output format: json or html"),
+    services: str = typer.Option("all", help="Comma-separated service list to scan"),
+    dry_run: bool = typer.Option(False, help="Print planned API calls without executing them"),
+    verbose: bool = typer.Option(False, help="Log each API call as it runs"),
+    concurrency: int = typer.Option(4, help="Parallel region/account workers"),
+    org_file: str | None = typer.Option(None, help="Optional normalized AWS Organizations JSON export"),
+    org_scan: bool = typer.Option(False, help="Scan all accounts from the provided org file"),
+    role_name: str = typer.Option("StackMapReadOnly", help="Role name to assume during org scans"),
+    cache_dir: str | None = typer.Option(None, help="Cache directory for raw AWS API responses"),
+    no_cache: bool = typer.Option(False, help="Disable response caching"),
+    serve_after: bool = typer.Option(False, "--serve", help="Open the interactive viewer after scanning"),
+) -> None:
+    """Scan live AWS infrastructure using read-only AWS APIs."""
+    output_format = format.lower()
+    if output_format not in {"json", "html"}:
+        console.print(
+            f"[red]Error:[/red] Format '{format}' not supported. Use 'json' or 'html'."
+        )
+        raise typer.Exit(1)
+
+    if org_scan and not org_file:
+        console.print("[red]Error:[/red] --org-scan requires --org-file.")
+        raise typer.Exit(1)
+
+    try:
+        selected_services = _parse_live_services(services)
+    except typer.BadParameter as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(1)
+
+    scanner = AWSLiveScanner(
+        profile=profile,
+        regions=region,
+        account_hint=account,
+        role_arn=role_arn,
+        services=selected_services or None,
+        dry_run=dry_run,
+        verbose=verbose,
+        concurrency=concurrency,
+        org_file=org_file,
+        org_scan=org_scan,
+        role_name=role_name,
+        cache_dir=cache_dir,
+        no_cache=no_cache,
+        partial_write_path=output if output_format == "json" and not dry_run else None,
+    )
+
+    try:
+        summary = scanner.startup_summary()
+    except Exception as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(1)
+
+    _print_live_scan_banner(summary)
+
+    if dry_run:
+        try:
+            plan = scanner.dry_run_plan()
+        except Exception as exc:
+            console.print(f"[red]Error:[/red] {exc}")
+            raise typer.Exit(1)
+        _print_dry_run_plan(plan)
+        console.print(f"\n[green]✓[/green] Planned {len(plan)} AWS API calls.")
+        return
+
+    with console.status("[bold]Scanning live AWS infrastructure...[/bold]"):
+        try:
+            ir = scanner.scan()
+        except Exception as exc:
+            console.print(f"[red]Error:[/red] {exc}")
+            raise typer.Exit(1)
+
+    source_label = Path(output if output_format == "json" else "aws-live.json")
+    _annotate_scan_metadata(ir, source_label)
+
+    try:
+        _write_ir_output(ir, output, output_format)
+    except RuntimeError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(1)
+
+    table = Table(title="StackMap AWS Scan Results", show_header=False)
+    table.add_column("Metric", style="bold")
+    table.add_column("Value", style="cyan")
+    table.add_row("Scan mode", "organization" if org_scan else "single account")
+    table.add_row("Account", str(ir.metadata.get("account_id") or summary.get("account_id") or "-"))
+    table.add_row("Regions", ", ".join(ir.metadata.get("regions", summary.get("regions", []))) or "-")
+    table.add_row("Services", ", ".join(ir.metadata.get("selected_services", [])) or "all")
+    table.add_row("Resources", str(len(ir.nodes)))
+    table.add_row("Connections", str(len(ir.edges)))
+    table.add_row("Groups", str(len(ir.groups)))
+    table.add_row("API calls", str(ir.metadata.get("api_calls", 0)))
+    if ir.metadata.get("cross_account_edges") is not None:
+        table.add_row("Cross-account", str(ir.metadata.get("cross_account_edges", 0)))
+    table.add_row("Output", output)
+    console.print()
+    console.print(table)
+
+    warnings = ir.metadata.get("warnings", [])
+    errors = ir.metadata.get("errors", [])
+    if warnings:
+        console.print()
+        console.print("[yellow]Warnings:[/yellow]")
+        for warning in warnings[:15]:
+            console.print(f"- {warning}")
+        if len(warnings) > 15:
+            console.print(f"- ... and {len(warnings) - 15} more")
+    if errors:
+        console.print()
+        console.print("[yellow]Partial failures:[/yellow]")
+        for error in errors[:15]:
+            console.print(f"- {error}")
+        if len(errors) > 15:
+            console.print(f"- ... and {len(errors) - 15} more")
+
+    console.print(
+        f"\n[green]✓[/green] AWS scan complete: {len(ir.nodes)} resources, "
+        f"{len(ir.edges)} connections."
+    )
+
+    if serve_after:
+        serve_source = Path(output)
+        temp_json: Path | None = None
+        if output_format != "json":
+            temp_dir = Path(tempfile.mkdtemp(prefix="stackmap-scan-aws-"))
+            temp_json = temp_dir / "stackmap-aws-output.json"
+            ir.write_json(temp_json)
+            serve_source = temp_json
+        serve(
+            source=str(serve_source),
+            terraform_dir=None,
+            auto_pull_remote=False,
+            host="127.0.0.1",
+            port=3000,
+            watch=False,
+            watch_interval=1.0,
+            open_browser=True,
+        )
 
 
 @app.command()
