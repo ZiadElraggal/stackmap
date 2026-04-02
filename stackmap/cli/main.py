@@ -17,6 +17,7 @@ from rich.console import Console
 from rich.table import Table
 
 from stackmap.aws_live import AWSLiveScanner, build_policy_document, build_stackmap_role_template
+from stackmap.cli.mascot import mascot_status
 from stackmap.aws_live.org_setup import print_setup_instructions
 from stackmap.organizations import build_org_document_from_aws, load_organization_document
 from stackmap.parsers.base import BaseParser, StackMapIR
@@ -429,7 +430,7 @@ def scan(
         console.print(f"[red]Error:[/red] Source file not found: {source}")
         raise typer.Exit(1)
 
-    with console.status("[bold]Scanning infrastructure...[/bold]"):
+    with mascot_status(console, "[bold]Scanning infrastructure...[/bold]"):
         try:
             source_type, ir = _parse_source(str(source_path))
             _annotate_scan_metadata(ir, source_path)
@@ -530,7 +531,7 @@ def scan_repo(
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(1)
 
-    with console.status("[bold]Scanning repository sources...[/bold]"):
+    with mascot_status(console, "[bold]Scanning repository sources...[/bold]"):
         try:
             merged_ir, discovered, warnings, link_counts = _scan_repository_sources(
                 root=root_path,
@@ -613,7 +614,7 @@ def org_import(
     root_id: str | None = typer.Option(None, help="Optional Organizations root ID override"),
 ) -> None:
     """Export AWS Organizations hierarchy into a normalized JSON file."""
-    with console.status("[bold]Fetching AWS Organizations hierarchy...[/bold]"):
+    with mascot_status(console, "[bold]Fetching AWS Organizations hierarchy...[/bold]"):
         try:
             org = build_org_document_from_aws(profile=profile, region=region, root_id=root_id)
         except Exception as exc:
@@ -773,7 +774,7 @@ def scan_aws(
         console.print(f"\n[green]✓[/green] Planned {len(plan)} AWS API calls.")
         return
 
-    with console.status("[bold]Scanning live AWS infrastructure...[/bold]"):
+    with mascot_status(console, "[bold]Scanning live AWS infrastructure...[/bold]"):
         try:
             ir = scanner.scan()
         except Exception as exc:
@@ -941,7 +942,7 @@ def serve(
         console.print(f"[red]Error:[/red] Source file not found: {source}")
         raise typer.Exit(1)
 
-    with console.status("[bold]Preparing local viewer...[/bold]"):
+    with mascot_status(console, "[bold]Preparing local viewer...[/bold]"):
         try:
             source_type, ir = _parse_source(str(source_path))
             _annotate_scan_metadata(ir, source_path)
@@ -1064,7 +1065,7 @@ def diff(
         console.print(f"[red]Error:[/red] --to file not found: {to_path}")
         raise typer.Exit(1)
 
-    with console.status("[bold]Computing diff...[/bold]"):
+    with mascot_status(console, "[bold]Computing diff...[/bold]"):
         try:
             from_ir = StackMapIR.read_json(from_path)
             to_ir = StackMapIR.read_json(to_path)
