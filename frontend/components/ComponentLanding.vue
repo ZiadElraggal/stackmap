@@ -6,9 +6,9 @@
       <div class="mb-8 rounded-[28px] border border-white/[0.07] bg-[#0f131b]/88 px-6 py-6 shadow-[0_30px_100px_rgba(0,0,0,0.32)] backdrop-blur-md md:px-8">
         <div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           <div class="max-w-3xl">
-            <p class="mb-3 text-[10px] font-mono uppercase tracking-[0.32em] text-cyan-300/75">Architecture Overview</p>
+            <p class="mb-3 text-[10px] font-mono uppercase tracking-[0.32em] text-emerald-300/75">Architecture Overview</p>
             <div class="flex items-start gap-4">
-              <div class="hidden rounded-2xl border border-cyan-400/10 bg-cyan-500/[0.05] p-3 md:block">
+              <div class="hidden rounded-2xl border border-emerald-400/10 bg-emerald-500/[0.05] p-3 md:block">
                 <PixelMascot :size="52" state="idle" :animate="true" />
               </div>
               <div>
@@ -55,13 +55,13 @@
 
         <button
           v-if="featuredSummary"
-          class="group mb-4 w-full rounded-[28px] border border-cyan-400/14 bg-[linear-gradient(135deg,rgba(18,25,36,0.95),rgba(13,18,28,0.88))] px-6 py-5 text-left shadow-[0_28px_80px_rgba(0,0,0,0.28)] transition hover:border-cyan-300/28 hover:shadow-[0_36px_100px_rgba(0,0,0,0.34)]"
+          class="group mb-4 w-full rounded-[28px] border border-emerald-400/14 bg-[linear-gradient(135deg,rgba(18,25,36,0.95),rgba(13,18,28,0.88))] px-6 py-5 text-left shadow-[0_28px_80px_rgba(0,0,0,0.28)] transition hover:border-emerald-300/28 hover:shadow-[0_36px_100px_rgba(0,0,0,0.34)]"
           @click="store.openComponent(featuredSummary.id)"
         >
           <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div class="max-w-3xl">
               <div class="mb-3 flex items-center gap-2">
-                <span class="rounded-full border border-cyan-400/15 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.22em] text-cyan-300">
+                <span class="rounded-full border border-emerald-400/15 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.22em] text-emerald-300">
                   Top component
                 </span>
                 <span
@@ -71,7 +71,7 @@
                   {{ featuredSummary.entrypoints[0] }}
                 </span>
               </div>
-              <h4 class="text-2xl font-semibold tracking-tight text-white transition group-hover:text-cyan-100">
+              <h4 class="text-2xl font-semibold tracking-tight text-white transition group-hover:text-emerald-100">
                 {{ displayName(featuredSummary.name) }}
               </h4>
               <p class="mt-3 max-w-2xl text-sm leading-6 text-gray-400">
@@ -96,7 +96,7 @@
               <div class="text-xs text-gray-500">
                 {{ metaLine(featuredSummary) }}
               </div>
-              <div class="text-xs font-mono text-cyan-300 transition group-hover:text-cyan-200">
+              <div class="text-xs font-mono text-emerald-300 transition group-hover:text-emerald-200">
                 Open map →
               </div>
             </div>
@@ -110,7 +110,7 @@
             class="group rounded-[24px] border bg-[#11151d]/84 p-4 text-left shadow-[0_18px_60px_rgba(0,0,0,0.18)] transition hover:-translate-y-0.5 hover:shadow-[0_24px_70px_rgba(0,0,0,0.24)]"
             :class="component.kind === 'weakly_linked'
               ? 'border-white/[0.06] hover:border-indigo-400/20'
-              : 'border-white/[0.08] hover:border-cyan-400/24'"
+              : 'border-white/[0.08] hover:border-emerald-400/24'"
             @click="store.openComponent(component.id)"
           >
             <div class="mb-3 flex items-center justify-between gap-3">
@@ -118,14 +118,14 @@
                 class="rounded-full px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.18em]"
                 :class="component.kind === 'weakly_linked'
                   ? 'bg-indigo-500/10 text-indigo-300'
-                  : 'bg-cyan-500/10 text-cyan-300'"
+                  : 'bg-emerald-500/10 text-emerald-300'"
               >
                 {{ component.kind === 'weakly_linked' ? 'Weakly linked' : 'Service component' }}
               </span>
               <span class="text-[11px] font-mono text-gray-500">{{ component.resourceCount }} res</span>
             </div>
 
-            <h4 class="text-lg font-semibold tracking-tight text-white transition group-hover:text-cyan-100">
+            <h4 class="text-lg font-semibold tracking-tight text-white transition group-hover:text-emerald-100">
               {{ displayName(component.name) }}
             </h4>
             <p class="mt-2 text-sm leading-6 text-gray-400">
@@ -150,7 +150,7 @@
 
             <div class="mt-5 flex items-center justify-between border-t border-white/[0.06] pt-3 text-[11px] font-mono text-gray-500">
               <span>{{ metaLine(component) }}</span>
-              <span class="text-cyan-300 transition group-hover:text-cyan-200">Open map →</span>
+              <span class="text-emerald-300 transition group-hover:text-emerald-200">Open map →</span>
             </div>
           </button>
         </div>

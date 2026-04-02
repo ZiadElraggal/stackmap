@@ -2,7 +2,8 @@
   <Transition name="slide">
     <div
       v-if="node"
-      class="fixed right-0 top-0 h-full w-96 bg-[#12121a] overflow-y-auto overflow-x-hidden z-50 detail-shell"
+      class="fixed right-0 top-0 h-full w-96 overflow-y-auto overflow-x-hidden z-50 detail-shell"
+      style="backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); background: rgba(18, 18, 26, 0.95)"
       :style="{ '--panel-color': categoryColor }"
     >
       <div class="panel-accent" />
@@ -72,6 +73,29 @@
       </div>
 
       <div class="p-4 border-b border-white/10">
+        <!-- Edit mode actions for selected node -->
+        <div v-if="store.editMode && node" class="mb-3 flex flex-wrap gap-1.5">
+          <button
+            class="rounded-md border border-red-400/20 bg-red-500/10 px-2.5 py-1 text-[10px] font-mono text-red-300 transition hover:bg-red-500/15"
+            @click="store.hideNode(node.id)"
+          >
+            Hide
+          </button>
+          <button
+            class="rounded-md border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-mono text-emerald-300 transition hover:bg-emerald-500/15"
+            @click="store.startConnecting(node.id)"
+          >
+            Connect to...
+          </button>
+          <button
+            v-if="node.tags?._user_created"
+            class="rounded-md border border-red-400/30 bg-red-500/15 px-2.5 py-1 text-[10px] font-mono text-red-300 transition hover:bg-red-500/25"
+            @click="store.removeUserNode(node.id)"
+          >
+            Delete
+          </button>
+        </div>
+
         <div v-if="componentLabel" class="mb-3 flex items-center justify-between rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2">
           <div>
             <div class="text-[10px] uppercase tracking-widest text-gray-600">Component</div>

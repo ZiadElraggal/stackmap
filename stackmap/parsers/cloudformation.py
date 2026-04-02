@@ -102,6 +102,38 @@ CFN_CATEGORY_MAP: dict[str, ResourceCategory] = {
     "AWS::ECR::Repository": ResourceCategory.CONTAINER,
     # SES
     "AWS::SES::EmailIdentity": ResourceCategory.INTEGRATION,
+    # MSK (Kafka)
+    "AWS::MSK::Cluster": ResourceCategory.QUEUE,
+    "AWS::MSK::Configuration": ResourceCategory.QUEUE,
+    # OpenSearch / Elasticsearch
+    "AWS::OpenSearchService::Domain": ResourceCategory.DATABASE,
+    "AWS::Elasticsearch::Domain": ResourceCategory.DATABASE,
+    # Redshift
+    "AWS::Redshift::Cluster": ResourceCategory.DATABASE,
+    "AWS::Redshift::ClusterSubnetGroup": ResourceCategory.DATABASE,
+    # Glue
+    "AWS::Glue::Database": ResourceCategory.DATABASE,
+    "AWS::Glue::Crawler": ResourceCategory.INTEGRATION,
+    "AWS::Glue::Job": ResourceCategory.COMPUTE,
+    # CodePipeline / CodeBuild
+    "AWS::CodePipeline::Pipeline": ResourceCategory.INTEGRATION,
+    "AWS::CodeBuild::Project": ResourceCategory.COMPUTE,
+    # App Runner
+    "AWS::AppRunner::Service": ResourceCategory.COMPUTE,
+    # EFS
+    "AWS::EFS::FileSystem": ResourceCategory.STORAGE,
+    "AWS::EFS::MountTarget": ResourceCategory.STORAGE,
+    # MQ
+    "AWS::AmazonMQ::Broker": ResourceCategory.QUEUE,
+    # Global Accelerator
+    "AWS::GlobalAccelerator::Accelerator": ResourceCategory.NETWORK,
+    # Service Discovery
+    "AWS::ServiceDiscovery::Service": ResourceCategory.NETWORK,
+    "AWS::ServiceDiscovery::PrivateDnsNamespace": ResourceCategory.NETWORK,
+    # Transfer Family
+    "AWS::Transfer::Server": ResourceCategory.INTEGRATION,
+    # Amplify
+    "AWS::Amplify::App": ResourceCategory.COMPUTE,
     # SAM resources
     "AWS::Serverless::Function": ResourceCategory.COMPUTE,
     "AWS::Serverless::Api": ResourceCategory.INTEGRATION,
@@ -161,6 +193,17 @@ WEIGHT_MAP: dict[str, int] = {
     "AWS::Serverless::HttpApi": 5,
     "AWS::Serverless::StateMachine": 5,
     "AWS::Serverless::SimpleTable": 5,
+    "AWS::MSK::Cluster": 5,
+    "AWS::OpenSearchService::Domain": 5,
+    "AWS::Redshift::Cluster": 5,
+    "AWS::Glue::Job": 4,
+    "AWS::CodePipeline::Pipeline": 4,
+    "AWS::CodeBuild::Project": 3,
+    "AWS::AppRunner::Service": 5,
+    "AWS::EFS::FileSystem": 4,
+    "AWS::AmazonMQ::Broker": 5,
+    "AWS::Amplify::App": 4,
+    "AWS::Transfer::Server": 4,
 }
 
 _SUB_REF_PATTERN = re.compile(r"\${([A-Za-z0-9:_\-.]+)}")

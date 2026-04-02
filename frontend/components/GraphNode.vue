@@ -206,7 +206,7 @@
       :y="-(nodeHeight - 8) / 2"
       :rx="10"
       :ry="10"
-      fill="#13131f"
+      fill="#0d0d14"
       class="inner-shell"
     />
 
@@ -291,6 +291,69 @@
         font-family="'JetBrains Mono', monospace"
       >{{ diffBadge }}</text>
     </g>
+
+    <!-- Edit mode action buttons -->
+    <g v-if="store.editMode && !isAccountSummary" class="edit-actions" :opacity="isHovered ? 1 : 0">
+      <!-- Hide button -->
+      <g
+        class="edit-action-btn"
+        :transform="`translate(${nodeWidth / 2 - 8}, ${-nodeHeight / 2 - 14})`"
+        @click.stop="store.hideNode(node.id)"
+      >
+        <rect x="-10" y="-8" width="20" height="16" rx="4" fill="rgba(239,68,68,0.2)" stroke="rgba(239,68,68,0.4)" stroke-width="1"/>
+        <text x="0" y="1" text-anchor="middle" dominant-baseline="central" fill="#ef4444" font-size="9" font-family="'JetBrains Mono', monospace">H</text>
+      </g>
+      <!-- Connect button -->
+      <g
+        class="edit-action-btn"
+        :transform="`translate(${nodeWidth / 2 - 32}, ${-nodeHeight / 2 - 14})`"
+        @click.stop="onConnectClick"
+      >
+        <rect x="-10" y="-8" width="20" height="16" rx="4" fill="rgba(74,222,128,0.2)" stroke="rgba(74,222,128,0.4)" stroke-width="1"/>
+        <text x="0" y="1" text-anchor="middle" dominant-baseline="central" fill="#4ADE80" font-size="9" font-family="'JetBrains Mono', monospace">C</text>
+      </g>
+      <!-- Delete button (user nodes only) -->
+      <g
+        v-if="node.tags?._user_created"
+        class="edit-action-btn"
+        :transform="`translate(${nodeWidth / 2 + 16}, ${-nodeHeight / 2 - 14})`"
+        @click.stop="store.removeUserNode(node.id)"
+      >
+        <rect x="-10" y="-8" width="20" height="16" rx="4" fill="rgba(239,68,68,0.3)" stroke="rgba(239,68,68,0.5)" stroke-width="1"/>
+        <text x="0" y="1" text-anchor="middle" dominant-baseline="central" fill="#ef4444" font-size="10" font-weight="bold" font-family="'JetBrains Mono', monospace">x</text>
+      </g>
+    </g>
+
+    <!-- Connecting-from indicator ring -->
+    <rect
+      v-if="store.connectingFromNodeId === node.id"
+      :width="nodeWidth + 12"
+      :height="nodeHeight + 12"
+      :x="-(nodeWidth + 12) / 2"
+      :y="-(nodeHeight + 12) / 2"
+      rx="16" ry="16"
+      fill="none"
+      stroke="#4ADE80"
+      stroke-width="2"
+      stroke-dasharray="4 3"
+      opacity="0.7"
+      class="connecting-ring"
+    />
+
+    <!-- Connect-target pulse (when another node is connecting) -->
+    <rect
+      v-if="store.connectingFromNodeId && store.connectingFromNodeId !== node.id"
+      :width="nodeWidth + 6"
+      :height="nodeHeight + 6"
+      :x="-(nodeWidth + 6) / 2"
+      :y="-(nodeHeight + 6) / 2"
+      rx="14" ry="14"
+      fill="none"
+      stroke="#4ADE80"
+      stroke-width="1"
+      opacity="0.25"
+      class="connect-target-ring"
+    />
 
     <title>{{ node.name }} ({{ node.resource_type }})</title>
   </g>
@@ -432,7 +495,15 @@ const nodeOpacity = computed(() => {
   return isDimmed.value ? 0.12 : 1
 })
 
+const isHovered = computed(() => store.hoveredNodeId === props.node.id)
+
 function onClick() {
+  // Edit mode: handle connecting
+  if (store.editMode && store.connectingFromNodeId) {
+    store.completeConnection(props.node.id)
+    return
+  }
+
   const accountId = props.node.metadata?.account_id || props.node.position_hint?.account_id
   if (store.viewMode === 'organization' && props.node.position_hint?.view_kind === 'account_summary' && accountId) {
     store.enterAccountArchitecture(accountId)
@@ -440,6 +511,11 @@ function onClick() {
   }
   store.selectNode(isSelected.value ? null : props.node.id)
 }
+
+function onConnectClick() {
+  store.startConnecting(props.node.id)
+}
+
 function onHover() {
   store.hoverNode(props.node.id)
 }
@@ -506,5 +582,36 @@ onMounted(() => {
 .graph-node .icon,
 .graph-node .selection-ring {
   pointer-events: none;
+}
+
+.edit-actions {
+  transition: opacity 150ms ease;
+  pointer-events: auto;
+}
+
+.edit-action-btn {
+  cursor: pointer;
+  transition: transform 120ms ease;
+}
+
+.edit-action-btn:hover {
+  transform: scale(1.15);
+}
+
+@keyframes connecting-dash {
+  to { stroke-dashoffset: -14; }
+}
+
+.connecting-ring {
+  animation: connecting-dash 0.6s linear infinite;
+}
+
+@keyframes connect-pulse {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 0.4; }
+}
+
+.connect-target-ring {
+  animation: connect-pulse 1.2s ease-in-out infinite;
 }
 </style>

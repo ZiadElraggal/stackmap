@@ -2,12 +2,12 @@ import type { StackMapNode } from '~/stores/graph'
 
 export const CATEGORY_COLORS: Record<string, string> = {
   compute: '#f59e0b',
-  storage: '#3b82f6',
-  database: '#8b5cf6',
+  storage: '#38BDF8',      // sky blue (aligned with landing page secondary)
+  database: '#C084FC',     // soft purple (aligned with landing page tertiary)
   network: '#6b7280',
   security: '#ef4444',
-  monitoring: '#10b981',
-  integration: '#f97316',
+  monitoring: '#4ADE80',   // StackMap green (primary brand color)
+  integration: '#FB923C',  // warm orange (aligned with landing page warning)
   cdn: '#06b6d4',
   dns: '#14b8a6',
   container: '#ec4899',
@@ -17,14 +17,14 @@ export const CATEGORY_COLORS: Record<string, string> = {
 }
 
 export const EDGE_COLORS: Record<string, string> = {
-  triggers: '#f97316',
-  reads_from: '#3b82f6',
-  writes_to: '#22c55e',
+  triggers: '#FB923C',       // warm orange (landing page warning)
+  reads_from: '#38BDF8',     // sky blue (landing page secondary)
+  writes_to: '#4ADE80',      // StackMap green (landing page primary)
   routes_to: '#94a3b8',
   references: '#64748b',
   contains: '#475569',
   authenticates: '#ef4444',
-  cross_account_reference: '#f97316',
+  cross_account_reference: '#C084FC', // purple (landing page tertiary)
 }
 
 export const CATEGORY_ICONS: Record<string, string> = {

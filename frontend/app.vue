@@ -6,10 +6,15 @@
         v-if="!loaded"
         class="absolute inset-0 z-[200] flex items-center justify-center bg-[#0a0a0f]"
       >
-        <div class="flex flex-col items-center gap-4 rounded-3xl border border-white/[0.06] bg-white/[0.02] px-8 py-7 shadow-[0_30px_80px_rgba(0,0,0,0.35)] backdrop-blur-sm">
-          <PixelMascot :size="72" state="scanning" :animate="true" />
-          <span class="text-sm text-gray-400 font-mono tracking-wide">Loading infrastructure map...</span>
-          <span class="text-[11px] text-gray-600 font-mono tracking-[0.18em] uppercase">StackMap Prism</span>
+        <div class="flex flex-col items-center gap-5 rounded-3xl border border-white/[0.06] bg-[#12121a]/80 px-10 py-8 shadow-[0_24px_64px_rgba(0,0,0,0.55)] backdrop-blur-2xl">
+          <PixelMascot :size="80" state="scanning" :animate="true" />
+          <div class="flex flex-col items-center gap-1.5">
+            <span class="text-sm font-light tracking-wide" style="color: var(--sm-text)">Loading infrastructure map...</span>
+            <span class="text-[10px] font-mono tracking-[0.22em] uppercase" style="color: var(--sm-primary, #4ADE80); opacity: 0.6">StackMap Prism</span>
+          </div>
+          <div class="h-0.5 w-24 overflow-hidden rounded-full bg-white/5">
+            <div class="h-full w-full origin-left animate-pulse rounded-full" style="background: linear-gradient(90deg, transparent, var(--sm-primary), transparent)" />
+          </div>
         </div>
       </div>
     </Transition>
@@ -19,6 +24,7 @@
     <TimeTravelSlider />
     <DetailPanel />
     <CommandPalette ref="cmdRef" @pan-to="onPanTo" @fit-to-screen="onFit" />
+    <EditToolbar />
 
     <!-- Empty state overlay -->
     <Transition name="fade">
@@ -26,11 +32,11 @@
         v-if="loaded && isEmpty"
         class="absolute inset-0 z-30 flex items-center justify-center pointer-events-none"
       >
-        <div class="flex flex-col items-center gap-3 pointer-events-auto rounded-3xl border border-white/[0.06] bg-white/[0.02] px-8 py-7 shadow-[0_24px_72px_rgba(0,0,0,0.28)] backdrop-blur-sm">
+        <div class="flex flex-col items-center gap-4 pointer-events-auto rounded-3xl border border-white/[0.06] bg-[#12121a]/80 px-10 py-8 shadow-[0_24px_64px_rgba(0,0,0,0.55)] backdrop-blur-2xl">
           <PixelMascot :size="84" state="idle" :animate="true" />
-          <p class="text-sm text-gray-500 font-mono">No resources found</p>
-          <p class="text-xs text-gray-600 font-mono max-w-xs text-center">
-            Run <code class="text-gray-400">stackmap scan</code> or <code class="text-gray-400">stackmap scan-repo</code> to generate an infrastructure map.
+          <p class="text-sm font-light" style="color: var(--sm-text-muted)">No resources found</p>
+          <p class="text-xs max-w-xs text-center leading-relaxed" style="color: rgba(245,245,247,0.35)">
+            Run <code class="px-1.5 py-0.5 rounded" style="color: var(--sm-primary); background: rgba(74,222,128,0.08)">stackmap scan</code> or <code class="px-1.5 py-0.5 rounded" style="color: var(--sm-primary); background: rgba(74,222,128,0.08)">stackmap scan-repo</code> to generate an infrastructure map.
           </p>
         </div>
       </div>
@@ -60,13 +66,33 @@ function onFit() {
 
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  /* StackMap Design Tokens */
+  --sm-bg: #0a0a0f;
+  --sm-surface: #12121a;
+  --sm-border: rgba(255, 255, 255, 0.06);
+  --sm-border-hover: rgba(255, 255, 255, 0.10);
+  --sm-primary: #4ADE80;
+  --sm-primary-glow: rgba(74, 222, 128, 0.15);
+  --sm-secondary: #38BDF8;
+  --sm-tertiary: #C084FC;
+  --sm-warning: #FB923C;
+  --sm-text: #f5f5f7;
+  --sm-text-muted: rgba(245, 245, 247, 0.5);
+  --sm-terminal-bg: #0d0d14;
+}
 
 html, body {
   margin: 0;
   padding: 0;
   overflow: hidden;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
+  letter-spacing: -0.01em;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 code, .font-mono {
@@ -80,17 +106,32 @@ code, .font-mono {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.08);
-  border-radius: 3px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 980px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.12);
 }
 
-.fade-slow-enter-active { transition: opacity 0.3s ease; }
-.fade-slow-leave-active { transition: opacity 0.6s ease; }
+/* Glassmorphic panel base */
+.glass-panel {
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--sm-border);
+}
+
+.fade-slow-enter-active { transition: opacity 0.3s cubic-bezier(0.25, 0.1, 0.25, 1); }
+.fade-slow-leave-active { transition: opacity 0.6s cubic-bezier(0.25, 0.1, 0.25, 1); }
 .fade-slow-enter-from, .fade-slow-leave-to { opacity: 0; }
 
-.fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s cubic-bezier(0.25, 0.1, 0.25, 1); }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
 </style>
