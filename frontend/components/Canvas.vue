@@ -28,16 +28,16 @@
         <g v-if="store.viewMode !== 'organization'">
           <rect
             v-for="band in tierBands"
-            :key="`tier-band-${band.name}`"
+            :key="`tier-band-${band.id}`"
             :x="graphBounds.minX - 260"
             :y="band.yStart"
             :width="graphBounds.width + 520"
             :height="band.yEnd - band.yStart"
             :fill="band.fill"
-            :fill-opacity="tierBandOpacity(band.name)"
+            :fill-opacity="tierBandOpacity(band.id)"
             :stroke="band.stroke"
-            :stroke-opacity="tierBorderOpacity(band.name)"
-            stroke-width="1.2"
+            :stroke-opacity="tierBorderOpacity(band.id)"
+            :stroke-width="store.dragTargetLayerId === band.id ? 1.8 : 1.2"
           />
         </g>
 
@@ -64,7 +64,7 @@
           @click="store.selectNode(null)"
         />
 
-        <g v-if="store.viewMode !== 'organization'" v-for="band in tierBands" :key="`tier-${band.name}`">
+        <g v-if="store.viewMode !== 'organization'" v-for="band in tierBands" :key="`tier-${band.id}`">
           <rect
             :x="graphBounds.minX - 226"
             :y="band.yStart + 12"
@@ -73,10 +73,10 @@
             width="118"
             height="24"
             :fill="band.chipFill"
-            :fill-opacity="tierChipOpacity(band.name)"
+            :fill-opacity="tierChipOpacity(band.id)"
             :stroke="band.chipStroke"
-            :stroke-opacity="tierChipOpacity(band.name)"
-            stroke-width="1"
+            :stroke-opacity="tierChipOpacity(band.id)"
+            :stroke-width="store.dragTargetLayerId === band.id ? 1.4 : 1"
           />
           <text
             :x="graphBounds.minX - 216"
@@ -111,7 +111,7 @@
           >{{ band.name.toUpperCase() }}</text>
         </g>
 
-        <g v-if="store.viewMode !== 'organization'" v-for="(band, idx) in tierBands" :key="`flow-arrow-${band.name}`">
+        <g v-if="store.viewMode !== 'organization'" v-for="(band, idx) in tierBands" :key="`flow-arrow-${band.id}`">
           <text
             v-if="idx < tierBands.length - 1"
             :x="graphBounds.minX + graphBounds.width / 2"
@@ -149,6 +149,9 @@
           :x="store.positions[node.id]?.x ?? 0"
           :y="store.positions[node.id]?.y ?? 0"
           :entry-delay="idx * 15"
+          @drag-node-start="onNodeDragStart"
+          @drag-node-move="onNodeDragMove"
+          @drag-node-end="onNodeDragEnd"
         />
       </g>
     </svg>
@@ -158,6 +161,20 @@
     <div class="absolute left-1/2 top-4 z-40 -translate-x-1/2">
       <SearchBar ref="searchBarRef" @pan-to="panToNode" />
     </div>
+
+    <Transition name="fade">
+      <div
+        v-if="draggingNodeName"
+        class="pointer-events-none absolute left-1/2 top-20 z-50 -translate-x-1/2 rounded-xl border border-emerald-400/25 bg-[#0e0e18]/95 px-4 py-2 backdrop-blur-md shadow-xl"
+      >
+        <div class="text-[10px] font-mono uppercase tracking-widest text-emerald-400">Moving Component</div>
+        <div class="mt-1 text-xs text-gray-300">
+          {{ draggingNodeName }}
+          <span class="text-gray-500">→</span>
+          <span class="text-emerald-300">{{ dragTargetLayerLabel || 'choose a layer' }}</span>
+        </div>
+      </div>
+    </Transition>
 
     <Transition name="fade">
       <div
@@ -288,7 +305,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import * as d3 from 'd3'
 import { useGraphStore, type NodePosition, type StackMapEdge, type StackMapNode } from '~/stores/graph'
 import { useLayout } from '~/composables/useLayout'
-import { EDGE_COLORS, getNodeHeight } from '~/composables/useGraph'
+import { EDGE_COLORS, buildLayerDefinitions, getNodeHeight } from '~/composables/useGraph'
 
 const store = useGraphStore()
 const { computeLayout, sortByTier } = useLayout()
@@ -309,7 +326,7 @@ const orderedVisibleNodes = computed(() => {
   if (store.viewMode === 'organization') {
     return [...store.visibleNodes].sort((a, b) => a.name.localeCompare(b.name))
   }
-  return sortByTier(store.visibleNodes)
+  return sortByTier(store.visibleNodes, store.layoutLayers)
 })
 const visibleNodeMap = computed(() => new Map(store.visibleNodes.map(n => [n.id, n])))
 const edgeEntryBaseDelay = computed(() => orderedVisibleNodes.value.length * 15 + 200)
@@ -334,11 +351,13 @@ const graphBounds = computed(() => {
   }
 })
 
+const layerDefinitions = computed(() => buildLayerDefinitions(store.layoutLayers, store.customLayers))
+
 const tierBands = computed(() => {
   if (store.viewMode === 'organization') return []
   const tierNodes: Record<string, number[]> = {}
   for (const node of store.visibleNodes) {
-    const tier = node.position_hint?.tier || 'backend'
+    const tier = node.position_hint?.tier || 'compute'
     const pos = store.positions[node.id]
     if (!pos) continue
     if (!tierNodes[tier]) tierNodes[tier] = []
@@ -346,6 +365,7 @@ const tierBands = computed(() => {
   }
 
   const bands: Array<{
+    id: string
     name: string
     yStart: number
     yEnd: number
@@ -357,32 +377,24 @@ const tierBands = computed(() => {
     labelY: number
     icon: string
   }> = []
-  const tierOrder = ['frontend', 'api', 'backend', 'data']
-  const tierColors: Record<string, { fill: string; stroke: string; icon: string }> = {
-    frontend: { fill: 'rgba(34,211,238,0.09)', stroke: 'rgba(34,211,238,0.32)', icon: '◈' },
-    api: { fill: 'rgba(59,130,246,0.085)', stroke: 'rgba(59,130,246,0.3)', icon: '◎' },
-    backend: { fill: 'rgba(99,102,241,0.08)', stroke: 'rgba(129,140,248,0.28)', icon: '▣' },
-    data: { fill: 'rgba(16,185,129,0.09)', stroke: 'rgba(52,211,153,0.3)', icon: '◉' },
-  }
-
-  for (const tier of tierOrder) {
-    const ys = tierNodes[tier]
+  for (const layer of layerDefinitions.value) {
+    const ys = tierNodes[layer.id]
     if (!ys || ys.length === 0) continue
     const minY = Math.min(...ys)
     const maxY = Math.max(...ys)
     const padding = 80
-    const c = tierColors[tier] || { fill: 'rgba(255,255,255,0.05)', stroke: 'rgba(255,255,255,0.2)', icon: '•' }
     bands.push({
-      name: tier,
+      id: layer.id,
+      name: layer.label,
       yStart: minY - padding,
       yEnd: maxY + padding,
-      fill: c.fill,
-      stroke: c.stroke,
-      chipFill: c.fill,
-      chipStroke: c.stroke,
-      chipAccent: c.stroke,
+      fill: layer.fill,
+      stroke: layer.stroke,
+      chipFill: layer.fill,
+      chipStroke: layer.stroke,
+      chipAccent: layer.accent,
       labelY: (minY + maxY) / 2,
-      icon: c.icon,
+      icon: layer.icon,
     })
   }
 
@@ -414,33 +426,32 @@ const hoveredTier = computed(() => {
 })
 
 const architectureStrip = computed(() => {
-  const order = ['frontend', 'api', 'backend', 'data']
-  const names: Record<string, string> = { frontend: 'FE', api: 'API', backend: 'BE', data: 'DATA' }
-  const accents: Record<string, string> = {
-    frontend: '#67e8f9',
-    api: '#60a5fa',
-    backend: '#818cf8',
-    data: '#34d399',
-  }
-  const backgrounds: Record<string, string> = {
-    frontend: 'rgba(34,211,238,0.16)',
-    api: 'rgba(59,130,246,0.16)',
-    backend: 'rgba(99,102,241,0.16)',
-    data: 'rgba(16,185,129,0.16)',
-  }
-  const counts: Record<string, number> = { frontend: 0, api: 0, backend: 0, data: 0 }
+  const counts: Record<string, number> = Object.fromEntries(store.layoutLayers.map(layerId => [layerId, 0]))
   const sourceNodes = store.viewMode === 'components' ? store.architectureSourceNodes : store.visibleNodes
   for (const node of sourceNodes) {
-    const tier = node.position_hint?.tier || 'backend'
-    if (tier in counts) counts[tier] += 1
+    const tier = node.position_hint?.tier || 'compute'
+    counts[tier] = (counts[tier] || 0) + 1
   }
-  return order.map(name => ({
-    name,
-    short: names[name],
-    count: counts[name] || 0,
-    accent: accents[name],
-    bg: backgrounds[name],
+  return layerDefinitions.value.map(layer => ({
+    name: layer.id,
+    short: layer.short,
+    count: counts[layer.id] || 0,
+    accent: layer.accent,
+    bg: layer.fill.replace('0.09', '0.16').replace('0.085', '0.16').replace('0.10', '0.16').replace('0.08', '0.16'),
   }))
+})
+
+const draggingNodeName = computed(() => {
+  if (!store.draggingNodeId) return null
+  return store.visibleNodes.find(node => node.id === store.draggingNodeId)?.name
+    || store.userNodes.find(node => node.id === store.draggingNodeId)?.name
+    || store.nodes.find(node => node.id === store.draggingNodeId)?.name
+    || null
+})
+
+const dragTargetLayerLabel = computed(() => {
+  if (!store.dragTargetLayerId) return null
+  return layerDefinitions.value.find(layer => layer.id === store.dragTargetLayerId)?.label || store.dragTargetLayerId
 })
 
 const viewModeLabel = computed(() => {
@@ -460,11 +471,13 @@ const diffSummaryMeta = computed(() => {
 })
 
 function tierBandOpacity(bandName: string): number {
+  if (store.dragTargetLayerId) return store.dragTargetLayerId === bandName ? 0.95 : 0.36
   if (!hoveredTier.value) return 0.65
   return hoveredTier.value === bandName ? 0.95 : 0.28
 }
 
 function tierBorderOpacity(bandName: string): number {
+  if (store.dragTargetLayerId) return store.dragTargetLayerId === bandName ? 0.95 : 0.26
   if (!hoveredTier.value) return 0.45
   return hoveredTier.value === bandName ? 0.9 : 0.2
 }
@@ -475,6 +488,7 @@ function tierDividerOpacity(dividerName: string): number {
 }
 
 function tierChipOpacity(bandName: string): number {
+  if (store.dragTargetLayerId) return store.dragTargetLayerId === bandName ? 1 : 0.56
   if (!hoveredTier.value) return 0.9
   return hoveredTier.value === bandName ? 1 : 0.45
 }
@@ -647,8 +661,53 @@ function recomputeLayout() {
   const allEdges = store.visibleEdges
   const positions = store.diffMode
     ? computeDiffLayout()
-    : computeLayout(allNodes, allEdges, store.graphGroups)
+    : computeLayout(allNodes, allEdges, store.graphGroups, store.layoutLayers)
   store.setPositions(positions)
+}
+
+function onNodeDragStart(payload: { nodeId: string; clientX: number; clientY: number }) {
+  if (!store.editMode || store.viewMode === 'organization') return
+  store.startDraggingNode(payload.nodeId)
+  updateDragTargetFromPointer(payload.clientY)
+}
+
+function onNodeDragMove(payload: { nodeId: string; clientX: number; clientY: number }) {
+  if (store.draggingNodeId !== payload.nodeId) return
+  updateDragTargetFromPointer(payload.clientY)
+}
+
+async function onNodeDragEnd(payload: { nodeId: string; clientX: number; clientY: number }) {
+  if (store.draggingNodeId !== payload.nodeId) return
+  updateDragTargetFromPointer(payload.clientY)
+  const targetLayerId = store.dragTargetLayerId
+  store.finishDraggingNode(targetLayerId)
+  await nextTick()
+  fitToViewport()
+}
+
+function updateDragTargetFromPointer(clientY: number) {
+  const svg = svgRef.value
+  if (!svg || !zoomGroupRef.value || !zoomBehavior) return
+  const screenPoint = svg.createSVGPoint()
+  screenPoint.x = 0
+  screenPoint.y = clientY
+
+  const zoomMatrix = zoomGroupRef.value.getScreenCTM()
+  if (!zoomMatrix) return
+
+  const graphPoint = screenPoint.matrixTransform(zoomMatrix.inverse())
+  const targetBand = tierBands.value.find(band => graphPoint.y >= band.yStart && graphPoint.y <= band.yEnd)
+  if (targetBand) {
+    store.setDragTargetLayer(targetBand.id)
+    return
+  }
+
+  const nearestBand = [...tierBands.value].sort((a, b) => {
+    const aCenter = (a.yStart + a.yEnd) / 2
+    const bCenter = (b.yStart + b.yEnd) / 2
+    return Math.abs(aCenter - graphPoint.y) - Math.abs(bCenter - graphPoint.y)
+  })[0]
+  store.setDragTargetLayer(nearestBand?.id || null)
 }
 
 function computeDiffLayout(): Record<string, NodePosition> {
@@ -669,8 +728,8 @@ function computeDiffLayout(): Record<string, NodePosition> {
     edgeDiffStatus[edge.id] !== 'removed' && afterIds.has(edge.source) && afterIds.has(edge.target)
   )
 
-  const beforePositions = computeLayout(beforeNodes, beforeEdges, store.graphGroups)
-  const afterPositions = computeLayout(afterNodes, afterEdges, store.graphGroups)
+  const beforePositions = computeLayout(beforeNodes, beforeEdges, store.graphGroups, store.layoutLayers)
+  const afterPositions = computeLayout(afterNodes, afterEdges, store.graphGroups, store.layoutLayers)
   const beforeFallback = centroidForPositions(beforePositions)
   const afterFallback = centroidForPositions(afterPositions)
 

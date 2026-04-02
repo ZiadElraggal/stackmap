@@ -39,7 +39,7 @@
       "tagging"
     ],
     "auth_mode": "explicit multi-account via AWS profiles",
-    "scanned_at": "2026-04-02T12:58:20.617224+00:00",
+    "scanned_at": "2026-04-02T16:03:41.490985+00:00",
     "source_path": "multi.json"
   },
   "nodes": [
@@ -1184,7 +1184,7 @@
           "DYNAMODB_TABLE_NAME": "meso-simulation-metadata-sandbox-ziad",
           "LAMBDA_API_URL": ""
         },
-        "last_modified": "2026-04-02T12:50:43.000+0000"
+        "last_modified": "2026-04-02T15:46:00.000+0000"
       },
       "tags": {},
       "metadata": {
@@ -1226,7 +1226,7 @@
           "DYNAMODB_TABLE_NAME": "meso-simulation-metadata-sandbox-ziad",
           "LAMBDA_API_URL": ""
         },
-        "last_modified": "2026-04-02T12:50:44.000+0000"
+        "last_modified": "2026-04-02T15:46:37.000+0000"
       },
       "tags": {},
       "metadata": {
@@ -1268,7 +1268,7 @@
           "DYNAMODB_TABLE_NAME": "meso-simulation-metadata-sandbox-ziad",
           "LAMBDA_API_URL": ""
         },
-        "last_modified": "2026-04-02T12:50:43.000+0000"
+        "last_modified": "2026-04-02T15:49:15.000+0000"
       },
       "tags": {},
       "metadata": {
@@ -1312,7 +1312,7 @@
           "API_DATA_BUCKET": "meso-api-data-sandbox-ziad",
           "LAMBDA_API_URL": ""
         },
-        "last_modified": "2026-04-02T12:50:43.000+0000"
+        "last_modified": "2026-04-02T15:46:27.000+0000"
       },
       "tags": {},
       "metadata": {
@@ -1396,7 +1396,7 @@
           "DYNAMODB_TABLE_NAME": "meso-simulation-metadata-sandbox-ziad",
           "LAMBDA_API_URL": ""
         },
-        "last_modified": "2026-04-02T12:50:40.000+0000"
+        "last_modified": "2026-04-02T15:22:25.000+0000"
       },
       "tags": {},
       "metadata": {
@@ -1438,7 +1438,7 @@
           "DYNAMODB_TABLE_NAME": "meso-simulation-metadata-sandbox-ziad",
           "LAMBDA_API_URL": ""
         },
-        "last_modified": "2026-04-02T12:50:44.000+0000"
+        "last_modified": "2026-04-02T15:49:11.000+0000"
       },
       "tags": {},
       "metadata": {
@@ -1481,7 +1481,7 @@
           "DYNAMODB_TABLE_NAME": "meso-simulation-metadata-sandbox-ziad",
           "LAMBDA_API_URL": ""
         },
-        "last_modified": "2026-04-02T12:50:44.000+0000"
+        "last_modified": "2026-04-02T15:46:06.000+0000"
       },
       "tags": {},
       "metadata": {
@@ -1523,7 +1523,7 @@
           "DYNAMODB_TABLE_NAME": "meso-simulation-metadata-sandbox-ziad",
           "LAMBDA_API_URL": ""
         },
-        "last_modified": "2026-04-02T12:50:44.000+0000"
+        "last_modified": "2026-04-02T15:22:25.000+0000"
       },
       "tags": {},
       "metadata": {
@@ -1565,7 +1565,7 @@
           "DYNAMODB_TABLE_NAME": "meso-simulation-metadata-sandbox-ziad",
           "LAMBDA_API_URL": ""
         },
-        "last_modified": "2026-04-02T12:50:44.000+0000"
+        "last_modified": "2026-04-02T15:49:06.000+0000"
       },
       "tags": {},
       "metadata": {
@@ -1607,7 +1607,7 @@
           "DYNAMODB_TABLE_NAME": "meso-simulation-metadata-sandbox-ziad",
           "LAMBDA_API_URL": ""
         },
-        "last_modified": "2026-04-02T12:50:43.000+0000"
+        "last_modified": "2026-04-02T15:46:51.000+0000"
       },
       "tags": {},
       "metadata": {
@@ -1649,7 +1649,7 @@
           "DYNAMODB_TABLE_NAME": "meso-simulation-metadata-sandbox-ziad",
           "LAMBDA_API_URL": ""
         },
-        "last_modified": "2026-04-02T12:50:40.000+0000"
+        "last_modified": "2026-04-02T15:22:25.000+0000"
       },
       "tags": {},
       "metadata": {
@@ -1779,7 +1779,7 @@
           "API_DATA_BUCKET": "meso-api-data-sandbox-ziad",
           "LAMBDA_API_URL": ""
         },
-        "last_modified": "2026-04-02T12:50:44.000+0000"
+        "last_modified": "2026-04-02T15:22:25.000+0000"
       },
       "tags": {},
       "metadata": {
@@ -1822,7 +1822,7 @@
           "DYNAMODB_TABLE_NAME": "meso-simulation-metadata-sandbox-ziad",
           "LAMBDA_API_URL": ""
         },
-        "last_modified": "2026-04-02T12:50:43.000+0000"
+        "last_modified": "2026-04-02T15:46:47.000+0000"
       },
       "tags": {},
       "metadata": {
@@ -2716,6 +2716,51 @@
       }
     },
     {
+      "id": "aws:931112879148:us-east-1:aws_instance:i-07afbd9d6a6585f7f",
+      "name": "meso-dev-env",
+      "resource_type": "aws_instance",
+      "provider": "aws",
+      "category": "compute",
+      "properties": {
+        "id": "i-07afbd9d6a6585f7f",
+        "arn": "arn:aws:ec2:us-east-1:931112879148:instance/i-07afbd9d6a6585f7f",
+        "instance_type": "t3.small",
+        "state": "running",
+        "vpc_id": "vpc-0981b92ab94523e98",
+        "subnet_id": "subnet-0cc4f2dce4f84b502",
+        "security_group_ids": [
+          "sg-0d2709efa8f4c4d85"
+        ]
+      },
+      "tags": {
+        "aws:ec2launchtemplate:version": "1",
+        "aws:cloudformation:stack-name": "awseb-e-4q63gxmuhq-stack",
+        "aws:autoscaling:groupName": "awseb-e-4q63gxmuhq-stack-AWSEBAutoScalingGroup-ijD6wp7RuGfP",
+        "Project": "meso-frontend",
+        "aws:cloudformation:logical-id": "AWSEBAutoScalingGroup",
+        "Environment": "dev",
+        "aws:ec2launchtemplate:id": "lt-084a0d01885075264",
+        "Name": "meso-dev-env",
+        "elasticbeanstalk:environment-id": "e-4q63gxmuhq",
+        "elasticbeanstalk:environment-name": "meso-dev-env",
+        "aws:cloudformation:stack-id": "arn:aws:cloudformation:us-east-1:931112879148:stack/awseb-e-4q63gxmuhq-stack/245efe40-2e2c-11f1-afff-12cd4b69d7a7"
+      },
+      "metadata": {
+        "account_id": "931112879148",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 2,
+        "account_id": "931112879148",
+        "region": "us-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
       "id": "aws:931112879148:us-east-1:aws_ecr_repository:mesosamdev34e9e687/solarapifunctionc65567earepo",
       "name": "mesosamdev34e9e687/solarapifunctionc65567earepo",
       "resource_type": "aws_ecr_repository",
@@ -2876,7 +2921,7 @@
         "id": "arn:aws:ecs:us-east-1:931112879148:service/meso-cluster-dev/meso-backend-dev",
         "arn": "arn:aws:ecs:us-east-1:931112879148:service/meso-cluster-dev/meso-backend-dev",
         "cluster": "arn:aws:ecs:us-east-1:931112879148:cluster/meso-cluster-dev",
-        "task_definition": "arn:aws:ecs:us-east-1:931112879148:task-definition/meso-backend-dev-dev:23",
+        "task_definition": "arn:aws:ecs:us-east-1:931112879148:task-definition/meso-backend-dev-dev:32",
         "target_group_arns": [
           "arn:aws:elasticloadbalancing:us-east-1:931112879148:targetgroup/MESO-dev-tg/6e2549e037bd1f22"
         ],
@@ -2904,14 +2949,14 @@
       }
     },
     {
-      "id": "aws:931112879148:us-east-1:aws_ecs_task_definition:meso-backend-dev-dev:23",
+      "id": "aws:931112879148:us-east-1:aws_ecs_task_definition:meso-backend-dev-dev:32",
       "name": "meso-backend-dev-dev",
       "resource_type": "aws_ecs_task_definition",
       "provider": "aws",
       "category": "container",
       "properties": {
-        "id": "arn:aws:ecs:us-east-1:931112879148:task-definition/meso-backend-dev-dev:23",
-        "arn": "arn:aws:ecs:us-east-1:931112879148:task-definition/meso-backend-dev-dev:23",
+        "id": "arn:aws:ecs:us-east-1:931112879148:task-definition/meso-backend-dev-dev:32",
+        "arn": "arn:aws:ecs:us-east-1:931112879148:task-definition/meso-backend-dev-dev:32",
         "family": "meso-backend-dev-dev",
         "task_role_arn": null,
         "execution_role_arn": "arn:aws:iam::931112879148:role/meso-backend-dev-execution-role-dev"
@@ -3439,6 +3484,35 @@
         "role_name": "meso-backend-dev-execution-role-dev",
         "assume_role_policy": "{\"Version\": \"2012-10-17\", \"Statement\": [{\"Effect\": \"Allow\", \"Principal\": {\"Service\": \"ecs-tasks.amazonaws.com\"}, \"Action\": \"sts:AssumeRole\"}]}",
         "create_date": "2026-03-25 18:22:08+00:00"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "931112879148",
+        "region": "global",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "backend",
+        "weight": 2,
+        "account_id": "931112879148",
+        "region": "global",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:931112879148:global:aws_iam_role:meso-backend-dev-task-role-dev",
+      "name": "meso-backend-dev-task-role-dev",
+      "resource_type": "aws_iam_role",
+      "provider": "aws",
+      "category": "security",
+      "properties": {
+        "id": "meso-backend-dev-task-role-dev",
+        "arn": "arn:aws:iam::931112879148:role/meso-backend-dev-task-role-dev",
+        "role_name": "meso-backend-dev-task-role-dev",
+        "assume_role_policy": "{\"Version\": \"2012-10-17\", \"Statement\": [{\"Effect\": \"Allow\", \"Principal\": {\"Service\": \"ecs-tasks.amazonaws.com\"}, \"Action\": \"sts:AssumeRole\"}]}",
+        "create_date": "2026-04-02 15:25:04+00:00"
       },
       "tags": {},
       "metadata": {
@@ -5185,6 +5259,20 @@
       "label": "in vpc"
     },
     {
+      "id": "aws:931112879148:us-east-1:aws_instance:i-07afbd9d6a6585f7f->aws:931112879148:us-east-1:aws_vpc:vpc-0981b92ab94523e98:references",
+      "source": "aws:931112879148:us-east-1:aws_instance:i-07afbd9d6a6585f7f",
+      "target": "aws:931112879148:us-east-1:aws_vpc:vpc-0981b92ab94523e98",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:931112879148:us-east-1:aws_instance:i-07afbd9d6a6585f7f->aws:931112879148:us-east-1:aws_subnet:subnet-0cc4f2dce4f84b502:references",
+      "source": "aws:931112879148:us-east-1:aws_instance:i-07afbd9d6a6585f7f",
+      "target": "aws:931112879148:us-east-1:aws_subnet:subnet-0cc4f2dce4f84b502",
+      "edge_type": "references",
+      "label": "in subnet"
+    },
+    {
       "id": "aws:931112879148:us-east-1:aws_ecs_service:meso-backend-dev->aws:931112879148:us-east-1:aws_ecs_cluster:meso-cluster-dev:references",
       "source": "aws:931112879148:us-east-1:aws_ecs_service:meso-backend-dev",
       "target": "aws:931112879148:us-east-1:aws_ecs_cluster:meso-cluster-dev",
@@ -5192,9 +5280,9 @@
       "label": "runs on"
     },
     {
-      "id": "aws:931112879148:us-east-1:aws_ecs_service:meso-backend-dev->aws:931112879148:us-east-1:aws_ecs_task_definition:meso-backend-dev-dev:23:references",
+      "id": "aws:931112879148:us-east-1:aws_ecs_service:meso-backend-dev->aws:931112879148:us-east-1:aws_ecs_task_definition:meso-backend-dev-dev:32:references",
       "source": "aws:931112879148:us-east-1:aws_ecs_service:meso-backend-dev",
-      "target": "aws:931112879148:us-east-1:aws_ecs_task_definition:meso-backend-dev-dev:23",
+      "target": "aws:931112879148:us-east-1:aws_ecs_task_definition:meso-backend-dev-dev:32",
       "edge_type": "references",
       "label": "uses task definition"
     },
@@ -5206,8 +5294,8 @@
       "label": "routes to"
     },
     {
-      "id": "aws:931112879148:us-east-1:aws_ecs_task_definition:meso-backend-dev-dev:23->aws:931112879148:global:aws_iam_role:meso-backend-dev-execution-role-dev:authenticates",
-      "source": "aws:931112879148:us-east-1:aws_ecs_task_definition:meso-backend-dev-dev:23",
+      "id": "aws:931112879148:us-east-1:aws_ecs_task_definition:meso-backend-dev-dev:32->aws:931112879148:global:aws_iam_role:meso-backend-dev-execution-role-dev:authenticates",
+      "source": "aws:931112879148:us-east-1:aws_ecs_task_definition:meso-backend-dev-dev:32",
       "target": "aws:931112879148:global:aws_iam_role:meso-backend-dev-execution-role-dev",
       "edge_type": "authenticates",
       "label": "executes as"
@@ -5473,6 +5561,38 @@
       }
     },
     {
+      "id": "group:vpc:931112879148:us-east-1:vpc-0981b92ab94523e98",
+      "name": "vpc-0981b92ab94523e98",
+      "group_type": "vpc",
+      "children": [
+        "aws:931112879148:us-east-1:aws_instance:i-07afbd9d6a6585f7f",
+        "aws:931112879148:us-east-1:aws_security_group:sg-00ecfd11dc21db26a",
+        "aws:931112879148:us-east-1:aws_security_group:sg-016ce5660bd678c06",
+        "aws:931112879148:us-east-1:aws_security_group:sg-0d2709efa8f4c4d85",
+        "aws:931112879148:us-east-1:aws_subnet:subnet-00a18c76d1ca51a82",
+        "aws:931112879148:us-east-1:aws_subnet:subnet-04557b9eae754148a",
+        "aws:931112879148:us-east-1:aws_subnet:subnet-0516787cdd73b2f9d",
+        "aws:931112879148:us-east-1:aws_subnet:subnet-0a835f0e11cbdd752",
+        "aws:931112879148:us-east-1:aws_subnet:subnet-0cc4f2dce4f84b502",
+        "aws:931112879148:us-east-1:aws_subnet:subnet-0fc8352d6f0b26bfd"
+      ],
+      "parent": "group:account:931112879148",
+      "metadata": {
+        "account_id": "931112879148",
+        "source_kind": "scan"
+      }
+    },
+    {
+      "id": "group:subnet:931112879148:us-east-1:subnet-0cc4f2dce4f84b502",
+      "name": "subnet-0cc4f2dce4f84b502",
+      "group_type": "subnet",
+      "children": [
+        "aws:931112879148:us-east-1:aws_instance:i-07afbd9d6a6585f7f"
+      ],
+      "parent": "group:vpc:931112879148:us-east-1:vpc-0981b92ab94523e98",
+      "metadata": {}
+    },
+    {
       "id": "group:subnet:931112879148:us-east-1:subnet-0a582f408198c1eb3",
       "name": "MESO-dev-public-0",
       "group_type": "subnet",
@@ -5502,6 +5622,7 @@
         "aws:931112879148:global:aws_iam_role:OrganizationAccountAccessRole",
         "aws:931112879148:global:aws_iam_role:TerraformDeployRole",
         "aws:931112879148:global:aws_iam_role:meso-backend-dev-execution-role-dev",
+        "aws:931112879148:global:aws_iam_role:meso-backend-dev-task-role-dev",
         "aws:931112879148:global:aws_iam_role:meso-dev-env-lambda-role",
         "aws:931112879148:global:aws_iam_role:meso-frontend-ec2-role-dev",
         "aws:931112879148:global:aws_iam_role:meso-frontend-service-role-dev",
@@ -5535,7 +5656,8 @@
         "aws:931112879148:us-east-1:aws_ecr_repository:mesosamdev34e9e687/windapifunction9a471a4erepo",
         "aws:931112879148:us-east-1:aws_ecs_cluster:meso-cluster-dev",
         "aws:931112879148:us-east-1:aws_ecs_service:meso-backend-dev",
-        "aws:931112879148:us-east-1:aws_ecs_task_definition:meso-backend-dev-dev:23",
+        "aws:931112879148:us-east-1:aws_ecs_task_definition:meso-backend-dev-dev:32",
+        "aws:931112879148:us-east-1:aws_instance:i-07afbd9d6a6585f7f",
         "aws:931112879148:us-east-1:aws_lambda_function:meso-acaes-simulation-dev",
         "aws:931112879148:us-east-1:aws_lambda_function:meso-bess-simulation-dev",
         "aws:931112879148:us-east-1:aws_lambda_function:meso-data-source-comparison-dev",
@@ -5613,13 +5735,14 @@
         "aws:931112879148:us-east-1:aws_security_group:sg-016ce5660bd678c06",
         "aws:931112879148:us-east-1:aws_security_group:sg-04ddfd2eaf00a2536",
         "aws:931112879148:us-east-1:aws_security_group:sg-019891cb77deb3192",
+        "aws:931112879148:us-east-1:aws_instance:i-07afbd9d6a6585f7f",
         "aws:931112879148:us-east-1:aws_ecr_repository:mesosamdev34e9e687/solarapifunctionc65567earepo",
         "aws:931112879148:us-east-1:aws_ecr_repository:meso-backend-dev",
         "aws:931112879148:us-east-1:aws_ecr_repository:mesosamdev34e9e687/windapifunction9a471a4erepo",
         "aws:931112879148:us-east-1:aws_ecr_repository:mesosamdev34e9e687/hydroelectricapifunctione9a13de0repo",
         "aws:931112879148:us-east-1:aws_ecs_cluster:meso-cluster-dev",
         "aws:931112879148:us-east-1:aws_ecs_service:meso-backend-dev",
-        "aws:931112879148:us-east-1:aws_ecs_task_definition:meso-backend-dev-dev:23",
+        "aws:931112879148:us-east-1:aws_ecs_task_definition:meso-backend-dev-dev:32",
         "aws:931112879148:us-east-1:aws_lb:8e0a37761476ef3d",
         "aws:931112879148:us-east-1:aws_lb_listener:099496e53a33db1b",
         "aws:931112879148:us-east-1:aws_lb_target_group:6e2549e037bd1f22",
@@ -5638,6 +5761,7 @@
         "aws:931112879148:global:aws_iam_role:AWSServiceRoleForSupport",
         "aws:931112879148:global:aws_iam_role:AWSServiceRoleForTrustedAdvisor",
         "aws:931112879148:global:aws_iam_role:meso-backend-dev-execution-role-dev",
+        "aws:931112879148:global:aws_iam_role:meso-backend-dev-task-role-dev",
         "aws:931112879148:global:aws_iam_role:meso-dev-env-lambda-role",
         "aws:931112879148:global:aws_iam_role:meso-frontend-ec2-role-dev",
         "aws:931112879148:global:aws_iam_role:meso-frontend-service-role-dev",
