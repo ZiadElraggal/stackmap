@@ -6,9 +6,10 @@
         v-if="!loaded"
         class="absolute inset-0 z-[200] flex items-center justify-center bg-[#0a0a0f]"
       >
-        <div class="flex flex-col items-center gap-4">
-          <div class="loading-ring" />
-          <span class="text-sm text-gray-500 font-mono tracking-wide">Loading infrastructure map...</span>
+        <div class="flex flex-col items-center gap-4 rounded-3xl border border-white/[0.06] bg-white/[0.02] px-8 py-7 shadow-[0_30px_80px_rgba(0,0,0,0.35)] backdrop-blur-sm">
+          <PixelMascot :size="72" state="scanning" :animate="true" />
+          <span class="text-sm text-gray-400 font-mono tracking-wide">Loading infrastructure map...</span>
+          <span class="text-[11px] text-gray-600 font-mono tracking-[0.18em] uppercase">StackMap Prism</span>
         </div>
       </div>
     </Transition>
@@ -25,13 +26,8 @@
         v-if="loaded && isEmpty"
         class="absolute inset-0 z-30 flex items-center justify-center pointer-events-none"
       >
-        <div class="flex flex-col items-center gap-3 pointer-events-auto">
-          <div class="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center text-gray-600">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <rect x="3" y="3" width="18" height="18" rx="3" />
-              <path d="M9 9l6 6M15 9l-6 6" />
-            </svg>
-          </div>
+        <div class="flex flex-col items-center gap-3 pointer-events-auto rounded-3xl border border-white/[0.06] bg-white/[0.02] px-8 py-7 shadow-[0_24px_72px_rgba(0,0,0,0.28)] backdrop-blur-sm">
+          <PixelMascot :size="84" state="idle" :animate="true" />
           <p class="text-sm text-gray-500 font-mono">No resources found</p>
           <p class="text-xs text-gray-600 font-mono max-w-xs text-center">
             Run <code class="text-gray-400">stackmap scan</code> or <code class="text-gray-400">stackmap scan-repo</code> to generate an infrastructure map.
@@ -89,19 +85,6 @@ code, .font-mono {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255,255,255,0.15);
-}
-
-.loading-ring {
-  width: 40px;
-  height: 40px;
-  border: 2px solid rgba(255,255,255,0.06);
-  border-top-color: rgba(96, 165, 250, 0.6);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 .fade-slow-enter-active { transition: opacity 0.3s ease; }
