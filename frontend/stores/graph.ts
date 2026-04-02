@@ -878,6 +878,7 @@ export const useGraphStore = defineStore('graph', {
     userEdges: [] as StackMapEdge[],
     userNodes: [] as StackMapNode[],
     connectingFromNodeId: null as string | null,
+    layoutVersion: 0 as number,
   }),
 
   getters: {
@@ -1458,16 +1459,19 @@ export const useGraphStore = defineStore('graph', {
         this.hiddenNodeIds.push(nodeId)
       }
       if (this.selectedNodeId === nodeId) this.selectedNodeId = null
+      this.requestRelayout()
       this._persistEdits()
     },
 
     showNode(nodeId: string) {
       this.hiddenNodeIds = this.hiddenNodeIds.filter(id => id !== nodeId)
+      this.requestRelayout()
       this._persistEdits()
     },
 
     showAllNodes() {
       this.hiddenNodeIds = []
+      this.requestRelayout()
       this._persistEdits()
     },
 
@@ -1498,29 +1502,45 @@ export const useGraphStore = defineStore('graph', {
         label: 'user link',
       })
       this.connectingFromNodeId = null
+      this.requestRelayout()
       this._persistEdits()
     },
 
     removeUserEdge(edgeId: string) {
       this.userEdges = this.userEdges.filter(e => e.id !== edgeId)
+      this.requestRelayout()
       this._persistEdits()
     },
 
-    addUserNode(name: string, category: string, tier: string) {
+    requestRelayout() {
+      this.layoutVersion += 1
+    },
+
+    addUserNode(
+      name: string,
+      options: {
+        resourceType: string
+        category: string
+        tier: string
+        provider?: string
+        weight?: number
+      }
+    ) {
       const id = `user:${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
       this.userNodes.push({
         id,
         name,
-        resource_type: 'user_defined',
-        provider: 'user',
-        category,
+        resource_type: options.resourceType,
+        provider: options.provider || 'user',
+        category: options.category,
         properties: {},
         tags: { _user_created: 'true' },
         position_hint: {
-          tier,
-          weight: 4,
+          tier: options.tier,
+          weight: options.weight ?? 4,
         },
       })
+      this.requestRelayout()
       this._persistEdits()
     },
 
@@ -1528,6 +1548,7 @@ export const useGraphStore = defineStore('graph', {
       this.userNodes = this.userNodes.filter(n => n.id !== nodeId)
       this.userEdges = this.userEdges.filter(e => e.source !== nodeId && e.target !== nodeId)
       if (this.selectedNodeId === nodeId) this.selectedNodeId = null
+      this.requestRelayout()
       this._persistEdits()
     },
 
@@ -1566,6 +1587,7 @@ export const useGraphStore = defineStore('graph', {
       this.userEdges = []
       this.userNodes = []
       this.connectingFromNodeId = null
+      this.requestRelayout()
       if (typeof window !== 'undefined') {
         localStorage.removeItem('stackmap-edits')
       }
