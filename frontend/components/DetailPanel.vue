@@ -96,6 +96,39 @@
           </button>
         </div>
 
+        <div v-if="store.editMode && node" class="mb-3 space-y-2">
+          <label class="block">
+            <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Layer</span>
+            <select
+              :value="node.position_hint?.tier || 'compute'"
+              class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+              @change="onLayerSelectChange"
+            >
+              <option
+                v-for="layer in layerDefinitions"
+                :key="layer.id"
+                :value="layer.id"
+              >
+                {{ layer.label }}
+              </option>
+            </select>
+          </label>
+          <div class="flex gap-2">
+            <input
+              v-model="newLayerName"
+              class="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono placeholder-gray-600 outline-none focus:border-emerald-400/40"
+              placeholder="Add new layer"
+              @keydown.enter.prevent="addLayerAndMove"
+            />
+            <button
+              class="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-[10px] font-mono text-emerald-300 transition hover:bg-emerald-500/15"
+              @click="addLayerAndMove"
+            >
+              Add
+            </button>
+          </div>
+        </div>
+
         <div v-if="componentLabel" class="mb-3 flex items-center justify-between rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2">
           <div>
             <div class="text-[10px] uppercase tracking-widest text-gray-600">Component</div>
@@ -235,10 +268,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useGraphStore } from '~/stores/graph'
-import { CATEGORY_COLORS, CATEGORY_ICONS } from '~/composables/useGraph'
+import { CATEGORY_COLORS, buildLayerDefinitions, getNodeIconPath, getResourceIconPath } from '~/composables/useGraph'
 
 const store = useGraphStore()
 const showRaw = ref(false)
+const newLayerName = ref('')
 
 const node = computed(() => store.selectedNode)
 const diffStatus = computed(() => node.value?.position_hint?.diff_status as string | undefined)
@@ -268,7 +302,8 @@ const diffBadgeLabel = computed(() => {
   }
 })
 const categoryColor = computed(() => CATEGORY_COLORS[node.value?.category || ''] || '#9ca3af')
-const iconPath = computed(() => CATEGORY_ICONS[node.value?.category || 'other'] || CATEGORY_ICONS.other)
+const iconPath = computed(() => node.value ? getNodeIconPath(node.value) : getResourceIconPath('user_defined', 'other'))
+const layerDefinitions = computed(() => buildLayerDefinitions(store.layoutLayers, store.customLayers))
 
 const edges = computed(() => (node.value ? store.nodeEdges(node.value.id) : []))
 const outgoing = computed(() => edges.value.filter(e => e.source === node.value?.id))
@@ -339,17 +374,37 @@ function normalizeEmbeddedJson(value: any): any {
 }
 
 function nodeNameById(id: string): string {
-  return store.nodes.find(n => n.id === id)?.name || id
+  return store.nodes.find(n => n.id === id)?.name || store.userNodes.find(n => n.id === id)?.name || id
 }
 
 function nodeColorById(id: string): string {
-  const category = store.nodes.find(n => n.id === id)?.category || 'other'
+  const category = store.nodes.find(n => n.id === id)?.category || store.userNodes.find(n => n.id === id)?.category || 'other'
   return CATEGORY_COLORS[category] || '#9ca3af'
 }
 
 function nodeIconById(id: string): string {
-  const category = store.nodes.find(n => n.id === id)?.category || 'other'
-  return CATEGORY_ICONS[category] || CATEGORY_ICONS.other
+  const targetNode = store.nodes.find(n => n.id === id) || store.userNodes.find(n => n.id === id)
+  return targetNode ? getNodeIconPath(targetNode) : getResourceIconPath('user_defined', 'other')
+}
+
+function onLayerChange(layerId: string) {
+  if (!node.value) return
+  store.moveNodeToLayer(node.value.id, layerId)
+}
+
+function onLayerSelectChange(event: Event) {
+  const target = event.target as HTMLSelectElement | null
+  if (!target) return
+  onLayerChange(target.value)
+}
+
+function addLayerAndMove() {
+  if (!node.value || !newLayerName.value.trim()) return
+  const layerId = store.addCustomLayer(newLayerName.value)
+  if (layerId) {
+    store.moveNodeToLayer(node.value.id, layerId)
+    newLayerName.value = ''
+  }
 }
 </script>
 
