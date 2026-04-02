@@ -66,6 +66,7 @@ export const EDGE_COLORS: Record<string, string> = {
   triggers: '#FB923C',       // warm orange (landing page warning)
   reads_from: '#38BDF8',     // sky blue (landing page secondary)
   writes_to: '#4ADE80',      // StackMap green (landing page primary)
+  user_link: '#4ADE80',
   routes_to: '#94a3b8',
   references: '#64748b',
   contains: '#475569',
