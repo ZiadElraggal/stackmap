@@ -736,6 +736,14 @@ def _parse_account_roles(accounts_str: str) -> list[tuple[str, str]]:
     return result
 
 
+def _parse_profile_list(profiles_str: str) -> list[str]:
+    """Parse 'dev,sandbox,prod' into ['dev', 'sandbox', 'prod']."""
+    profiles = [entry.strip() for entry in profiles_str.split(",") if entry.strip()]
+    if not profiles:
+        raise typer.BadParameter("Expected at least one AWS profile name.")
+    return profiles
+
+
 @app.command("scan-aws")
 def scan_aws(
     profile: str | None = typer.Option(None, help="AWS profile name"),
@@ -756,6 +764,7 @@ def scan_aws(
     no_cache: bool = typer.Option(False, help="Disable response caching"),
     serve_after: bool = typer.Option(False, "--serve", help="Open the interactive viewer after scanning"),
     accounts: str | None = typer.Option(None, help="Comma-separated account:role_arn pairs for multi-account scan (e.g. '123456789012:arn:aws:iam::123456789012:role/StackMapReadOnly,987654321098:arn:aws:iam::987654321098:role/StackMapReadOnly')"),
+    account_profiles: str | None = typer.Option(None, help="Comma-separated AWS profile names for multi-account scan (e.g. 'dev,sandbox,prod')"),
 ) -> None:
     """Scan live AWS infrastructure using read-only AWS APIs."""
     output_format = format.lower()
@@ -788,6 +797,14 @@ def scan_aws(
         no_cache=no_cache,
         partial_write_path=output if output_format == "json" and not dry_run else None,
     )
+
+    if accounts and account_profiles:
+        console.print("[red]Error:[/red] Use either --accounts or --account-profiles, not both.")
+        raise typer.Exit(1)
+
+    if profile and account_profiles:
+        console.print("[red]Error:[/red] Use either --profile or --account-profiles, not both.")
+        raise typer.Exit(1)
 
     # Multi-account explicit scan (without organization)
     if accounts:
@@ -844,6 +861,83 @@ def scan_aws(
         console.print(
             f"\n[green]✓[/green] Multi-account scan complete: {len(ir.nodes)} resources, "
             f"{len(ir.edges)} connections across {len(account_roles)} accounts."
+        )
+
+        if serve_after:
+            serve_source = Path(output)
+            temp_json_path: Path | None = None
+            if output_format != "json":
+                temp_dir_path = Path(tempfile.mkdtemp(prefix="stackmap-scan-multi-"))
+                temp_json_path = temp_dir_path / "stackmap-multi-output.json"
+                ir.write_json(temp_json_path)
+                serve_source = temp_json_path
+            serve(
+                source=str(serve_source),
+                terraform_dir=None,
+                auto_pull_remote=False,
+                host="127.0.0.1",
+                port=3000,
+                watch=False,
+                watch_interval=1.0,
+                open_browser=True,
+            )
+        return
+
+    if account_profiles:
+        try:
+            profiles = _parse_profile_list(account_profiles)
+        except typer.BadParameter as exc:
+            console.print(f"[red]Error:[/red] {exc}")
+            raise typer.Exit(1)
+
+        console.print()
+        console.print("[bold]StackMap Multi-Account Scan[/bold]  [cyan]read-only mode[/cyan]")
+        console.print(f"Profiles : [cyan]{len(profiles)}[/cyan]")
+        for profile_name in profiles:
+            console.print(f"  - [cyan]{profile_name}[/cyan]")
+        console.print(f"Regions  : [cyan]{', '.join(region) if region else 'auto-detect'}[/cyan]")
+        console.print()
+        console.print("No resources will be created or modified in any account.")
+
+        if dry_run:
+            console.print("[yellow]Dry run not yet supported for multi-account profile scan.[/yellow]")
+            raise typer.Exit(0)
+
+        with mascot_status(console, "[bold]Scanning multiple AWS profiles...[/bold]"):
+            try:
+                ir = scanner.scan_explicit_profiles(profiles)
+            except Exception as exc:
+                console.print(f"[red]Error:[/red] {exc}")
+                raise typer.Exit(1)
+
+        source_label = Path(output if output_format == "json" else "aws-multi.json")
+        _annotate_scan_metadata(ir, source_label)
+
+        try:
+            _write_ir_output(ir, output, output_format)
+        except RuntimeError as exc:
+            console.print(f"[red]Error:[/red] {exc}")
+            raise typer.Exit(1)
+
+        table = Table(title="StackMap Multi-Account Scan Results", show_header=False)
+        table.add_column("Metric", style="bold")
+        table.add_column("Value", style="cyan")
+        table.add_row("Scan mode", "multi-account (profiles)")
+        table.add_row("Profiles", ", ".join(profiles))
+        table.add_row("Accounts", str(len(ir.metadata.get("accounts", []))))
+        table.add_row("Regions", ", ".join(ir.metadata.get("regions", [])) or "-")
+        table.add_row("Resources", str(len(ir.nodes)))
+        table.add_row("Connections", str(len(ir.edges)))
+        table.add_row("Groups", str(len(ir.groups)))
+        if ir.metadata.get("cross_account_edges") is not None:
+            table.add_row("Cross-account", str(ir.metadata.get("cross_account_edges", 0)))
+        table.add_row("Output", output)
+        console.print()
+        console.print(table)
+
+        console.print(
+            f"\n[green]✓[/green] Multi-account profile scan complete: {len(ir.nodes)} resources, "
+            f"{len(ir.edges)} connections across {len(ir.metadata.get('accounts', []))} accounts."
         )
 
         if serve_after:
