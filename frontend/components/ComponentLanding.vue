@@ -1,78 +1,214 @@
 <template>
-  <div class="absolute inset-0 z-20 overflow-y-auto px-16 pb-16 pt-28">
-    <div class="mx-auto max-w-6xl">
-      <div class="mb-6 flex items-end justify-between gap-6">
-        <div>
-          <p class="mb-2 text-[10px] font-mono uppercase tracking-[0.28em] text-cyan-400/70">Large Architecture</p>
-          <h2 class="text-2xl font-semibold text-white">Component Landing</h2>
-          <p class="mt-2 max-w-3xl text-sm text-gray-400">
-            Service-shaped islands are ranked first so large AWS scans open as architecture, not inventory soup.
-          </p>
+  <div class="absolute inset-0 z-20 overflow-y-auto px-6 pb-16 pt-24 md:px-10 xl:px-16">
+    <div class="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.12),transparent_52%),radial-gradient(circle_at_22%_18%,rgba(96,165,250,0.10),transparent_28%)]" />
+
+    <div class="relative mx-auto max-w-5xl">
+      <div class="mb-8 rounded-[28px] border border-white/[0.07] bg-[#0f131b]/88 px-6 py-6 shadow-[0_30px_100px_rgba(0,0,0,0.32)] backdrop-blur-md md:px-8">
+        <div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div class="max-w-3xl">
+            <p class="mb-3 text-[10px] font-mono uppercase tracking-[0.32em] text-cyan-300/75">Architecture Overview</p>
+            <div class="flex items-start gap-4">
+              <div class="hidden rounded-2xl border border-cyan-400/10 bg-cyan-500/[0.05] p-3 md:block">
+                <PixelMascot :size="52" state="idle" :animate="true" />
+              </div>
+              <div>
+                <h2 class="text-[28px] font-semibold leading-tight tracking-tight text-white md:text-[32px]">
+                  Service islands, before the soup.
+                </h2>
+                <p class="mt-3 max-w-2xl text-sm leading-6 text-gray-400">
+                  StackMap separated the visible infrastructure into service-shaped components so you can understand the landscape first, then open the part that matters.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-white/[0.06] bg-white/[0.03] px-4 py-3 text-left lg:min-w-[220px] lg:text-right">
+            <div class="text-[10px] font-mono uppercase tracking-[0.24em] text-gray-600">Visible Scope</div>
+            <div class="mt-2 text-sm font-medium text-white">{{ scopeLabel }}</div>
+            <div class="mt-1 text-xs font-mono text-gray-500">{{ totalResources }} resources · {{ totalConnections }} connections</div>
+          </div>
         </div>
-        <div class="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-right">
-          <div class="text-[10px] font-mono uppercase tracking-widest text-gray-600">Visible Scope</div>
-          <div class="mt-1 text-sm font-mono text-white">{{ summaries.length }} component{{ summaries.length === 1 ? '' : 's' }}</div>
+
+        <div class="mt-6 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          <div
+            v-for="item in overviewItems"
+            :key="item.label"
+            class="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3"
+          >
+            <div class="text-[10px] font-mono uppercase tracking-[0.22em] text-gray-600">{{ item.label }}</div>
+            <div class="mt-2 text-sm font-semibold text-white">{{ item.value }}</div>
+            <div v-if="item.detail" class="mt-1 text-xs text-gray-500">{{ item.detail }}</div>
+          </div>
         </div>
       </div>
 
-      <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <section class="mb-10">
+        <div class="mb-4 flex items-end justify-between gap-6">
+          <div>
+            <p class="text-[10px] font-mono uppercase tracking-[0.24em] text-gray-600">Service Components</p>
+            <h3 class="mt-2 text-xl font-semibold text-white">Explore the architecture surface</h3>
+          </div>
+          <div class="text-right text-xs font-mono text-gray-500">
+            {{ primarySummaries.length }} service island{{ primarySummaries.length === 1 ? '' : 's' }}
+          </div>
+        </div>
+
         <button
-          v-for="component in summaries"
-          :key="component.id"
-          class="group rounded-2xl border border-white/10 bg-[#11131c]/85 p-4 text-left transition hover:border-cyan-400/40 hover:bg-[#141826]"
-          @click="store.openComponent(component.id)"
+          v-if="featuredSummary"
+          class="group mb-4 w-full rounded-[28px] border border-cyan-400/14 bg-[linear-gradient(135deg,rgba(18,25,36,0.95),rgba(13,18,28,0.88))] px-6 py-5 text-left shadow-[0_28px_80px_rgba(0,0,0,0.28)] transition hover:border-cyan-300/28 hover:shadow-[0_36px_100px_rgba(0,0,0,0.34)]"
+          @click="store.openComponent(featuredSummary.id)"
         >
-          <div class="mb-3 flex items-start justify-between gap-4">
-            <div>
-              <div class="mb-1 flex items-center gap-2">
+          <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div class="max-w-3xl">
+              <div class="mb-3 flex items-center gap-2">
+                <span class="rounded-full border border-cyan-400/15 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.22em] text-cyan-300">
+                  Top component
+                </span>
                 <span
-                  class="rounded-full px-2 py-0.5 text-[10px] font-mono uppercase tracking-widest"
-                  :class="component.kind === 'unlinked_bucket' ? 'bg-amber-500/10 text-amber-300' : component.kind === 'weakly_linked' ? 'bg-indigo-500/10 text-indigo-300' : 'bg-cyan-500/10 text-cyan-300'"
+                  v-if="featuredSummary.entrypoints.length"
+                  class="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.18em] text-gray-400"
                 >
-                  {{ component.kind === 'unlinked_bucket' ? 'Unlinked' : component.kind === 'weakly_linked' ? 'Weakly linked' : 'Service component' }}
+                  {{ featuredSummary.entrypoints[0] }}
                 </span>
               </div>
-              <h3 class="text-lg font-semibold text-white transition group-hover:text-cyan-200">{{ prettyName(component.name) }}</h3>
-              <p class="mt-1 text-xs font-mono text-gray-500">{{ component.summary }}</p>
-            </div>
-            <div class="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-right">
-              <div class="text-[10px] font-mono uppercase tracking-widest text-gray-600">Resources</div>
-              <div class="mt-1 text-lg font-semibold text-white">{{ component.resourceCount }}</div>
-            </div>
-          </div>
-
-          <div class="mb-3 flex flex-wrap gap-1.5">
-            <span
-              v-for="category in component.dominantCategories"
-              :key="`${component.id}-${category}`"
-              class="rounded-full px-2 py-0.5 text-[10px] font-mono"
-              :style="{ backgroundColor: `${colorForCategory(category)}20`, color: colorForCategory(category) }"
-            >
-              {{ category }}
-            </span>
-          </div>
-
-          <div class="grid gap-3 sm:grid-cols-2">
-            <div>
-              <div class="mb-1 text-[10px] font-mono uppercase tracking-widest text-gray-600">Entrypoints</div>
-              <div class="text-xs text-gray-300">
-                {{ component.entrypoints.length ? component.entrypoints.join(', ') : 'Internal / no clear front door' }}
+              <h4 class="text-2xl font-semibold tracking-tight text-white transition group-hover:text-cyan-100">
+                {{ displayName(featuredSummary.name) }}
+              </h4>
+              <p class="mt-3 max-w-2xl text-sm leading-6 text-gray-400">
+                {{ featuredSummary.summary }}
+              </p>
+              <div class="mt-4 flex flex-wrap gap-1.5">
+                <span
+                  v-for="category in featuredSummary.dominantCategories.slice(0, 3)"
+                  :key="`${featuredSummary.id}-${category}`"
+                  class="rounded-full px-2.5 py-1 text-[10px] font-mono"
+                  :style="{ backgroundColor: `${colorForCategory(category)}20`, color: colorForCategory(category) }"
+                >
+                  {{ displayCategory(category) }}
+                </span>
               </div>
             </div>
-            <div>
-              <div class="mb-1 text-[10px] font-mono uppercase tracking-widest text-gray-600">Accounts / Regions</div>
-              <div class="text-xs text-gray-300">
-                {{ component.accountIds.length }} account{{ component.accountIds.length === 1 ? '' : 's' }} · {{ component.regions.length }} region{{ component.regions.length === 1 ? '' : 's' }}
+
+            <div class="flex flex-col items-start gap-3 lg:min-w-[220px] lg:items-end">
+              <div class="text-sm font-mono text-gray-300">
+                {{ featuredSummary.resourceCount }} resources · {{ featuredSummary.edgeCount }} connections
+              </div>
+              <div class="text-xs text-gray-500">
+                {{ metaLine(featuredSummary) }}
+              </div>
+              <div class="text-xs font-mono text-cyan-300 transition group-hover:text-cyan-200">
+                Open map →
               </div>
             </div>
-          </div>
-
-          <div class="mt-4 flex items-center justify-between border-t border-white/6 pt-3 text-[11px] font-mono text-gray-500">
-            <span>{{ component.edgeCount }} connection{{ component.edgeCount === 1 ? '' : 's' }}</span>
-            <span class="text-cyan-300 transition group-hover:text-cyan-200">Open component →</span>
           </div>
         </button>
-      </div>
+
+        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <button
+            v-for="component in secondarySummaries"
+            :key="component.id"
+            class="group rounded-[24px] border bg-[#11151d]/84 p-4 text-left shadow-[0_18px_60px_rgba(0,0,0,0.18)] transition hover:-translate-y-0.5 hover:shadow-[0_24px_70px_rgba(0,0,0,0.24)]"
+            :class="component.kind === 'weakly_linked'
+              ? 'border-white/[0.06] hover:border-indigo-400/20'
+              : 'border-white/[0.08] hover:border-cyan-400/24'"
+            @click="store.openComponent(component.id)"
+          >
+            <div class="mb-3 flex items-center justify-between gap-3">
+              <span
+                class="rounded-full px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.18em]"
+                :class="component.kind === 'weakly_linked'
+                  ? 'bg-indigo-500/10 text-indigo-300'
+                  : 'bg-cyan-500/10 text-cyan-300'"
+              >
+                {{ component.kind === 'weakly_linked' ? 'Weakly linked' : 'Service component' }}
+              </span>
+              <span class="text-[11px] font-mono text-gray-500">{{ component.resourceCount }} res</span>
+            </div>
+
+            <h4 class="text-lg font-semibold tracking-tight text-white transition group-hover:text-cyan-100">
+              {{ displayName(component.name) }}
+            </h4>
+            <p class="mt-2 text-sm leading-6 text-gray-400">
+              {{ component.summary }}
+            </p>
+
+            <div class="mt-4 flex flex-wrap gap-1.5">
+              <span
+                v-for="category in component.dominantCategories.slice(0, 3)"
+                :key="`${component.id}-${category}`"
+                class="rounded-full px-2 py-0.5 text-[10px] font-mono"
+                :style="{ backgroundColor: `${colorForCategory(category)}20`, color: colorForCategory(category) }"
+              >
+                {{ displayCategory(category) }}
+              </span>
+            </div>
+
+            <div v-if="component.entrypoints.length" class="mt-4 text-xs text-gray-300">
+              <span class="font-mono uppercase tracking-[0.18em] text-gray-600">Entrypoint</span>
+              <span class="ml-2">{{ component.entrypoints[0] }}</span>
+            </div>
+
+            <div class="mt-5 flex items-center justify-between border-t border-white/[0.06] pt-3 text-[11px] font-mono text-gray-500">
+              <span>{{ metaLine(component) }}</span>
+              <span class="text-cyan-300 transition group-hover:text-cyan-200">Open map →</span>
+            </div>
+          </button>
+        </div>
+      </section>
+
+      <section
+        v-if="unlinkedSummary"
+        class="rounded-[28px] border border-white/[0.05] bg-white/[0.02] px-6 py-5 shadow-[0_18px_60px_rgba(0,0,0,0.16)]"
+      >
+        <div class="mb-4 flex items-end justify-between gap-6">
+          <div>
+            <p class="text-[10px] font-mono uppercase tracking-[0.24em] text-gray-600">Unlinked Resources</p>
+            <h3 class="mt-2 text-lg font-semibold text-white">Quiet inventory, separate from the main architecture</h3>
+            <p class="mt-2 max-w-3xl text-sm leading-6 text-gray-400">
+              These resources are present in the scan but do not currently form strong service-shaped clusters.
+            </p>
+          </div>
+          <div class="text-right text-xs font-mono text-gray-500">
+            {{ unlinkedSummary.resourceCount }} resources
+          </div>
+        </div>
+
+        <button
+          class="group w-full rounded-[24px] border border-white/[0.06] bg-[#11141b]/72 p-4 text-left transition hover:border-amber-400/18 hover:bg-[#141923]"
+          @click="store.openComponent(unlinkedSummary.id)"
+        >
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <div class="mb-2 flex items-center gap-2">
+                <span class="rounded-full bg-amber-500/10 px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.18em] text-amber-300">
+                  Unlinked bucket
+                </span>
+              </div>
+              <h4 class="text-lg font-semibold text-white transition group-hover:text-amber-100">
+                {{ displayName(unlinkedSummary.name) }}
+              </h4>
+              <p class="mt-2 text-sm leading-6 text-gray-400">
+                {{ unlinkedSummary.summary }}
+              </p>
+            </div>
+
+            <div class="flex flex-col items-start gap-3 lg:items-end">
+              <div class="flex flex-wrap gap-1.5 lg:justify-end">
+                <span
+                  v-for="category in unlinkedSummary.dominantCategories.slice(0, 3)"
+                  :key="`${unlinkedSummary.id}-${category}`"
+                  class="rounded-full px-2 py-0.5 text-[10px] font-mono"
+                  :style="{ backgroundColor: `${colorForCategory(category)}20`, color: colorForCategory(category) }"
+                >
+                  {{ displayCategory(category) }}
+                </span>
+              </div>
+              <div class="text-[11px] font-mono text-gray-500">{{ metaLine(unlinkedSummary) }}</div>
+              <div class="text-xs font-mono text-amber-300 transition group-hover:text-amber-200">Inspect bucket →</div>
+            </div>
+          </div>
+        </button>
+      </section>
     </div>
   </div>
 </template>
@@ -80,13 +216,97 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { CATEGORY_COLORS } from '~/composables/useGraph'
-import { useGraphStore } from '~/stores/graph'
+import { useGraphStore, type ComponentSummary } from '~/stores/graph'
 
 const store = useGraphStore()
-const summaries = computed(() => store.componentSummaries)
 
-function prettyName(value: string): string {
-  return value.replace(/-/g, ' ')
+const allSummaries = computed(() => store.componentSummaries)
+const primarySummaries = computed(() => allSummaries.value.filter(summary => summary.kind !== 'unlinked_bucket'))
+const featuredSummary = computed(() => primarySummaries.value[0] || null)
+const secondarySummaries = computed(() => primarySummaries.value.slice(1))
+const unlinkedSummary = computed(() => allSummaries.value.find(summary => summary.kind === 'unlinked_bucket') || null)
+const totalResources = computed(() => store.architectureSourceNodes.length)
+const totalConnections = computed(() => store.architectureSourceEdges.length)
+
+const accountScopeName = computed(() => {
+  if (!store.activeAccountId) return null
+  const accountGroup = store.groups.find(group => group.group_type === 'account' && group.metadata?.account_id === store.activeAccountId)
+  return accountGroup?.metadata?.account_name || accountGroup?.name || store.activeAccountId
+})
+
+const scopeLabel = computed(() => {
+  if (accountScopeName.value) return accountScopeName.value
+  if (store.metadata?.scan_mode === 'organization') return 'Organization slice'
+  return 'Current scan'
+})
+
+const totalAccounts = computed(() => {
+  const ids = new Set<string>()
+  for (const summary of allSummaries.value) {
+    for (const accountId of summary.accountIds) ids.add(accountId)
+  }
+  return ids.size || 1
+})
+
+const totalRegions = computed(() => {
+  const regions = new Set<string>()
+  for (const summary of allSummaries.value) {
+    for (const region of summary.regions) regions.add(region)
+  }
+  return regions.size || 1
+})
+
+const topEntrypoints = computed(() => {
+  const names = new Set<string>()
+  for (const summary of primarySummaries.value) {
+    for (const entrypoint of summary.entrypoints.slice(0, 2)) names.add(entrypoint)
+  }
+  return [...names].slice(0, 3)
+})
+
+const overviewItems = computed(() => [
+  {
+    label: 'Service islands',
+    value: `${primarySummaries.value.length}`,
+    detail: primarySummaries.value.length === 1 ? 'One mapped system in scope' : 'Ranked by architectural value',
+  },
+  {
+    label: 'Resources in scope',
+    value: `${totalResources.value}`,
+    detail: `${totalConnections.value} visible connections`,
+  },
+  {
+    label: 'Accounts / regions',
+    value: `${totalAccounts.value} / ${totalRegions.value}`,
+    detail: accountScopeName.value ? 'Scoped to the selected account' : 'Landscape view across the current scope',
+  },
+  {
+    label: 'Top signal',
+    value: featuredSummary.value ? displayName(featuredSummary.value.name) : 'No dominant component',
+    detail: topEntrypoints.value.length ? topEntrypoints.value.join(' · ') : 'Internal architecture',
+  },
+])
+
+function displayName(value: string): string {
+  return value
+    .split(/[-_]/g)
+    .filter(Boolean)
+    .map(part => {
+      const lower = part.toLowerCase()
+      if (['api', 'aws', 'vpc', 'ecs', 'rds', 's3', 'sns', 'sqs', 'cdn', 'dns', 'alb'].includes(lower)) {
+        return lower.toUpperCase()
+      }
+      return lower.charAt(0).toUpperCase() + lower.slice(1)
+    })
+    .join(' ')
+}
+
+function displayCategory(category: string): string {
+  return category.replace(/_/g, ' ')
+}
+
+function metaLine(component: ComponentSummary): string {
+  return `${component.accountIds.length} account${component.accountIds.length === 1 ? '' : 's'} · ${component.regions.length} region${component.regions.length === 1 ? '' : 's'} · ${component.edgeCount} connection${component.edgeCount === 1 ? '' : 's'}`
 }
 
 function colorForCategory(category: string): string {

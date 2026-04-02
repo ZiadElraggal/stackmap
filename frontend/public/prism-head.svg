@@ -1,0 +1,34 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" role="img" aria-label="Prism icon">
+  <rect x="26" y="2" width="12" height="2" fill="#7B8EA8" opacity="0.25" />
+  <rect x="24" y="4" width="16" height="2" fill="#1e2436" />
+  <rect x="20" y="6" width="24" height="2" fill="#1e2436" />
+
+  <rect x="16" y="10" width="32" height="4" fill="#1e2436" />
+  <rect x="14" y="14" width="36" height="14" fill="#1e2436" />
+  <rect x="16" y="12" width="32" height="14" fill="#0d1018" />
+
+  <rect x="20" y="16" width="6" height="4" fill="#4ADE80" />
+  <rect x="20" y="16" width="3" height="2" fill="#6FFFB0" />
+  <rect x="38" y="16" width="6" height="4" fill="#4ADE80" />
+  <rect x="38" y="16" width="3" height="2" fill="#6FFFB0" />
+
+  <rect x="14" y="28" width="36" height="4" fill="#252a3a" />
+  <rect x="16" y="30" width="2" height="2" fill="#4ADE80" opacity="0.7" />
+  <rect x="28" y="30" width="2" height="2" fill="#4ADE80" opacity="0.7" />
+  <rect x="46" y="30" width="2" height="2" fill="#4ADE80" opacity="0.7" />
+
+  <rect x="18" y="32" width="28" height="10" fill="#1e2436" />
+  <rect x="16" y="36" width="6" height="2" fill="#252a3a" />
+  <rect x="42" y="36" width="6" height="2" fill="#252a3a" />
+  <rect x="16" y="38" width="4" height="6" fill="#252a3a" />
+  <rect x="44" y="38" width="4" height="6" fill="#252a3a" />
+  <rect x="14" y="40" width="4" height="2" fill="#4ADE80" opacity="0.25" />
+  <rect x="46" y="40" width="4" height="2" fill="#4ADE80" opacity="0.25" />
+
+  <rect x="20" y="42" width="10" height="2" fill="#252a3a" />
+  <rect x="34" y="42" width="10" height="2" fill="#252a3a" />
+  <rect x="22" y="44" width="8" height="8" fill="#1a1f2e" />
+  <rect x="34" y="44" width="8" height="8" fill="#1a1f2e" />
+  <rect x="20" y="52" width="12" height="2" fill="#252a3a" />
+  <rect x="32" y="52" width="12" height="2" fill="#252a3a" />
+</svg>

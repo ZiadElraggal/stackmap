@@ -58,6 +58,41 @@ def test_scan_html_uses_exporter(monkeypatch, tmp_path: Path) -> None:
     assert out.exists()
 
 
+def test_scan_uses_mascot_status(monkeypatch, tmp_path: Path) -> None:
+    out = tmp_path / "out.json"
+    called = {"value": False}
+
+    class DummyStatus:
+        def __enter__(self):  # type: ignore[no-untyped-def]
+            called["value"] = True
+            return self
+
+        def __exit__(self, exc_type, exc, tb):  # type: ignore[no-untyped-def]
+            return False
+
+    def fake_mascot_status(console, label):  # type: ignore[no-untyped-def]
+        assert "Scanning infrastructure" in label
+        return DummyStatus()
+
+    monkeypatch.setattr("stackmap.cli.main.mascot_status", fake_mascot_status)
+
+    result = runner.invoke(
+        app,
+        [
+            "scan",
+            "--source",
+            str(FIXTURES / "simple-lambda-api.tfstate"),
+            "--format",
+            "json",
+            "--output",
+            str(out),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert called["value"] is True
+
+
 def test_scan_cloudformation_json_writes_output(tmp_path: Path) -> None:
     out = tmp_path / "out-cfn.json"
     result = runner.invoke(
