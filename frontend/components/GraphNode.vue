@@ -168,9 +168,12 @@
       '--diff-color': diffBorderColor,
     }"
     :opacity="nodeOpacity"
+    :data-node-id="node.id"
+    :data-drag-enabled="store.editMode && !isAccountSummary && !store.connectingFromNodeId ? 'true' : 'false'"
     @click.stop="onClick"
     @mouseenter="onHover"
     @mouseleave="onLeave"
+    @pointerdown.prevent.stop="onPointerDown"
   >
     <rect
       v-if="diffStatus && diffStatus !== 'unchanged'"
@@ -360,13 +363,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useGraphStore, type StackMapNode } from '~/stores/graph'
 import {
   CATEGORY_COLORS,
-  CATEGORY_ICONS,
   formatResourceType,
   getNodeHeight,
+  getNodeIconPath,
   getNodeProminence,
   getNodeWidth,
   truncate,
@@ -386,11 +389,22 @@ const props = withDefaults(
   }
 )
 
+const emit = defineEmits<{
+  dragNodeStart: [payload: { nodeId: string; clientX: number; clientY: number }]
+  dragNodeMove: [payload: { nodeId: string; clientX: number; clientY: number }]
+  dragNodeEnd: [payload: { nodeId: string; clientX: number; clientY: number }]
+}>()
+
 const store = useGraphStore()
 const entered = ref(false)
+const activePointerId = ref<number | null>(null)
+const pointerStart = ref<{ x: number; y: number } | null>(null)
+const dragStarted = ref(false)
+const suppressClickOnce = ref(false)
+const pointerOwner = ref<Element | null>(null)
 
 const categoryColor = computed(() => CATEGORY_COLORS[props.node.category] || '#9ca3af')
-const iconPath = computed(() => CATEGORY_ICONS[props.node.category] || CATEGORY_ICONS.other)
+const iconPath = computed(() => getNodeIconPath(props.node))
 const displayName = computed(() => truncate(props.node.name, 28))
 const shortType = computed(() => formatResourceType(props.node.resource_type))
 
@@ -498,6 +512,10 @@ const nodeOpacity = computed(() => {
 const isHovered = computed(() => store.hoveredNodeId === props.node.id)
 
 function onClick() {
+  if (suppressClickOnce.value) {
+    suppressClickOnce.value = false
+    return
+  }
   // Edit mode: handle connecting
   if (store.editMode && store.connectingFromNodeId) {
     store.completeConnection(props.node.id)
@@ -523,10 +541,79 @@ function onLeave() {
   store.hoverNode(null)
 }
 
+function onPointerDown(event: PointerEvent) {
+  if (!store.editMode || isAccountSummary.value || store.connectingFromNodeId) return
+  if (event.button !== 0) return
+  activePointerId.value = event.pointerId
+  pointerStart.value = { x: event.clientX, y: event.clientY }
+  dragStarted.value = false
+  pointerOwner.value = event.currentTarget as Element | null
+  pointerOwner.value?.setPointerCapture?.(event.pointerId)
+  window.addEventListener('pointermove', onPointerMove)
+  window.addEventListener('pointerup', onPointerUp)
+  window.addEventListener('pointercancel', onPointerCancel)
+}
+
+function onPointerMove(event: PointerEvent) {
+  if (activePointerId.value !== event.pointerId) return
+  const start = pointerStart.value
+  if (!start) return
+  const dx = event.clientX - start.x
+  const dy = event.clientY - start.y
+  if (!dragStarted.value && Math.hypot(dx, dy) < 6) return
+  if (!dragStarted.value) {
+    dragStarted.value = true
+    emit('dragNodeStart', {
+      nodeId: props.node.id,
+      clientX: start.x,
+      clientY: start.y,
+    })
+  }
+  emit('dragNodeMove', {
+    nodeId: props.node.id,
+    clientX: event.clientX,
+    clientY: event.clientY,
+  })
+}
+
+function onPointerUp(event: PointerEvent) {
+  if (activePointerId.value !== event.pointerId) return
+  if (dragStarted.value) {
+    suppressClickOnce.value = true
+    emit('dragNodeEnd', {
+      nodeId: props.node.id,
+      clientX: event.clientX,
+      clientY: event.clientY,
+    })
+  }
+  cleanupPointerListeners()
+}
+
+function onPointerCancel() {
+  cleanupPointerListeners()
+}
+
+function cleanupPointerListeners() {
+  if (pointerOwner.value && activePointerId.value !== null) {
+    pointerOwner.value.releasePointerCapture?.(activePointerId.value)
+  }
+  pointerOwner.value = null
+  activePointerId.value = null
+  pointerStart.value = null
+  dragStarted.value = false
+  window.removeEventListener('pointermove', onPointerMove)
+  window.removeEventListener('pointerup', onPointerUp)
+  window.removeEventListener('pointercancel', onPointerCancel)
+}
+
 onMounted(() => {
   requestAnimationFrame(() => {
     entered.value = true
   })
+})
+
+onUnmounted(() => {
+  cleanupPointerListeners()
 })
 </script>
 
@@ -534,6 +621,10 @@ onMounted(() => {
 .graph-node {
   cursor: pointer;
   transition: opacity 200ms ease-out;
+}
+
+.graph-node[data-drag-enabled='true'] {
+  touch-action: none;
 }
 
 .graph-node.entering {

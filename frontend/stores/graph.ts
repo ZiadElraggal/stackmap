@@ -192,6 +192,25 @@ const NETWORK_HEAVY_RESOURCE_TYPES = new Set([
 ])
 const UNLINKED_COMPONENT_ID = '__unlinked_resources__'
 const COMPONENT_VIEW_THRESHOLD_DEFAULT = 35
+const DEFAULT_LAYOUT_LAYERS = ['frontend', 'api', 'serverless', 'compute', 'security', 'data']
+
+function normalizeNodeTier(node: StackMapNode): string {
+  const currentTier = node.position_hint?.tier
+  if (currentTier && !['backend', 'frontend', 'api', 'data'].includes(currentTier)) {
+    return currentTier
+  }
+  if (currentTier === 'frontend' || currentTier === 'api' || currentTier === 'data') {
+    return currentTier
+  }
+  if (node.category === 'serverless' || node.resource_type.includes('lambda')) return 'serverless'
+  if (
+    node.category === 'security' ||
+    node.resource_type.includes('cognito') ||
+    node.resource_type.includes('iam') ||
+    node.resource_type.includes('waf')
+  ) return 'security'
+  return 'compute'
+}
 
 const REFERENCE_TYPE_ALLOWLIST = new Set([
   'aws_ecs_service->aws_ecs_cluster',
@@ -879,6 +898,11 @@ export const useGraphStore = defineStore('graph', {
     userNodes: [] as StackMapNode[],
     connectingFromNodeId: null as string | null,
     layoutVersion: 0 as number,
+    layoutLayers: [...DEFAULT_LAYOUT_LAYERS] as string[],
+    customLayers: [] as Array<{ id: string; label: string }>,
+    nodeTierOverrides: {} as Record<string, string>,
+    draggingNodeId: null as string | null,
+    dragTargetLayerId: null as string | null,
   }),
 
   getters: {
@@ -1290,6 +1314,17 @@ export const useGraphStore = defineStore('graph', {
       this.nodes = data.nodes || []
       this.edges = data.edges || []
       this.groups = data.groups || []
+      this.layoutLayers = [...DEFAULT_LAYOUT_LAYERS]
+
+      for (const node of this.nodes) {
+        if (!node.position_hint) {
+          node.position_hint = { tier: 'compute', weight: 2 }
+        }
+        node.position_hint.tier = normalizeNodeTier(node)
+        if (!this.layoutLayers.includes(node.position_hint.tier)) {
+          this.layoutLayers.push(node.position_hint.tier)
+        }
+      }
 
       const cats = new Set(this.graphNodes.map(node => node.category))
       this.categoryFilters = Object.fromEntries([...cats].map(category => [category, true]))
@@ -1516,6 +1551,84 @@ export const useGraphStore = defineStore('graph', {
       this.layoutVersion += 1
     },
 
+    startDraggingNode(nodeId: string) {
+      this.draggingNodeId = nodeId
+      const node =
+        this.userNodes.find(candidate => candidate.id === nodeId)
+        || this.nodes.find(candidate => candidate.id === nodeId)
+        || this.graphNodes.find(candidate => candidate.id === nodeId)
+      this.dragTargetLayerId = node?.position_hint?.tier || null
+    },
+
+    setDragTargetLayer(layerId: string | null) {
+      this.dragTargetLayerId = layerId
+    },
+
+    finishDraggingNode(layerId: string | null) {
+      const nodeId = this.draggingNodeId
+      this.draggingNodeId = null
+      this.dragTargetLayerId = null
+      if (!nodeId || !layerId) return
+      this.moveNodeToLayer(nodeId, layerId)
+    },
+
+    cancelDraggingNode() {
+      this.draggingNodeId = null
+      this.dragTargetLayerId = null
+    },
+
+    addCustomLayer(label: string): string | null {
+      const trimmed = label.trim()
+      if (!trimmed) return null
+      const id = trimmed
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+      if (!id) return null
+      if (!this.layoutLayers.includes(id)) {
+        this.layoutLayers.push(id)
+      }
+      if (!this.customLayers.some(layer => layer.id === id) && !DEFAULT_LAYOUT_LAYERS.includes(id)) {
+        this.customLayers.push({ id, label: trimmed })
+      }
+      this.requestRelayout()
+      this._persistEdits()
+      return id
+    },
+
+    reorderLayers(draggedLayerId: string, targetLayerId: string) {
+      if (draggedLayerId === targetLayerId) return
+      const fromIndex = this.layoutLayers.indexOf(draggedLayerId)
+      const toIndex = this.layoutLayers.indexOf(targetLayerId)
+      if (fromIndex === -1 || toIndex === -1) return
+
+      const updated = [...this.layoutLayers]
+      const [moved] = updated.splice(fromIndex, 1)
+      updated.splice(toIndex, 0, moved)
+      this.layoutLayers = updated
+      this.requestRelayout()
+      this._persistEdits()
+    },
+
+    moveNodeToLayer(nodeId: string, layerId: string) {
+      if (!this.layoutLayers.includes(layerId)) {
+        this.layoutLayers.push(layerId)
+      }
+      const userNode = this.userNodes.find(node => node.id === nodeId)
+      if (userNode) {
+        if (!userNode.position_hint) userNode.position_hint = { tier: layerId, weight: 4 }
+        userNode.position_hint.tier = layerId
+      } else {
+        const node = this.nodes.find(candidate => candidate.id === nodeId)
+        if (!node) return
+        if (!node.position_hint) node.position_hint = { tier: layerId, weight: 2 }
+        node.position_hint.tier = layerId
+        this.nodeTierOverrides[nodeId] = layerId
+      }
+      this.requestRelayout()
+      this._persistEdits()
+    },
+
     addUserNode(
       name: string,
       options: {
@@ -1540,6 +1653,9 @@ export const useGraphStore = defineStore('graph', {
           weight: options.weight ?? 4,
         },
       })
+      if (!this.layoutLayers.includes(options.tier)) {
+        this.layoutLayers.push(options.tier)
+      }
       this.requestRelayout()
       this._persistEdits()
     },
@@ -1559,6 +1675,9 @@ export const useGraphStore = defineStore('graph', {
           hiddenNodeIds: this.hiddenNodeIds,
           userEdges: this.userEdges,
           userNodes: this.userNodes,
+          customLayers: this.customLayers,
+          nodeTierOverrides: this.nodeTierOverrides,
+          layoutLayers: this.layoutLayers,
         }
         localStorage.setItem('stackmap-edits', JSON.stringify(data))
       } catch { /* ignore quota errors */ }
@@ -1578,6 +1697,40 @@ export const useGraphStore = defineStore('graph', {
         }
         if (Array.isArray(data.userNodes)) {
           this.userNodes = data.userNodes
+          for (const node of this.userNodes) {
+            if (!node.position_hint) {
+              node.position_hint = { tier: 'compute', weight: 4 }
+            }
+            node.position_hint.tier = normalizeNodeTier(node)
+            if (!this.layoutLayers.includes(node.position_hint.tier)) {
+              this.layoutLayers.push(node.position_hint.tier)
+            }
+          }
+        }
+        if (Array.isArray(data.customLayers)) {
+          this.customLayers = data.customLayers
+          for (const layer of this.customLayers) {
+            if (!this.layoutLayers.includes(layer.id)) {
+              this.layoutLayers.push(layer.id)
+            }
+          }
+        }
+        if (data.nodeTierOverrides && typeof data.nodeTierOverrides === 'object') {
+          this.nodeTierOverrides = data.nodeTierOverrides
+          for (const node of this.nodes) {
+            const override = this.nodeTierOverrides[node.id]
+            if (override) {
+              if (!node.position_hint) node.position_hint = { tier: override, weight: 2 }
+              node.position_hint.tier = override
+              if (!this.layoutLayers.includes(override)) {
+                this.layoutLayers.push(override)
+              }
+            }
+          }
+        }
+        if (Array.isArray(data.layoutLayers)) {
+          const extras = this.layoutLayers.filter(layerId => !data.layoutLayers.includes(layerId))
+          this.layoutLayers = [...data.layoutLayers, ...extras]
         }
       } catch { /* ignore parse errors */ }
     },
@@ -1587,6 +1740,15 @@ export const useGraphStore = defineStore('graph', {
       this.userEdges = []
       this.userNodes = []
       this.connectingFromNodeId = null
+      this.customLayers = []
+      this.nodeTierOverrides = {}
+      this.draggingNodeId = null
+      this.dragTargetLayerId = null
+      this.layoutLayers = [...DEFAULT_LAYOUT_LAYERS]
+      for (const node of this.nodes) {
+        if (!node.position_hint) node.position_hint = { tier: 'compute', weight: 2 }
+        node.position_hint.tier = normalizeNodeTier(node)
+      }
       this.requestRelayout()
       if (typeof window !== 'undefined') {
         localStorage.removeItem('stackmap-edits')
