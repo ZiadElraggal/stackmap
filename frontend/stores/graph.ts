@@ -1533,7 +1533,7 @@ export const useGraphStore = defineStore('graph', {
         id: edgeId,
         source: this.connectingFromNodeId,
         target: targetNodeId,
-        edge_type: 'references',
+        edge_type: 'user_link',
         label: 'user link',
       })
       this.connectingFromNodeId = null
@@ -1693,7 +1693,11 @@ export const useGraphStore = defineStore('graph', {
           this.hiddenNodeIds = data.hiddenNodeIds
         }
         if (Array.isArray(data.userEdges)) {
-          this.userEdges = data.userEdges
+          this.userEdges = data.userEdges.map((edge: StackMapEdge) => (
+            edge.label === 'user link' && edge.edge_type === 'references'
+              ? { ...edge, edge_type: 'user_link' }
+              : edge
+          ))
         }
         if (Array.isArray(data.userNodes)) {
           this.userNodes = data.userNodes

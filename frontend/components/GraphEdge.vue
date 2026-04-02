@@ -18,7 +18,7 @@
     />
 
     <circle
-      v-if="edge.edge_type === 'triggers' && !isDimmed"
+      v-if="(edge.edge_type === 'triggers' || isUserLink) && !isDimmed"
       class="flow-dot"
       :fill="edgeColor"
       r="2.5"
@@ -74,11 +74,18 @@ const props = withDefaults(
 
 const store = useGraphStore()
 
+const isUserLink = computed(() =>
+  props.edge.edge_type === 'user_link'
+  || props.edge.label === 'user link'
+  || props.edge.id.startsWith('user:')
+)
+
 const edgeDiffStatus = computed(() => store.edgeDiffStatus[props.edge.id] as string | undefined)
 
 const edgeColor = computed(() => {
   if (store.diffMode && edgeDiffStatus.value === 'added') return '#22c55e'
   if (store.diffMode && edgeDiffStatus.value === 'removed') return '#ef4444'
+  if (isUserLink.value) return EDGE_COLORS.user_link
   return EDGE_COLORS[props.edge.edge_type] || '#64748b'
 })
 
@@ -117,6 +124,7 @@ const computedOpacity = computed(() => {
     if (edgeDiffStatus.value === 'unchanged') return 0.15
   }
   const type = props.edge.edge_type
+  if (isUserLink.value) return 0.82
   if (type === 'triggers') return 0.85
   if (type === 'writes_to' || type === 'reads_from') return 0.7
   if (type === 'routes_to') return 0.55
@@ -128,6 +136,7 @@ const strokeWidth = computed(() => {
     triggers: 1.5,
     reads_from: 1.5,
     writes_to: 1.5,
+    user_link: 1.6,
     routes_to: 1.2,
     references: 1,
     contains: 0.8,
@@ -141,6 +150,7 @@ const strokeWidth = computed(() => {
 const dashPattern = computed(() => {
   if (store.diffMode && edgeDiffStatus.value === 'added') return '6 3'
   if (store.diffMode && edgeDiffStatus.value === 'removed') return '3 4'
+  if (isUserLink.value) return 'none'
   if (props.edge.edge_type === 'cross_account_reference') return '8 4'
   if (props.edge.edge_type === 'references') return '4 3'
   if (props.edge.edge_type === 'contains') return '1 3'
@@ -193,7 +203,7 @@ const labelPosition = computed(() => {
 const labelWidth = computed(() => Math.max(36, props.edge.edge_type.length * 5.4 + 8))
 const showLabel = computed(() => {
   if (props.zoomScale <= 0.6) return false
-  return ['triggers', 'reads_from', 'writes_to', 'cross_account_reference'].includes(props.edge.edge_type)
+  return ['triggers', 'reads_from', 'writes_to', 'cross_account_reference', 'user_link'].includes(props.edge.edge_type)
 })
 </script>
 
