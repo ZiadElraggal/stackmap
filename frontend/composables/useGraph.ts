@@ -1,5 +1,31 @@
 import type { StackMapNode } from '~/stores/graph'
 
+export interface UserNodeTemplate {
+  id: string
+  label: string
+  resourceType: string
+  category: string
+  tier: string
+  provider?: string
+  weight?: number
+}
+
+export const USER_NODE_TEMPLATES: UserNodeTemplate[] = [
+  { id: 'lambda', label: 'Lambda', resourceType: 'aws_lambda_function', category: 'serverless', tier: 'backend', provider: 'aws', weight: 5 },
+  { id: 'ec2', label: 'EC2', resourceType: 'aws_instance', category: 'compute', tier: 'backend', provider: 'aws', weight: 4 },
+  { id: 'ecs-service', label: 'ECS Service', resourceType: 'aws_ecs_service', category: 'container', tier: 'backend', provider: 'aws', weight: 5 },
+  { id: 'api-gateway', label: 'API Gateway', resourceType: 'aws_api_gateway_rest_api', category: 'integration', tier: 'api', provider: 'aws', weight: 5 },
+  { id: 'load-balancer', label: 'Load Balancer', resourceType: 'aws_lb', category: 'network', tier: 'api', provider: 'aws', weight: 5 },
+  { id: 'cloudfront', label: 'CloudFront', resourceType: 'aws_cloudfront_distribution', category: 'cdn', tier: 'frontend', provider: 'aws', weight: 5 },
+  { id: 'route53', label: 'Route53', resourceType: 'aws_route53_record', category: 'dns', tier: 'frontend', provider: 'aws', weight: 3 },
+  { id: 'rds', label: 'RDS', resourceType: 'aws_db_instance', category: 'database', tier: 'data', provider: 'aws', weight: 5 },
+  { id: 'dynamodb', label: 'DynamoDB', resourceType: 'aws_dynamodb_table', category: 'database', tier: 'data', provider: 'aws', weight: 5 },
+  { id: 's3', label: 'S3 Bucket', resourceType: 'aws_s3_bucket', category: 'storage', tier: 'data', provider: 'aws', weight: 4 },
+  { id: 'sqs', label: 'SQS Queue', resourceType: 'aws_sqs_queue', category: 'queue', tier: 'backend', provider: 'aws', weight: 4 },
+  { id: 'sns', label: 'SNS Topic', resourceType: 'aws_sns_topic', category: 'integration', tier: 'api', provider: 'aws', weight: 4 },
+  { id: 'custom', label: 'Custom Service', resourceType: 'user_defined', category: 'other', tier: 'backend', provider: 'user', weight: 4 },
+]
+
 export const CATEGORY_COLORS: Record<string, string> = {
   compute: '#f59e0b',
   storage: '#38BDF8',      // sky blue (aligned with landing page secondary)
