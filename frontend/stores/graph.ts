@@ -871,12 +871,20 @@ export const useGraphStore = defineStore('graph', {
     showWeaklyLinkedComponents: false as boolean,
     collapseNetworkScaffolding: true as boolean,
     showCrossAccountEdges: true as boolean,
+
+    // Edit mode state
+    editMode: false as boolean,
+    hiddenNodeIds: [] as string[],
+    userEdges: [] as StackMapEdge[],
+    userNodes: [] as StackMapNode[],
+    connectingFromNodeId: null as string | null,
   }),
 
   getters: {
     selectedNode(state): StackMapNode | null {
       if (!state.selectedNodeId) return null
       return this.graphNodes.find((n: StackMapNode) => n.id === state.selectedNodeId)
+        ?? state.userNodes.find(n => n.id === state.selectedNodeId)
         ?? state.nodes.find(n => n.id === state.selectedNodeId)
         ?? null
     },
@@ -1155,7 +1163,7 @@ export const useGraphStore = defineStore('graph', {
 
     graphAdjacency(): Map<string, Set<string>> {
       const adj = new Map<string, Set<string>>()
-      for (const edge of this.graphEdges) {
+      for (const edge of [...this.graphEdges, ...this.userEdges]) {
         if (!adj.has(edge.source)) adj.set(edge.source, new Set())
         if (!adj.has(edge.target)) adj.set(edge.target, new Set())
         adj.get(edge.source)!.add(edge.target)
@@ -1237,7 +1245,11 @@ export const useGraphStore = defineStore('graph', {
         hopSet = this.nodesWithinHops(state.selectedNodeId, state.hopLimit)
       }
 
-      return this.graphNodes.filter((node: StackMapNode) => {
+      // Include user-created nodes
+      const allNodes = [...this.graphNodes, ...state.userNodes]
+
+      return allNodes.filter((node: StackMapNode) => {
+        if (state.hiddenNodeIds.includes(node.id)) return false
         if (state.categoryFilters[node.category] === false) return false
         if (state.minWeight > 1 && (node.position_hint?.weight || 2) < state.minWeight) return false
         if (hopSet && !hopSet.has(node.id)) return false
@@ -1253,11 +1265,16 @@ export const useGraphStore = defineStore('graph', {
 
     visibleEdges(): StackMapEdge[] {
       const visibleIds = new Set(this.visibleNodes.map((node: StackMapNode) => node.id))
-      return this.graphEdges.filter((edge: StackMapEdge) => visibleIds.has(edge.source) && visibleIds.has(edge.target))
+      const baseEdges = this.graphEdges.filter((edge: StackMapEdge) => visibleIds.has(edge.source) && visibleIds.has(edge.target))
+      const userEdgesVisible = this.userEdges.filter((edge: StackMapEdge) => visibleIds.has(edge.source) && visibleIds.has(edge.target))
+      return [...baseEdges, ...userEdgesVisible]
     },
 
     nodeEdges(): (nodeId: string) => StackMapEdge[] {
-      return (nodeId: string) => this.graphEdges.filter((edge: StackMapEdge) => edge.source === nodeId || edge.target === nodeId)
+      return (nodeId: string) =>
+        [...this.graphEdges, ...this.userEdges].filter(
+          (edge: StackMapEdge) => edge.source === nodeId || edge.target === nodeId
+        )
     },
   },
 
@@ -1290,6 +1307,7 @@ export const useGraphStore = defineStore('graph', {
         this.viewMode = 'architecture'
       }
 
+      this.loadPersistedEdits()
       this.loaded = true
     },
 
@@ -1425,6 +1443,132 @@ export const useGraphStore = defineStore('graph', {
       this.showWeaklyLinkedComponents = false
       this.collapseNetworkScaffolding = true
       this.showCrossAccountEdges = true
+    },
+
+    // ── Edit mode actions ─────────────────────────────────────────
+    toggleEditMode() {
+      this.editMode = !this.editMode
+      if (!this.editMode) {
+        this.connectingFromNodeId = null
+      }
+    },
+
+    hideNode(nodeId: string) {
+      if (!this.hiddenNodeIds.includes(nodeId)) {
+        this.hiddenNodeIds.push(nodeId)
+      }
+      if (this.selectedNodeId === nodeId) this.selectedNodeId = null
+      this._persistEdits()
+    },
+
+    showNode(nodeId: string) {
+      this.hiddenNodeIds = this.hiddenNodeIds.filter(id => id !== nodeId)
+      this._persistEdits()
+    },
+
+    showAllNodes() {
+      this.hiddenNodeIds = []
+      this._persistEdits()
+    },
+
+    startConnecting(nodeId: string) {
+      this.connectingFromNodeId = nodeId
+    },
+
+    cancelConnecting() {
+      this.connectingFromNodeId = null
+    },
+
+    completeConnection(targetNodeId: string) {
+      if (!this.connectingFromNodeId || this.connectingFromNodeId === targetNodeId) {
+        this.connectingFromNodeId = null
+        return
+      }
+      const edgeId = `user:${this.connectingFromNodeId}->${targetNodeId}`
+      // Don't add duplicate edges
+      if (this.userEdges.some(e => e.id === edgeId)) {
+        this.connectingFromNodeId = null
+        return
+      }
+      this.userEdges.push({
+        id: edgeId,
+        source: this.connectingFromNodeId,
+        target: targetNodeId,
+        edge_type: 'references',
+        label: 'user link',
+      })
+      this.connectingFromNodeId = null
+      this._persistEdits()
+    },
+
+    removeUserEdge(edgeId: string) {
+      this.userEdges = this.userEdges.filter(e => e.id !== edgeId)
+      this._persistEdits()
+    },
+
+    addUserNode(name: string, category: string, tier: string) {
+      const id = `user:${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      this.userNodes.push({
+        id,
+        name,
+        resource_type: 'user_defined',
+        provider: 'user',
+        category,
+        properties: {},
+        tags: { _user_created: 'true' },
+        position_hint: {
+          tier,
+          weight: 4,
+        },
+      })
+      this._persistEdits()
+    },
+
+    removeUserNode(nodeId: string) {
+      this.userNodes = this.userNodes.filter(n => n.id !== nodeId)
+      this.userEdges = this.userEdges.filter(e => e.source !== nodeId && e.target !== nodeId)
+      if (this.selectedNodeId === nodeId) this.selectedNodeId = null
+      this._persistEdits()
+    },
+
+    _persistEdits() {
+      if (typeof window === 'undefined') return
+      try {
+        const data = {
+          hiddenNodeIds: this.hiddenNodeIds,
+          userEdges: this.userEdges,
+          userNodes: this.userNodes,
+        }
+        localStorage.setItem('stackmap-edits', JSON.stringify(data))
+      } catch { /* ignore quota errors */ }
+    },
+
+    loadPersistedEdits() {
+      if (typeof window === 'undefined') return
+      try {
+        const raw = localStorage.getItem('stackmap-edits')
+        if (!raw) return
+        const data = JSON.parse(raw)
+        if (Array.isArray(data.hiddenNodeIds)) {
+          this.hiddenNodeIds = data.hiddenNodeIds
+        }
+        if (Array.isArray(data.userEdges)) {
+          this.userEdges = data.userEdges
+        }
+        if (Array.isArray(data.userNodes)) {
+          this.userNodes = data.userNodes
+        }
+      } catch { /* ignore parse errors */ }
+    },
+
+    clearAllEdits() {
+      this.hiddenNodeIds = []
+      this.userEdges = []
+      this.userNodes = []
+      this.connectingFromNodeId = null
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('stackmap-edits')
+      }
     },
   },
 })

@@ -406,7 +406,10 @@ const tierDividers = computed(() => {
 
 const hoveredTier = computed(() => {
   if (!store.hoveredNodeId) return null
-  const node = store.graphNodes.find(n => n.id === store.hoveredNodeId) || store.nodes.find(n => n.id === store.hoveredNodeId)
+  const node =
+    store.graphNodes.find(n => n.id === store.hoveredNodeId) ||
+    store.userNodes.find(n => n.id === store.hoveredNodeId) ||
+    store.nodes.find(n => n.id === store.hoveredNodeId)
   return node?.position_hint?.tier || null
 })
 
@@ -631,15 +634,17 @@ function fitToViewport() {
 }
 
 function recomputeLayout() {
+  const allNodes = [...store.graphNodes, ...store.userNodes]
+  const allEdges = [...store.graphEdges, ...store.userEdges]
   const positions = store.diffMode
     ? computeDiffLayout()
-    : computeLayout(store.graphNodes, store.graphEdges, store.graphGroups)
+    : computeLayout(allNodes, allEdges, store.graphGroups)
   store.setPositions(positions)
 }
 
 function computeDiffLayout(): Record<string, NodePosition> {
-  const allNodes = store.graphNodes
-  const allEdges = store.graphEdges
+  const allNodes = [...store.graphNodes, ...store.userNodes]
+  const allEdges = [...store.graphEdges, ...store.userEdges]
   const nodeDiffStatus = store.nodeDiffStatus
   const edgeDiffStatus = store.edgeDiffStatus
 
@@ -697,7 +702,7 @@ function inferAnchorPosition(
     return centroidForList(neighborPositions)
   }
 
-  const tierPeers = store.graphNodes
+  const tierPeers = [...store.graphNodes, ...store.userNodes]
     .filter(candidate => candidate.position_hint?.tier === node.position_hint?.tier)
     .map(candidate => positions[candidate.id])
     .filter((pos): pos is NodePosition => Boolean(pos))
