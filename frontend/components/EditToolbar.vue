@@ -38,6 +38,17 @@
         </button>
 
         <button
+          class="edit-btn"
+          title="Re-arrange the graph after edits"
+          @click="relayoutGraph"
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 3.5h4M2 9.5h9M7 3.5l1.5-1.5M7 3.5L8.5 5M9 9.5l1.5-1.5M9 9.5l1.5 1.5"/>
+          </svg>
+          <span>Reflow</span>
+        </button>
+
+        <button
           v-if="store.hiddenNodeIds.length > 0"
           class="edit-btn"
           @click="store.showAllNodes()"
@@ -99,37 +110,26 @@
         </label>
 
         <label class="block mb-3">
-          <span class="text-[10px] font-mono uppercase tracking-wider text-gray-500 mb-1 block">Category</span>
+          <span class="text-[10px] font-mono uppercase tracking-wider text-gray-500 mb-1 block">Service Type</span>
           <select
-            v-model="newNodeCategory"
+            v-model="newNodeTemplateId"
             class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white font-mono outline-none focus:border-emerald-400/40 appearance-none"
           >
-            <option value="compute">Compute</option>
-            <option value="storage">Storage</option>
-            <option value="database">Database</option>
-            <option value="network">Network</option>
-            <option value="integration">Integration</option>
-            <option value="container">Container</option>
-            <option value="queue">Queue</option>
-            <option value="cdn">CDN</option>
-            <option value="dns">DNS</option>
-            <option value="security">Security</option>
-            <option value="monitoring">Monitoring</option>
-            <option value="other">Other</option>
+            <option
+              v-for="template in userNodeTemplates"
+              :key="template.id"
+              :value="template.id"
+            >
+              {{ template.label }}
+            </option>
           </select>
         </label>
 
         <label class="block mb-5">
-          <span class="text-[10px] font-mono uppercase tracking-wider text-gray-500 mb-1 block">Tier</span>
-          <select
-            v-model="newNodeTier"
-            class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white font-mono outline-none focus:border-emerald-400/40 appearance-none"
-          >
-            <option value="frontend">Frontend</option>
-            <option value="api">API</option>
-            <option value="backend">Backend</option>
-            <option value="data">Data</option>
-          </select>
+          <span class="text-[10px] font-mono uppercase tracking-wider text-gray-500 mb-1 block">Placement</span>
+          <div class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-gray-300 font-mono">
+            {{ selectedTemplate?.tier || 'backend' }} · {{ selectedTemplate?.category || 'other' }}
+          </div>
         </label>
 
         <div class="flex justify-end gap-2">
@@ -154,14 +154,19 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { USER_NODE_TEMPLATES } from '~/composables/useGraph'
 import { useGraphStore } from '~/stores/graph'
 
 const store = useGraphStore()
 
 const showAddDialog = ref(false)
 const newNodeName = ref('')
-const newNodeCategory = ref('compute')
-const newNodeTier = ref('backend')
+const newNodeTemplateId = ref('lambda')
+const userNodeTemplates = USER_NODE_TEMPLATES
+
+const selectedTemplate = computed(() =>
+  userNodeTemplates.find(template => template.id === newNodeTemplateId.value) || userNodeTemplates[0]
+)
 
 const hasAnyEdits = computed(() =>
   store.hiddenNodeIds.length > 0 || store.userEdges.length > 0 || store.userNodes.length > 0
@@ -169,9 +174,24 @@ const hasAnyEdits = computed(() =>
 
 function addNode() {
   if (!newNodeName.value.trim()) return
-  store.addUserNode(newNodeName.value.trim(), newNodeCategory.value, newNodeTier.value)
+  const template = selectedTemplate.value
+  store.addUserNode(newNodeName.value.trim(), {
+    resourceType: template.resourceType,
+    category: template.category,
+    tier: template.tier,
+    provider: template.provider,
+    weight: template.weight,
+  })
   newNodeName.value = ''
   showAddDialog.value = false
+  relayoutGraph()
+}
+
+function relayoutGraph() {
+  store.requestRelayout()
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('stackmap-fit-view'))
+  }
 }
 </script>
 

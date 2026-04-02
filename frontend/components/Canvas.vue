@@ -284,7 +284,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import * as d3 from 'd3'
 import { useGraphStore, type NodePosition, type StackMapEdge, type StackMapNode } from '~/stores/graph'
 import { useLayout } from '~/composables/useLayout'
@@ -535,10 +535,12 @@ onMounted(async () => {
   }
 
   window.addEventListener('keydown', onKeydown)
+  window.addEventListener('stackmap-fit-view', onFitViewEvent)
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('stackmap-fit-view', onFitViewEvent)
 })
 
 watch(
@@ -546,17 +548,24 @@ watch(
     store.viewMode,
     store.diffMode,
     store.diffSlider,
-    store.graphNodes.map(n => n.id).join('|'),
-    store.graphEdges.map(e => e.id).join('|'),
+    store.visibleNodes.map(n => n.id).join('|'),
+    store.visibleEdges.map(e => e.id).join('|'),
     store.graphGroups.map(g => g.id).join('|'),
     store.activeAccountId,
     store.activeComponentId,
+    store.layoutVersion,
   ],
-  () => {
+  async () => {
     if (!store.loaded) return
     recomputeLayout()
+    await nextTick()
+    fitToViewport()
   }
 )
+
+function onFitViewEvent() {
+  fitToViewport()
+}
 
 function onKeydown(e: KeyboardEvent) {
   const tag = (e.target as HTMLElement)?.tagName
