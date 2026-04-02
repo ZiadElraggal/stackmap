@@ -643,8 +643,8 @@ function fitToViewport() {
 }
 
 function recomputeLayout() {
-  const allNodes = [...store.graphNodes, ...store.userNodes]
-  const allEdges = [...store.graphEdges, ...store.userEdges]
+  const allNodes = store.visibleNodes
+  const allEdges = store.visibleEdges
   const positions = store.diffMode
     ? computeDiffLayout()
     : computeLayout(allNodes, allEdges, store.graphGroups)
