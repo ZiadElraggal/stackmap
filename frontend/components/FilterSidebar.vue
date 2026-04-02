@@ -1,9 +1,10 @@
 <template>
   <div
     :class="[
-      'fixed left-0 top-0 h-full bg-[#12121a]/95 backdrop-blur-md border-r border-white/[0.06] z-40 transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] flex flex-col',
+      'fixed left-0 top-0 h-full border-r z-40 transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] flex flex-col',
       collapsed ? 'w-10' : 'w-64',
     ]"
+    style="backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); background: rgba(18, 18, 26, 0.92); border-color: var(--sm-border)"
   >
     <button
       class="h-9 flex items-center justify-center text-gray-500 hover:text-gray-300 border-b border-white/[0.06] text-xs transition-colors"

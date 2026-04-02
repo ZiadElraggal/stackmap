@@ -704,6 +704,38 @@ def setup_org_role(
         ))
 
 
+def _parse_account_roles(accounts_str: str) -> list[tuple[str, str]]:
+    """Parse 'accountId:roleArn,...' into [(account_id, role_arn), ...]."""
+    result: list[tuple[str, str]] = []
+    for entry in accounts_str.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        # Support both account_id:role_arn and just role_arn (extract account from ARN)
+        if entry.startswith("arn:"):
+            # Just a role ARN — extract account from ARN
+            parts = entry.split(":")
+            if len(parts) >= 5:
+                account_id = parts[4]
+                result.append((account_id, entry))
+            else:
+                raise typer.BadParameter(f"Invalid role ARN: {entry}")
+        elif ":" in entry:
+            # account_id:role_arn format
+            first_colon = entry.index(":")
+            account_id = entry[:first_colon]
+            role_arn = entry[first_colon + 1:]
+            if not account_id.isdigit() or len(account_id) != 12:
+                raise typer.BadParameter(f"Invalid account ID '{account_id}' — expected 12-digit number")
+            result.append((account_id, role_arn))
+        else:
+            raise typer.BadParameter(
+                f"Invalid account entry: '{entry}'. "
+                "Use format 'accountId:roleArn' or just 'roleArn'"
+            )
+    return result
+
+
 @app.command("scan-aws")
 def scan_aws(
     profile: str | None = typer.Option(None, help="AWS profile name"),
@@ -723,6 +755,7 @@ def scan_aws(
     cache_dir: str | None = typer.Option(None, help="Cache directory for raw AWS API responses"),
     no_cache: bool = typer.Option(False, help="Disable response caching"),
     serve_after: bool = typer.Option(False, "--serve", help="Open the interactive viewer after scanning"),
+    accounts: str | None = typer.Option(None, help="Comma-separated account:role_arn pairs for multi-account scan (e.g. '123456789012:arn:aws:iam::123456789012:role/StackMapReadOnly,987654321098:arn:aws:iam::987654321098:role/StackMapReadOnly')"),
 ) -> None:
     """Scan live AWS infrastructure using read-only AWS APIs."""
     output_format = format.lower()
@@ -755,6 +788,83 @@ def scan_aws(
         no_cache=no_cache,
         partial_write_path=output if output_format == "json" and not dry_run else None,
     )
+
+    # Multi-account explicit scan (without organization)
+    if accounts:
+        try:
+            account_roles = _parse_account_roles(accounts)
+        except typer.BadParameter as exc:
+            console.print(f"[red]Error:[/red] {exc}")
+            raise typer.Exit(1)
+
+        console.print()
+        console.print("[bold]StackMap Multi-Account Scan[/bold]  [cyan]read-only mode[/cyan]")
+        console.print(f"Accounts : [cyan]{len(account_roles)}[/cyan]")
+        for acct_id, role in account_roles:
+            console.print(f"  - [cyan]{acct_id}[/cyan] → {role}")
+        console.print(f"Regions  : [cyan]{', '.join(region) if region else 'auto-detect'}[/cyan]")
+        console.print()
+        console.print("No resources will be created or modified in any account.")
+
+        if dry_run:
+            console.print("[yellow]Dry run not yet supported for multi-account explicit scan.[/yellow]")
+            raise typer.Exit(0)
+
+        with mascot_status(console, "[bold]Scanning multiple AWS accounts...[/bold]"):
+            try:
+                ir = scanner.scan_explicit_accounts(account_roles)
+            except Exception as exc:
+                console.print(f"[red]Error:[/red] {exc}")
+                raise typer.Exit(1)
+
+        source_label = Path(output if output_format == "json" else "aws-multi.json")
+        _annotate_scan_metadata(ir, source_label)
+
+        try:
+            _write_ir_output(ir, output, output_format)
+        except RuntimeError as exc:
+            console.print(f"[red]Error:[/red] {exc}")
+            raise typer.Exit(1)
+
+        table = Table(title="StackMap Multi-Account Scan Results", show_header=False)
+        table.add_column("Metric", style="bold")
+        table.add_column("Value", style="cyan")
+        table.add_row("Scan mode", "multi-account (explicit)")
+        table.add_row("Accounts", str(len(account_roles)))
+        table.add_row("Regions", ", ".join(ir.metadata.get("regions", [])) or "-")
+        table.add_row("Resources", str(len(ir.nodes)))
+        table.add_row("Connections", str(len(ir.edges)))
+        table.add_row("Groups", str(len(ir.groups)))
+        if ir.metadata.get("cross_account_edges") is not None:
+            table.add_row("Cross-account", str(ir.metadata.get("cross_account_edges", 0)))
+        table.add_row("Output", output)
+        console.print()
+        console.print(table)
+
+        console.print(
+            f"\n[green]✓[/green] Multi-account scan complete: {len(ir.nodes)} resources, "
+            f"{len(ir.edges)} connections across {len(account_roles)} accounts."
+        )
+
+        if serve_after:
+            serve_source = Path(output)
+            temp_json_path: Path | None = None
+            if output_format != "json":
+                temp_dir_path = Path(tempfile.mkdtemp(prefix="stackmap-scan-multi-"))
+                temp_json_path = temp_dir_path / "stackmap-multi-output.json"
+                ir.write_json(temp_json_path)
+                serve_source = temp_json_path
+            serve(
+                source=str(serve_source),
+                terraform_dir=None,
+                auto_pull_remote=False,
+                host="127.0.0.1",
+                port=3000,
+                watch=False,
+                watch_interval=1.0,
+                open_browser=True,
+            )
+        return
 
     try:
         summary = scanner.startup_summary()

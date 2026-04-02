@@ -450,6 +450,124 @@ class AWSLiveScanner:
             ir.write_json(self.partial_write_path)
         return ir
 
+    def scan_explicit_accounts(
+        self, account_roles: list[tuple[str, str]]
+    ) -> StackMapIR:
+        """Scan multiple explicit accounts by assuming roles via STS.
+
+        Args:
+            account_roles: List of (account_id, role_arn) tuples.
+        """
+        base_session, auth_description = self._resolve_base_session()
+
+        # Resolve regions from the first account if not specified
+        if not self.regions:
+            first_role_arn = account_roles[0][1] if account_roles else None
+            try:
+                probe_session = self._assume_role(base_session, first_role_arn)
+                regions = self._resolve_regions(probe_session)
+            except Exception:
+                regions = ["us-east-1"]
+        else:
+            regions = self.regions
+
+        all_results: list[StackMapIR] = []
+        all_errors: list[str] = []
+
+        def scan_one_account(account_id: str, role_arn: str) -> tuple[StackMapIR | None, list[str]]:
+            errors: list[str] = []
+            try:
+                session = self._assume_role(base_session, role_arn)
+            except Exception as exc:
+                errors.append(f"Failed to assume role for {account_id}: {exc}")
+                return None, errors
+
+            context = AccountScanContext(
+                session=session,
+                account_id=account_id,
+                account_name=None,
+                auth_description=f"{auth_description} -> {role_arn}",
+                role_arn=role_arn,
+                services=self.services,
+                regions=regions,
+                recorder=APIRecorder(dry_run=self.dry_run, verbose=self.verbose),
+                cache_dir=self.cache_dir,
+                cache_ttl_seconds=DEFAULT_CACHE_TTL_SECONDS,
+                dry_run=self.dry_run,
+                verbose=self.verbose,
+            )
+            try:
+                ir = self._scan_account(context)
+                errors.extend(context.errors)
+                return ir, errors
+            except Exception as exc:
+                errors.append(f"Scan failed for {account_id}: {exc}")
+                return None, errors
+
+        if self.verbose:
+            from rich.console import Console as RichConsole
+            verbose_console = RichConsole(stderr=True)
+
+        with ThreadPoolExecutor(max_workers=min(self.concurrency, len(account_roles))) as pool:
+            futures = {
+                pool.submit(scan_one_account, acct_id, role): (acct_id, role)
+                for acct_id, role in account_roles
+            }
+            for future in as_completed(futures):
+                acct_id, role = futures[future]
+                ir, errors = future.result()
+                all_errors.extend(errors)
+                if ir is not None:
+                    all_results.append(ir)
+                    if self.verbose:
+                        verbose_console.print(
+                            f"[green]✓[/green] {acct_id}: {len(ir.nodes)} resources"
+                        )
+
+        # Merge all results
+        merged = StackMapIR(
+            metadata={
+                "source_type": "aws_live",
+                "source_kind": "live_scan",
+                "scan_mode": "multi_account",
+                "accounts": [acct_id for acct_id, _ in account_roles],
+                "regions": regions,
+                "selected_services": sorted(self.services),
+                "auth_mode": f"explicit multi-account via {auth_description}",
+            },
+            nodes=[],
+            edges=[],
+            groups=[],
+        )
+
+        for ir in all_results:
+            merged.nodes.extend(ir.nodes)
+            merged.edges.extend(ir.edges)
+            merged.groups.extend(ir.groups)
+
+        if all_errors:
+            merged.metadata["errors"] = all_errors
+
+        # Create account groups
+        for account_id, _ in account_roles:
+            account_nodes = [n for n in merged.nodes if n.metadata.get("account_id") == account_id]
+            if account_nodes:
+                merged.groups.append(
+                    StackMapGroup(
+                        id=f"group:account:{account_id}",
+                        name=account_id,
+                        group_type="account",
+                        children=[n.id for n in account_nodes],
+                        parent=None,
+                        metadata={"account_id": account_id},
+                    )
+                )
+
+        # Infer cross-account edges
+        infer_cross_account_edges(merged)
+
+        return merged
+
     def startup_summary(self) -> dict[str, Any]:
         session, auth_description = self._resolve_base_session()
         resolved_session = self._assume_role(session, self.role_arn) if self.role_arn else session
