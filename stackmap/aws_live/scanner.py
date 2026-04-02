@@ -568,6 +568,132 @@ class AWSLiveScanner:
 
         return merged
 
+    def scan_explicit_profiles(
+        self, profiles: list[str]
+    ) -> StackMapIR:
+        """Scan multiple explicit AWS profiles.
+
+        Args:
+            profiles: List of AWS shared-config profile names.
+        """
+        profile_sessions: list[tuple[str, boto3.session.Session, str]] = []
+        all_errors: list[str] = []
+
+        for profile in profiles:
+            try:
+                session = self._session_factory(profile_name=profile)
+                creds = session.get_credentials()
+                if creds is None:
+                    all_errors.append(f"Profile '{profile}' has no credentials")
+                    continue
+                account_id = self._get_account_id(session)
+                profile_sessions.append((profile, session, account_id))
+            except Exception as exc:
+                all_errors.append(f"Failed to initialize profile '{profile}': {exc}")
+
+        if not profile_sessions:
+            raise RuntimeError("No valid AWS profiles could be initialized for multi-account scan.")
+
+        if not self.regions:
+            try:
+                regions = self._resolve_regions(profile_sessions[0][1])
+            except Exception:
+                regions = ["us-east-1"]
+        else:
+            regions = self.regions
+
+        all_results: list[StackMapIR] = []
+
+        def scan_one_profile(
+            profile_name: str,
+            session: boto3.session.Session,
+            account_id: str,
+        ) -> tuple[StackMapIR | None, list[str]]:
+            errors: list[str] = []
+            context = AccountScanContext(
+                session=session,
+                account_id=account_id,
+                account_name=profile_name,
+                auth_description=f"profile '{profile_name}'",
+                role_arn=None,
+                services=self.services,
+                regions=regions,
+                recorder=APIRecorder(dry_run=self.dry_run, verbose=self.verbose),
+                cache_dir=self.cache_dir,
+                cache_ttl_seconds=DEFAULT_CACHE_TTL_SECONDS,
+                dry_run=self.dry_run,
+                verbose=self.verbose,
+            )
+            try:
+                ir = self._scan_account(context)
+                ir.metadata["profile"] = profile_name
+                errors.extend(context.errors)
+                return ir, errors
+            except Exception as exc:
+                errors.append(f"Scan failed for profile '{profile_name}' ({account_id}): {exc}")
+                return None, errors
+
+        if self.verbose:
+            from rich.console import Console as RichConsole
+            verbose_console = RichConsole(stderr=True)
+
+        with ThreadPoolExecutor(max_workers=min(self.concurrency, len(profile_sessions))) as pool:
+            futures = {
+                pool.submit(scan_one_profile, profile, session, account_id): (profile, account_id)
+                for profile, session, account_id in profile_sessions
+            }
+            for future in as_completed(futures):
+                profile_name, account_id = futures[future]
+                ir, errors = future.result()
+                all_errors.extend(errors)
+                if ir is not None:
+                    all_results.append(ir)
+                    if self.verbose:
+                        verbose_console.print(
+                            f"[green]✓[/green] {profile_name} ({account_id}): {len(ir.nodes)} resources"
+                        )
+
+        merged = StackMapIR(
+            metadata={
+                "source_type": "aws_live",
+                "source_kind": "live_scan",
+                "scan_mode": "multi_account",
+                "accounts": [account_id for _, _, account_id in profile_sessions],
+                "profiles": profiles,
+                "regions": regions,
+                "selected_services": sorted(self.services),
+                "auth_mode": "explicit multi-account via AWS profiles",
+            },
+            nodes=[],
+            edges=[],
+            groups=[],
+        )
+
+        for ir in all_results:
+            merged.nodes.extend(ir.nodes)
+            merged.edges.extend(ir.edges)
+            merged.groups.extend(ir.groups)
+
+        if all_errors:
+            merged.metadata["errors"] = all_errors
+
+        for profile_name, _, account_id in profile_sessions:
+            account_nodes = [n for n in merged.nodes if n.metadata.get("account_id") == account_id]
+            if account_nodes:
+                merged.groups.append(
+                    StackMapGroup(
+                        id=f"group:account:{account_id}",
+                        name=profile_name,
+                        group_type="account",
+                        children=[n.id for n in account_nodes],
+                        parent=None,
+                        metadata={"account_id": account_id, "account_name": profile_name},
+                    )
+                )
+
+        infer_cross_account_edges(merged)
+        return merged
+
     def startup_summary(self) -> dict[str, Any]:
         session, auth_description = self._resolve_base_session()
         resolved_session = self._assume_role(session, self.role_arn) if self.role_arn else session

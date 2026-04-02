@@ -742,6 +742,101 @@ def test_scan_aws_serve_uses_serve_command(monkeypatch, tmp_path: Path) -> None:
     assert called["watch_interval"] == 1.0
 
 
+def test_scan_aws_account_profiles_json_writes_output(monkeypatch, tmp_path: Path) -> None:
+    from stackmap.parsers.base import ResourceCategory, StackMapIR, StackMapNode
+
+    class FakeScanner:
+        def __init__(self, **kwargs):  # type: ignore[no-untyped-def]
+            self.kwargs = kwargs
+
+        def scan_explicit_profiles(self, profiles):  # type: ignore[no-untyped-def]
+            assert profiles == ["dev", "sandbox"]
+            return StackMapIR(
+                metadata={
+                    "source_type": "aws_live",
+                    "scan_mode": "multi_account",
+                    "accounts": ["111111111111", "222222222222"],
+                    "profiles": profiles,
+                    "regions": ["us-east-1"],
+                    "warnings": [],
+                    "errors": [],
+                },
+                nodes=[
+                    StackMapNode(
+                        id="aws:111111111111:us-east-1:aws_lambda_function:orders-handler",
+                        name="orders-handler",
+                        resource_type="aws_lambda_function",
+                        provider="aws",
+                        category=ResourceCategory.SERVERLESS,
+                    )
+                ],
+            )
+
+    monkeypatch.setattr("stackmap.cli.main.AWSLiveScanner", FakeScanner)
+
+    out = tmp_path / "aws-multi-profile.json"
+    result = runner.invoke(
+        app,
+        [
+            "scan-aws",
+            "--account-profiles",
+            "dev,sandbox",
+            "--output",
+            str(out),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert out.exists()
+    assert "Profiles" in result.output
+    assert "dev" in result.output
+    assert "sandbox" in result.output
+
+
+def test_scan_aws_rejects_accounts_and_account_profiles(monkeypatch) -> None:
+    class FakeScanner:
+        def __init__(self, **kwargs):  # type: ignore[no-untyped-def]
+            self.kwargs = kwargs
+
+    monkeypatch.setattr("stackmap.cli.main.AWSLiveScanner", FakeScanner)
+
+    result = runner.invoke(
+        app,
+        [
+            "scan-aws",
+            "--accounts",
+            "123456789012:arn:aws:iam::123456789012:role/StackMapReadOnly",
+            "--account-profiles",
+            "dev,sandbox",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "either --accounts or --account-profiles" in result.output
+
+
+def test_scan_aws_rejects_profile_and_account_profiles(monkeypatch) -> None:
+    class FakeScanner:
+        def __init__(self, **kwargs):  # type: ignore[no-untyped-def]
+            self.kwargs = kwargs
+
+    monkeypatch.setattr("stackmap.cli.main.AWSLiveScanner", FakeScanner)
+
+    result = runner.invoke(
+        app,
+        [
+            "scan-aws",
+            "--profile",
+            "dev",
+            "--account-profiles",
+            "sandbox",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "either --profile or --account-profiles" in result.output
+
+
 def test_scan_aws_org_scan_can_run_without_org_file(monkeypatch, tmp_path: Path) -> None:
     from stackmap.parsers.base import StackMapIR
 
