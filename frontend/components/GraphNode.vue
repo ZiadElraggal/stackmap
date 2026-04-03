@@ -169,11 +169,11 @@
     }"
     :opacity="nodeOpacity"
     :data-node-id="node.id"
-    :data-drag-enabled="store.editMode && !isAccountSummary && !store.connectingFromNodeId ? 'true' : 'false'"
+    :data-drag-enabled="store.editMode && store.editSubmode === 'structure' && !isAccountSummary && !store.connectingFromNodeId ? 'true' : 'false'"
     @click.stop="onClick"
     @mouseenter="onHover"
     @mouseleave="onLeave"
-    @pointerdown.prevent.stop="onPointerDown"
+    @pointerdown="onPointerDown"
   >
     <rect
       v-if="diffStatus && diffStatus !== 'unchanged'"
@@ -248,10 +248,43 @@
       :style="{ color: categoryColor }"
       class="icon"
     >
-      <g v-html="iconPath" />
+      <image
+        v-if="iconAsset"
+        :href="iconAsset"
+        x="0"
+        y="0"
+        width="24"
+        height="24"
+        preserveAspectRatio="xMidYMid meet"
+      />
+      <g v-else v-html="iconPath" />
     </svg>
 
+    <!-- Editable label (inline edit on double-click for user nodes) -->
+    <foreignObject
+      v-if="isEditingLabel"
+      :x="-nodeWidth / 2 + 14 + iconSize"
+      :y="typeFontSize > 0 ? -18 : -11"
+      :width="nodeWidth - 20 - iconSize"
+      height="22"
+    >
+      <input
+        ref="labelInputRef"
+        :value="editLabelValue"
+        class="inline-label-input"
+        :style="{
+          fontSize: `${nameFontSize}px`,
+          fontFamily: `'JetBrains Mono', 'SF Mono', monospace`,
+          fontWeight: 500,
+        }"
+        @input="editLabelValue = ($event.target as HTMLInputElement).value"
+        @keydown.enter="confirmLabelEdit"
+        @keydown.escape="cancelLabelEdit"
+        @blur="confirmLabelEdit"
+      />
+    </foreignObject>
     <text
+      v-else
       :x="-nodeWidth / 2 + 16 + iconSize"
       :y="typeFontSize > 0 ? -7 : 0"
       fill="#e5e7eb"
@@ -259,7 +292,9 @@
       font-weight="500"
       font-family="'JetBrains Mono', 'SF Mono', monospace"
       dominant-baseline="central"
-      class="node-name"
+      :class="['node-name', { 'node-name--editable': store.editMode }]"
+      @click.stop="onLabelClick"
+      @pointerdown.stop
     >{{ displayName }}</text>
 
     <text
@@ -296,7 +331,29 @@
     </g>
 
     <!-- Edit mode action buttons -->
-    <g v-if="store.editMode && !isAccountSummary" class="edit-actions" :opacity="isHovered ? 1 : 0">
+    <g
+      v-if="store.editMode && store.editSubmode !== 'inspect' && !isAccountSummary"
+      class="edit-actions"
+      :opacity="isHovered || isActionHovering || showDeleteConfirm ? 1 : 0"
+      @mouseenter="onActionHoverEnter"
+      @mouseleave="onActionHoverLeave"
+    >
+      <rect
+        :x="-nodeWidth / 2 - 24"
+        :y="-nodeHeight / 2 - 28"
+        :width="nodeWidth + 48"
+        height="30"
+        fill="rgba(0,0,0,0.001)"
+        class="edit-actions-bridge"
+      />
+      <g
+        v-if="store.editSubmode === 'structure'"
+        class="drag-handle"
+        :transform="`translate(${-nodeWidth / 2 + 14}, ${-nodeHeight / 2 - 14})`"
+      >
+        <rect x="-8" y="-8" width="16" height="16" rx="4" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+        <text x="0" y="1" text-anchor="middle" dominant-baseline="central" fill="#9ca3af" font-size="8" font-family="'JetBrains Mono', monospace">⋮</text>
+      </g>
       <!-- Hide button -->
       <g
         class="edit-action-btn"
@@ -315,15 +372,66 @@
         <rect x="-10" y="-8" width="20" height="16" rx="4" fill="rgba(74,222,128,0.2)" stroke="rgba(74,222,128,0.4)" stroke-width="1"/>
         <text x="0" y="1" text-anchor="middle" dominant-baseline="central" fill="#4ADE80" font-size="9" font-family="'JetBrains Mono', monospace">C</text>
       </g>
-      <!-- Delete button (user nodes only) -->
+      <!-- Duplicate button (user nodes only) -->
       <g
         v-if="node.tags?._user_created"
         class="edit-action-btn"
+        :transform="`translate(${nodeWidth / 2 - 56}, ${-nodeHeight / 2 - 14})`"
+        @click.stop="store.duplicateUserNode(node.id)"
+      >
+        <rect x="-10" y="-8" width="20" height="16" rx="4" fill="rgba(56,189,248,0.2)" stroke="rgba(56,189,248,0.4)" stroke-width="1"/>
+        <text x="0" y="1" text-anchor="middle" dominant-baseline="central" fill="#38BDF8" font-size="9" font-family="'JetBrains Mono', monospace">D</text>
+      </g>
+      <!-- Rename button (user nodes only) -->
+      <g
+        v-if="node.tags?._user_created"
+        class="edit-action-btn"
+        :transform="`translate(${nodeWidth / 2 - 80}, ${-nodeHeight / 2 - 14})`"
+        @click.stop="onLabelClick"
+      >
+        <rect x="-10" y="-8" width="20" height="16" rx="4" fill="rgba(250,204,21,0.2)" stroke="rgba(250,204,21,0.4)" stroke-width="1"/>
+        <text x="0" y="1" text-anchor="middle" dominant-baseline="central" fill="#facc15" font-size="8" font-family="'JetBrains Mono', monospace">R</text>
+      </g>
+      <!-- Delete button (user nodes only) — with inline confirmation -->
+      <g
+        v-if="node.tags?._user_created && !showDeleteConfirm"
+        class="edit-action-btn"
         :transform="`translate(${nodeWidth / 2 + 16}, ${-nodeHeight / 2 - 14})`"
-        @click.stop="store.removeUserNode(node.id)"
+        @click.stop="requestDelete"
       >
         <rect x="-10" y="-8" width="20" height="16" rx="4" fill="rgba(239,68,68,0.3)" stroke="rgba(239,68,68,0.5)" stroke-width="1"/>
-        <text x="0" y="1" text-anchor="middle" dominant-baseline="central" fill="#ef4444" font-size="10" font-weight="bold" font-family="'JetBrains Mono', monospace">x</text>
+        <text x="0" y="1" text-anchor="middle" dominant-baseline="central" fill="#ef4444" font-size="10" font-weight="bold" font-family="'JetBrains Mono', monospace">×</text>
+      </g>
+    </g>
+
+    <!-- Inline delete confirmation -->
+    <g v-if="showDeleteConfirm" class="delete-confirm">
+      <rect
+        :x="-60"
+        :y="nodeHeight / 2 + 6"
+        width="120"
+        height="24"
+        rx="6"
+        fill="rgba(239,68,68,0.15)"
+        stroke="rgba(239,68,68,0.4)"
+        stroke-width="1"
+      />
+      <text
+        x="-30"
+        :y="nodeHeight / 2 + 18"
+        text-anchor="middle"
+        dominant-baseline="central"
+        fill="rgba(239,68,68,0.8)"
+        font-size="8"
+        font-family="'JetBrains Mono', monospace"
+      >Delete?</text>
+      <g class="edit-action-btn" @click.stop="confirmDelete">
+        <rect :x="8" :y="nodeHeight / 2 + 10" width="22" height="16" rx="4" fill="rgba(239,68,68,0.3)" stroke="rgba(239,68,68,0.6)" stroke-width="1"/>
+        <text :x="19" :y="nodeHeight / 2 + 18" text-anchor="middle" dominant-baseline="central" fill="#ef4444" font-size="9" font-weight="bold" font-family="'JetBrains Mono', monospace">✓</text>
+      </g>
+      <g class="edit-action-btn" @click.stop="cancelDelete">
+        <rect :x="34" :y="nodeHeight / 2 + 10" width="22" height="16" rx="4" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+        <text :x="45" :y="nodeHeight / 2 + 18" text-anchor="middle" dominant-baseline="central" fill="#9ca3af" font-size="9" font-family="'JetBrains Mono', monospace">✗</text>
       </g>
     </g>
 
@@ -363,12 +471,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useGraphStore, type StackMapNode } from '~/stores/graph'
 import {
   CATEGORY_COLORS,
   formatResourceType,
   getNodeHeight,
+  getNodeIconAsset,
   getNodeIconPath,
   getNodeProminence,
   getNodeWidth,
@@ -402,8 +511,20 @@ const pointerStart = ref<{ x: number; y: number } | null>(null)
 const dragStarted = ref(false)
 const suppressClickOnce = ref(false)
 const pointerOwner = ref<Element | null>(null)
+const isActionHovering = ref(false)
+let hoverLeaveTimer: ReturnType<typeof setTimeout> | null = null
+
+// Inline label editing state
+const isEditingLabel = ref(false)
+const editLabelValue = ref('')
+const labelInputRef = ref<HTMLInputElement | null>(null)
+
+// Delete confirmation state
+const showDeleteConfirm = ref(false)
+let deleteConfirmTimer: ReturnType<typeof setTimeout> | null = null
 
 const categoryColor = computed(() => CATEGORY_COLORS[props.node.category] || '#9ca3af')
+const iconAsset = computed(() => getNodeIconAsset(props.node))
 const iconPath = computed(() => getNodeIconPath(props.node))
 const displayName = computed(() => truncate(props.node.name, 28))
 const shortType = computed(() => formatResourceType(props.node.resource_type))
@@ -531,19 +652,103 @@ function onClick() {
 }
 
 function onConnectClick() {
+  store.setEditSubmode('connect')
   store.startConnecting(props.node.id)
 }
 
 function onHover() {
+  if (hoverLeaveTimer) {
+    clearTimeout(hoverLeaveTimer)
+    hoverLeaveTimer = null
+  }
   store.hoverNode(props.node.id)
 }
 function onLeave() {
-  store.hoverNode(null)
+  if (isActionHovering.value) return
+  if (hoverLeaveTimer) clearTimeout(hoverLeaveTimer)
+  hoverLeaveTimer = setTimeout(() => {
+    if (!isActionHovering.value) {
+      store.hoverNode(null)
+    }
+    hoverLeaveTimer = null
+  }, 90)
+}
+
+function onActionHoverEnter() {
+  if (hoverLeaveTimer) {
+    clearTimeout(hoverLeaveTimer)
+    hoverLeaveTimer = null
+  }
+  isActionHovering.value = true
+  store.hoverNode(props.node.id)
+}
+
+function onActionHoverLeave() {
+  isActionHovering.value = false
+  if (hoverLeaveTimer) clearTimeout(hoverLeaveTimer)
+  hoverLeaveTimer = setTimeout(() => {
+    if (!isActionHovering.value) {
+      store.hoverNode(null)
+    }
+    hoverLeaveTimer = null
+  }, 90)
+}
+
+// ── Label editing ─────────────────────────────────────────────────
+function onLabelClick() {
+  if (!store.editMode) return
+  isEditingLabel.value = true
+  editLabelValue.value = props.node.name
+  nextTick(() => {
+    labelInputRef.value?.focus()
+    labelInputRef.value?.select()
+  })
+}
+
+function confirmLabelEdit() {
+  if (!isEditingLabel.value) return
+  const trimmed = editLabelValue.value.trim()
+  if (trimmed && trimmed !== props.node.name) {
+    store.renameNode(props.node.id, trimmed)
+  }
+  isEditingLabel.value = false
+}
+
+function cancelLabelEdit() {
+  isEditingLabel.value = false
+}
+
+// ── Delete confirmation ───────────────────────────────────────────
+function requestDelete() {
+  showDeleteConfirm.value = true
+  // Auto-dismiss after 3 seconds
+  if (deleteConfirmTimer) clearTimeout(deleteConfirmTimer)
+  deleteConfirmTimer = setTimeout(() => {
+    showDeleteConfirm.value = false
+  }, 3000)
+}
+
+function confirmDelete() {
+  if (deleteConfirmTimer) clearTimeout(deleteConfirmTimer)
+  showDeleteConfirm.value = false
+  store.removeUserNode(props.node.id)
+}
+
+function cancelDelete() {
+  if (deleteConfirmTimer) clearTimeout(deleteConfirmTimer)
+  showDeleteConfirm.value = false
 }
 
 function onPointerDown(event: PointerEvent) {
-  if (!store.editMode || isAccountSummary.value || store.connectingFromNodeId) return
+  if (!store.editMode || store.editSubmode !== 'structure' || isAccountSummary.value || store.connectingFromNodeId) return
   if (event.button !== 0) return
+  const target = event.target as HTMLElement | null
+  if (target?.closest('.edit-action-btn, .delete-confirm, .inline-label-input, .node-name--editable')) {
+    return
+  }
+  if (isEditingLabel.value) return
+  event.preventDefault()
+  event.stopPropagation()
   activePointerId.value = event.pointerId
   pointerStart.value = { x: event.clientX, y: event.clientY }
   dragStarted.value = false
@@ -614,6 +819,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   cleanupPointerListeners()
+  if (deleteConfirmTimer) clearTimeout(deleteConfirmTimer)
+  if (hoverLeaveTimer) clearTimeout(hoverLeaveTimer)
 })
 </script>
 
@@ -650,29 +857,41 @@ onUnmounted(() => {
 }
 
 .graph-node:hover .outer-shell {
-  stroke: color-mix(in srgb, var(--node-color) 40%, transparent);
-  stroke-width: 2;
-  filter: drop-shadow(0 0 16px color-mix(in srgb, var(--node-color) 25%, transparent));
+  stroke: color-mix(in srgb, var(--node-color) 35%, transparent);
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--node-color) 18%, transparent));
+}
+
+.graph-node:hover .inner-shell {
+  fill: #0e0e16;
 }
 
 .graph-node:hover .accent-bar {
-  filter: drop-shadow(0 0 6px var(--node-color));
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--node-color) 50%, transparent));
 }
 
 .graph-node.selected .outer-shell {
-  stroke: color-mix(in srgb, var(--node-color) 80%, transparent);
-  stroke-width: 2;
-  filter: drop-shadow(0 0 20px color-mix(in srgb, var(--node-color) 30%, transparent));
+  stroke: color-mix(in srgb, var(--node-color) 60%, transparent);
+  stroke-width: 1.8;
+  filter: drop-shadow(0 0 16px color-mix(in srgb, var(--node-color) 22%, transparent));
+}
+
+.graph-node.selected .inner-shell {
+  fill: #0f0f18;
 }
 
 .diff-glow {
   filter: drop-shadow(0 0 12px color-mix(in srgb, var(--diff-color) 35%, transparent));
 }
 
-.graph-node .node-name,
 .graph-node .icon,
 .graph-node .selection-ring {
   pointer-events: none;
+}
+
+.node-name--editable {
+  pointer-events: auto;
+  cursor: text;
 }
 
 .edit-actions {
@@ -680,13 +899,17 @@ onUnmounted(() => {
   pointer-events: auto;
 }
 
+.edit-actions-bridge {
+  pointer-events: auto;
+}
+
 .edit-action-btn {
   cursor: pointer;
-  transition: transform 120ms ease;
+  transition: opacity 120ms ease, filter 120ms ease;
 }
 
 .edit-action-btn:hover {
-  transform: scale(1.15);
+  filter: brightness(1.15) drop-shadow(0 0 6px rgba(255, 255, 255, 0.12));
 }
 
 @keyframes connecting-dash {
@@ -704,5 +927,32 @@ onUnmounted(() => {
 
 .connect-target-ring {
   animation: connect-pulse 1.2s ease-in-out infinite;
+}
+
+.inline-label-input {
+  width: 100%;
+  background: rgba(13, 13, 20, 0.95);
+  border: 1px solid rgba(74, 222, 128, 0.4);
+  border-radius: 4px;
+  color: #e5e7eb;
+  padding: 1px 4px;
+  outline: none;
+  line-height: 1.4;
+  box-sizing: border-box;
+}
+
+.inline-label-input:focus {
+  border-color: rgba(74, 222, 128, 0.7);
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.15);
+}
+
+.delete-confirm {
+  animation: confirm-appear 150ms ease-out;
+  pointer-events: auto;
+}
+
+@keyframes confirm-appear {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 </style>
