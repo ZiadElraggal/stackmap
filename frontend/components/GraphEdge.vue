@@ -1,6 +1,6 @@
 <template>
   <g
-    :class="['graph-edge', { dimmed: isDimmed, 'user-link-hover': isUserLink && isHovered && store.editMode }]"
+    :class="['graph-edge', { dimmed: isDimmed, 'user-link-hover': isUserLink && (isHovered || isControlHovering) && store.editMode }]"
     :style="{
       '--edge-color': edgeColor,
       '--edge-delay': `${entryDelay}ms`,
@@ -27,7 +27,7 @@
       :stroke-dasharray="dashPattern"
       fill="none"
       :opacity="computedOpacity"
-      :marker-end="`url(#arrow-${edge.edge_type})`"
+      :marker-end="`url(#${markerId})`"
       class="edge-path"
     />
 
@@ -61,14 +61,35 @@
       >{{ edge.edge_type }}</text>
     </g>
 
+    <g
+      v-if="isUserLink && store.editMode && (isHovered || isControlHovering) && !fadingOut"
+      class="edge-color-palette"
+      :transform="`translate(${midpoint.x - 34}, ${midpoint.y - 22})`"
+      @mouseenter="onControlHoverEnter"
+      @mouseleave="onControlHoverLeave"
+    >
+      <rect x="-10" y="-12" width="92" height="24" fill="rgba(0,0,0,0.001)" />
+      <g
+        v-for="(color, idx) in userLinkColors"
+        :key="color"
+        class="edge-color-chip"
+        :transform="`translate(${idx * 18}, 0)`"
+        @click.stop="onSetEdgeColor(color)"
+      >
+        <circle r="6" :fill="color" :stroke="edge.color === color ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.22)'" stroke-width="1.5" />
+      </g>
+    </g>
+
     <!-- Delete button at midpoint for user_link edges in edit mode -->
     <g
-      v-if="isUserLink && store.editMode && isHovered && !fadingOut"
+      v-if="isUserLink && store.editMode && (isHovered || isControlHovering) && !fadingOut"
       class="edge-delete-btn"
-      :transform="`translate(${midpoint.x}, ${midpoint.y})`"
+      :transform="`translate(${midpoint.x}, ${midpoint.y - 46})`"
+      @mouseenter="onControlHoverEnter"
+      @mouseleave="onControlHoverLeave"
       @click.stop="onDeleteEdge"
     >
-      <circle r="10" fill="rgba(239,68,68,0.25)" stroke="rgba(239,68,68,0.6)" stroke-width="1" />
+      <circle r="10" fill="rgba(239,68,68,0.3)" stroke="rgba(239,68,68,0.75)" stroke-width="1" />
       <path d="M-3.5,-3.5 L3.5,3.5 M3.5,-3.5 L-3.5,3.5" stroke="#ef4444" stroke-width="1.8" stroke-linecap="round" />
     </g>
 
@@ -106,12 +127,18 @@ const isUserLink = computed(() =>
 )
 
 const edgeDiffStatus = computed(() => store.edgeDiffStatus[props.edge.id] as string | undefined)
+const userLinkColors = ['#4ADE80', '#38BDF8', '#C084FC', '#FB923C', '#F87171']
 
 const edgeColor = computed(() => {
   if (store.diffMode && edgeDiffStatus.value === 'added') return '#22c55e'
   if (store.diffMode && edgeDiffStatus.value === 'removed') return '#ef4444'
-  if (isUserLink.value) return EDGE_COLORS.user_link
+  if (isUserLink.value) return props.edge.color || EDGE_COLORS.user_link
   return EDGE_COLORS[props.edge.edge_type] || '#64748b'
+})
+
+const markerId = computed(() => {
+  if (!isUserLink.value) return `arrow-${props.edge.edge_type}`
+  return `arrow-user-${props.edge.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`
 })
 
 const isConnectedToHovered = computed(() => {
@@ -239,16 +266,48 @@ const midpoint = computed(() => {
 })
 
 const isHovered = ref(false)
+const isControlHovering = ref(false)
 const fadingOut = ref(false)
+let hoverLeaveTimer: ReturnType<typeof setTimeout> | null = null
 
 function onEdgeEnter() {
   if (isUserLink.value && store.editMode) {
+    if (hoverLeaveTimer) {
+      clearTimeout(hoverLeaveTimer)
+      hoverLeaveTimer = null
+    }
     isHovered.value = true
   }
 }
 
 function onEdgeLeave() {
-  isHovered.value = false
+  if (hoverLeaveTimer) clearTimeout(hoverLeaveTimer)
+  hoverLeaveTimer = setTimeout(() => {
+    if (!isControlHovering.value) {
+      isHovered.value = false
+    }
+    hoverLeaveTimer = null
+  }, 90)
+}
+
+function onControlHoverEnter() {
+  if (hoverLeaveTimer) {
+    clearTimeout(hoverLeaveTimer)
+    hoverLeaveTimer = null
+  }
+  isControlHovering.value = true
+  isHovered.value = true
+}
+
+function onControlHoverLeave() {
+  isControlHovering.value = false
+  if (hoverLeaveTimer) clearTimeout(hoverLeaveTimer)
+  hoverLeaveTimer = setTimeout(() => {
+    if (!isControlHovering.value) {
+      isHovered.value = false
+    }
+    hoverLeaveTimer = null
+  }, 90)
 }
 
 function onDeleteEdge() {
@@ -256,6 +315,10 @@ function onDeleteEdge() {
   setTimeout(() => {
     store.removeUserEdge(props.edge.id)
   }, 300)
+}
+
+function onSetEdgeColor(color: string) {
+  store.setUserEdgeColor(props.edge.id, color)
 }
 </script>
 
@@ -292,6 +355,11 @@ function onDeleteEdge() {
 
 .flow-dot {
   filter: drop-shadow(0 0 4px color-mix(in srgb, var(--edge-color) 70%, transparent));
+}
+
+.edge-delete-btn,
+.edge-color-chip {
+  cursor: pointer;
 }
 
 .edge-delete-btn {

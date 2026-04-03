@@ -36,6 +36,7 @@ export interface StackMapEdge {
   target: string
   edge_type: string
   label: string
+  color?: string
 }
 
 export interface StackMapGroup {
@@ -82,6 +83,16 @@ export interface ComponentSummary {
   helperRatio: number
   mostlyNetwork: boolean
   summary: string
+}
+
+interface EditHistorySnapshot {
+  hiddenNodeIds: string[]
+  hiddenNodeIdsBackup: string[] | null
+  userEdges: StackMapEdge[]
+  userNodes: StackMapNode[]
+  customLayers: Array<{ id: string; label: string }>
+  nodeTierOverrides: Record<string, string>
+  layoutLayers: string[]
 }
 
 const HELPER_RESOURCE_TYPES = new Set([
@@ -894,6 +905,7 @@ export const useGraphStore = defineStore('graph', {
     // Edit mode state
     editMode: false as boolean,
     hiddenNodeIds: [] as string[],
+    hiddenNodeIdsBackup: null as string[] | null,
     userEdges: [] as StackMapEdge[],
     userNodes: [] as StackMapNode[],
     connectingFromNodeId: null as string | null,
@@ -903,6 +915,8 @@ export const useGraphStore = defineStore('graph', {
     nodeTierOverrides: {} as Record<string, string>,
     draggingNodeId: null as string | null,
     dragTargetLayerId: null as string | null,
+    editHistoryPast: [] as EditHistorySnapshot[],
+    editHistoryFuture: [] as EditHistorySnapshot[],
   }),
 
   getters: {
@@ -1301,9 +1315,76 @@ export const useGraphStore = defineStore('graph', {
           (edge: StackMapEdge) => edge.source === nodeId || edge.target === nodeId
         )
     },
+
+    canUndo(state): boolean {
+      return state.editHistoryPast.length > 0
+    },
+
+    canRedo(state): boolean {
+      return state.editHistoryFuture.length > 0
+    },
   },
 
   actions: {
+    _createEditSnapshot(): EditHistorySnapshot {
+      return JSON.parse(JSON.stringify({
+        hiddenNodeIds: this.hiddenNodeIds,
+        hiddenNodeIdsBackup: this.hiddenNodeIdsBackup,
+        userEdges: this.userEdges,
+        userNodes: this.userNodes,
+        customLayers: this.customLayers,
+        nodeTierOverrides: this.nodeTierOverrides,
+        layoutLayers: this.layoutLayers,
+      }))
+    },
+
+    _applyEditSnapshot(snapshot: EditHistorySnapshot) {
+      this.hiddenNodeIds = [...snapshot.hiddenNodeIds]
+      this.hiddenNodeIdsBackup = snapshot.hiddenNodeIdsBackup ? [...snapshot.hiddenNodeIdsBackup] : null
+      this.userEdges = JSON.parse(JSON.stringify(snapshot.userEdges))
+      this.userNodes = JSON.parse(JSON.stringify(snapshot.userNodes))
+      this.customLayers = JSON.parse(JSON.stringify(snapshot.customLayers))
+      this.nodeTierOverrides = { ...snapshot.nodeTierOverrides }
+      this.layoutLayers = [...snapshot.layoutLayers]
+
+      for (const node of this.nodes) {
+        const override = this.nodeTierOverrides[node.id]
+        if (!node.position_hint) node.position_hint = { tier: 'compute', weight: 2 }
+        node.position_hint.tier = override || normalizeNodeTier(node)
+      }
+
+      for (const node of this.userNodes) {
+        if (!node.position_hint) node.position_hint = { tier: 'compute', weight: 4 }
+        node.position_hint.tier = normalizeNodeTier(node)
+      }
+
+      this.requestRelayout()
+    },
+
+    _recordHistory() {
+      this.editHistoryPast.push(this._createEditSnapshot())
+      if (this.editHistoryPast.length > 80) {
+        this.editHistoryPast.shift()
+      }
+      this.editHistoryFuture = []
+    },
+
+    undoEdits() {
+      const previous = this.editHistoryPast.pop()
+      if (!previous) return
+      this.editHistoryFuture.push(this._createEditSnapshot())
+      this._applyEditSnapshot(previous)
+      this._persistEdits()
+    },
+
+    redoEdits() {
+      const next = this.editHistoryFuture.pop()
+      if (!next) return
+      this.editHistoryPast.push(this._createEditSnapshot())
+      this._applyEditSnapshot(next)
+      this._persistEdits()
+    },
+
     async loadFromJSON(path: string) {
       const data =
         typeof window !== 'undefined' && (window as any).__STACKMAP_DATA__
@@ -1344,6 +1425,8 @@ export const useGraphStore = defineStore('graph', {
       }
 
       this.loadPersistedEdits()
+      this.editHistoryPast = []
+      this.editHistoryFuture = []
       this.loaded = true
     },
 
@@ -1490,6 +1573,7 @@ export const useGraphStore = defineStore('graph', {
     },
 
     hideNode(nodeId: string) {
+      this._recordHistory()
       if (!this.hiddenNodeIds.includes(nodeId)) {
         this.hiddenNodeIds.push(nodeId)
       }
@@ -1499,13 +1583,30 @@ export const useGraphStore = defineStore('graph', {
     },
 
     showNode(nodeId: string) {
+      this._recordHistory()
       this.hiddenNodeIds = this.hiddenNodeIds.filter(id => id !== nodeId)
+      if (this.hiddenNodeIdsBackup) {
+        this.hiddenNodeIdsBackup = this.hiddenNodeIdsBackup.filter(id => id !== nodeId)
+        if (this.hiddenNodeIdsBackup.length === 0) this.hiddenNodeIdsBackup = null
+      }
       this.requestRelayout()
       this._persistEdits()
     },
 
     showAllNodes() {
+      if (this.hiddenNodeIds.length === 0) return
+      this._recordHistory()
+      this.hiddenNodeIdsBackup = [...this.hiddenNodeIds]
       this.hiddenNodeIds = []
+      this.requestRelayout()
+      this._persistEdits()
+    },
+
+    rehideShownNodes() {
+      if (!this.hiddenNodeIdsBackup?.length) return
+      this._recordHistory()
+      this.hiddenNodeIds = [...new Set([...this.hiddenNodeIdsBackup, ...this.hiddenNodeIds])]
+      this.hiddenNodeIdsBackup = null
       this.requestRelayout()
       this._persistEdits()
     },
@@ -1529,12 +1630,14 @@ export const useGraphStore = defineStore('graph', {
         this.connectingFromNodeId = null
         return
       }
+      this._recordHistory()
       this.userEdges.push({
         id: edgeId,
         source: this.connectingFromNodeId,
         target: targetNodeId,
         edge_type: 'user_link',
         label: 'user link',
+        color: '#4ADE80',
       })
       this.connectingFromNodeId = null
       this.requestRelayout()
@@ -1542,8 +1645,17 @@ export const useGraphStore = defineStore('graph', {
     },
 
     removeUserEdge(edgeId: string) {
+      this._recordHistory()
       this.userEdges = this.userEdges.filter(e => e.id !== edgeId)
       this.requestRelayout()
+      this._persistEdits()
+    },
+
+    setUserEdgeColor(edgeId: string, color: string) {
+      const edge = this.userEdges.find(candidate => candidate.id === edgeId)
+      if (!edge || edge.color === color) return
+      this._recordHistory()
+      edge.color = color
       this._persistEdits()
     },
 
@@ -1585,6 +1697,10 @@ export const useGraphStore = defineStore('graph', {
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '')
       if (!id) return null
+      if (this.layoutLayers.includes(id) || this.customLayers.some(layer => layer.id === id)) {
+        return id
+      }
+      this._recordHistory()
       if (!this.layoutLayers.includes(id)) {
         this.layoutLayers.push(id)
       }
@@ -1602,6 +1718,7 @@ export const useGraphStore = defineStore('graph', {
       const toIndex = this.layoutLayers.indexOf(targetLayerId)
       if (fromIndex === -1 || toIndex === -1) return
 
+      this._recordHistory()
       const updated = [...this.layoutLayers]
       const [moved] = updated.splice(fromIndex, 1)
       updated.splice(toIndex, 0, moved)
@@ -1611,6 +1728,11 @@ export const useGraphStore = defineStore('graph', {
     },
 
     moveNodeToLayer(nodeId: string, layerId: string) {
+      const currentNode =
+        this.userNodes.find(candidate => candidate.id === nodeId)
+        || this.nodes.find(candidate => candidate.id === nodeId)
+      if (currentNode?.position_hint?.tier === layerId) return
+      this._recordHistory()
       if (!this.layoutLayers.includes(layerId)) {
         this.layoutLayers.push(layerId)
       }
@@ -1639,6 +1761,7 @@ export const useGraphStore = defineStore('graph', {
         weight?: number
       }
     ) {
+      this._recordHistory()
       const id = `user:${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
       this.userNodes.push({
         id,
@@ -1661,6 +1784,7 @@ export const useGraphStore = defineStore('graph', {
     },
 
     removeUserNode(nodeId: string) {
+      this._recordHistory()
       this.userNodes = this.userNodes.filter(n => n.id !== nodeId)
       // Also remove any edges (user or auto) that reference this node
       this.userEdges = this.userEdges.filter(e => e.source !== nodeId && e.target !== nodeId)
@@ -1672,6 +1796,7 @@ export const useGraphStore = defineStore('graph', {
     renameUserNode(nodeId: string, newName: string) {
       const node = this.userNodes.find(n => n.id === nodeId)
       if (node) {
+        this._recordHistory()
         node.name = newName
         this._persistEdits()
       }
@@ -1680,6 +1805,7 @@ export const useGraphStore = defineStore('graph', {
     duplicateUserNode(nodeId: string) {
       const original = this.userNodes.find(n => n.id === nodeId)
       if (!original) return
+      this._recordHistory()
       const id = `user:${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
       this.userNodes.push({
         id,
@@ -1703,6 +1829,7 @@ export const useGraphStore = defineStore('graph', {
       try {
         const data = {
           hiddenNodeIds: this.hiddenNodeIds,
+          hiddenNodeIdsBackup: this.hiddenNodeIdsBackup,
           userEdges: this.userEdges,
           userNodes: this.userNodes,
           customLayers: this.customLayers,
@@ -1722,11 +1849,14 @@ export const useGraphStore = defineStore('graph', {
         if (Array.isArray(data.hiddenNodeIds)) {
           this.hiddenNodeIds = data.hiddenNodeIds
         }
+        if (Array.isArray(data.hiddenNodeIdsBackup)) {
+          this.hiddenNodeIdsBackup = data.hiddenNodeIdsBackup
+        }
         if (Array.isArray(data.userEdges)) {
           this.userEdges = data.userEdges.map((edge: StackMapEdge) => (
             edge.label === 'user link' && edge.edge_type === 'references'
-              ? { ...edge, edge_type: 'user_link' }
-              : edge
+              ? { ...edge, edge_type: 'user_link', color: edge.color || '#4ADE80' }
+              : (edge.edge_type === 'user_link' ? { ...edge, color: edge.color || '#4ADE80' } : edge)
           ))
         }
         if (Array.isArray(data.userNodes)) {
@@ -1770,7 +1900,9 @@ export const useGraphStore = defineStore('graph', {
     },
 
     clearAllEdits() {
+      this._recordHistory()
       this.hiddenNodeIds = []
+      this.hiddenNodeIdsBackup = null
       this.userEdges = []
       this.userNodes = []
       this.connectingFromNodeId = null

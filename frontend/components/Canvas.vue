@@ -20,6 +20,20 @@
         >
           <path d="M 0 0 L 6 2.5 L 0 5 Z" :fill="edgeColor(edgeType)" />
         </marker>
+
+        <marker
+          v-for="edge in visibleUserLinks"
+          :id="`arrow-user-${sanitizeMarkerId(edge.id)}`"
+          :key="`marker-user-${edge.id}`"
+          viewBox="0 0 6 5"
+          refX="8"
+          refY="2.5"
+          markerWidth="6"
+          markerHeight="5"
+          orient="auto-start-reverse"
+        >
+          <path d="M 0 0 L 6 2.5 L 0 5 Z" :fill="edge.color || edgeColor(edge.edge_type)" />
+        </marker>
       </defs>
 
       <rect width="100%" height="100%" fill="#0a0a0f" @click="store.selectNode(null)" />
@@ -248,6 +262,8 @@
         <div class="space-y-2 text-xs">
           <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.05] px-1.5 py-0.5 rounded-md text-[10px] font-mono border border-white/[0.06]">⌘K</kbd><span class="text-gray-500">Palette</span></div>
           <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.05] px-1.5 py-0.5 rounded-md text-[10px] font-mono border border-white/[0.06]">/</kbd><span class="text-gray-500">Search</span></div>
+          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.05] px-1.5 py-0.5 rounded-md text-[10px] font-mono border border-white/[0.06]">{{ undoShortcutLabel }}</kbd><span class="text-gray-500">Undo edit</span></div>
+          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.05] px-1.5 py-0.5 rounded-md text-[10px] font-mono border border-white/[0.06]">{{ redoShortcutLabel }}</kbd><span class="text-gray-500">Redo edit</span></div>
           <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.05] px-1.5 py-0.5 rounded-md text-[10px] font-mono border border-white/[0.06]">Esc</kbd><span class="text-gray-500">Close</span></div>
           <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.05] px-1.5 py-0.5 rounded-md text-[10px] font-mono border border-white/[0.06]">0</kbd><span class="text-gray-500">Fit to screen</span></div>
           <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.05] px-1.5 py-0.5 rounded-md text-[10px] font-mono border border-white/[0.06]">+/−</kbd><span class="text-gray-500">Zoom</span></div>
@@ -318,6 +334,7 @@ const showHelp = ref(false)
 
 const viewportRect = ref<{ x: number; y: number; width: number; height: number } | null>(null)
 const zoomScale = ref(1)
+const isMacLike = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform)
 
 let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null
 let svgSelection: d3.Selection<SVGSVGElement, unknown, null, undefined> | null = null
@@ -331,6 +348,7 @@ const orderedVisibleNodes = computed(() => {
 const visibleNodeMap = computed(() => new Map(store.visibleNodes.map(n => [n.id, n])))
 const edgeEntryBaseDelay = computed(() => orderedVisibleNodes.value.length * 15 + 200)
 const edgeTypesInGraph = computed(() => [...new Set(store.visibleEdges.map(edge => edge.edge_type))])
+const visibleUserLinks = computed(() => store.visibleEdges.filter(edge => edge.edge_type === 'user_link' || edge.id.startsWith('user:')))
 const primaryResourceCount = computed(() => store.viewMode === 'components' ? store.architectureSourceNodes.length : store.visibleNodes.length)
 const primaryConnectionCount = computed(() => store.viewMode === 'components' ? store.architectureSourceEdges.length : store.visibleEdges.length)
 
@@ -470,6 +488,9 @@ const diffSummaryMeta = computed(() => {
   return summary as { added: number; removed: number; modified: number; unchanged: number }
 })
 
+const undoShortcutLabel = computed(() => isMacLike ? '⌘Z' : 'Ctrl+Z')
+const redoShortcutLabel = computed(() => isMacLike ? '⇧⌘Z' : 'Ctrl+Y')
+
 function tierBandOpacity(bandName: string): number {
   if (store.dragTargetLayerId) return store.dragTargetLayerId === bandName ? 0.95 : 0.36
   if (!hoveredTier.value) return 0.65
@@ -495,6 +516,10 @@ function tierChipOpacity(bandName: string): number {
 
 function edgeColor(edgeType: string): string {
   return EDGE_COLORS[edgeType] || '#64748b'
+}
+
+function sanitizeMarkerId(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]/g, '-')
 }
 
 function edgeSourcePos(edge: StackMapEdge) {
@@ -594,6 +619,22 @@ function onKeydown(e: KeyboardEvent) {
   if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
     e.preventDefault()
     emit('toggleCommandPalette')
+    return
+  }
+
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+    e.preventDefault()
+    if (e.shiftKey) {
+      store.redoEdits()
+    } else {
+      store.undoEdits()
+    }
+    return
+  }
+
+  if (!isMacLike && e.ctrlKey && e.key.toLowerCase() === 'y') {
+    e.preventDefault()
+    store.redoEdits()
     return
   }
 
