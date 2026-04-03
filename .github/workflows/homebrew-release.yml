@@ -8,7 +8,7 @@ jobs:
   publish-formula:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -19,32 +19,43 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Verify packaged web assets are synced
+      - name: Build release source archive
+        id: release
+        env:
+          TAG_NAME: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
+          VERSION="${TAG_NAME#v}"
+          ASSET_NAME="stackmap-${VERSION}-source.tar.gz"
           cd frontend
           npm ci
           rm -rf .nuxt .output
           npm run generate
           cd ..
           python3 -m stackmap.webapp.build_assets --clean
-          git diff --exit-code -- stackmap/webapp/static
           test -f stackmap/webapp/static/index.html
+          tar --exclude-vcs -czf "/tmp/${ASSET_NAME}" .
+          SHA256="$(sha256sum "/tmp/${ASSET_NAME}" | awk '{print $1}')"
+          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "asset_name=${ASSET_NAME}" >> "$GITHUB_OUTPUT"
+          echo "asset_path=/tmp/${ASSET_NAME}" >> "$GITHUB_OUTPUT"
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
 
-      - name: Compute archive SHA256
-        id: release
+      - name: Upload release source archive
         env:
-          TAG_NAME: ${{ github.event.release.tag_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload "${{ steps.release.outputs.tag_name }}" "${{ steps.release.outputs.asset_path }}" --clobber
+
+      - name: Compute release asset URL
+        id: asset
+        env:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          VERSION="${TAG_NAME#v}"
-          URL="https://github.com/${REPOSITORY}/archive/refs/tags/${TAG_NAME}.tar.gz"
-          curl -L "$URL" -o /tmp/stackmap-release.tar.gz
-          SHA256="$(sha256sum /tmp/stackmap-release.tar.gz | awk '{print $1}')"
-          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+          echo "url=https://github.com/${REPOSITORY}/releases/download/${{ steps.release.outputs.tag_name }}/${{ steps.release.outputs.asset_name }}" >> "$GITHUB_OUTPUT"
 
       - name: Render formula
         env:
@@ -52,9 +63,9 @@ jobs:
         run: |
           python3 scripts/render_homebrew_formula.py \
             --version "${{ steps.release.outputs.version }}" \
-            --tag "${{ steps.release.outputs.tag_name }}" \
             --sha256 "${{ steps.release.outputs.sha256 }}" \
             --repository "${REPOSITORY}" \
+            --url "${{ steps.asset.outputs.url }}" \
             --output /tmp/stackmap.rb
 
       - name: Upload formula artifact

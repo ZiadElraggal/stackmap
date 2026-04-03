@@ -36,10 +36,12 @@ brew install --HEAD ziadelraggal/homebrew-stackmap/stackmap
 
 On GitHub Release publish (`vX.Y.Z`), the `Homebrew Release` workflow:
 
-1. Computes the release archive SHA256.
-2. Renders a stable `stackmap.rb` formula.
-3. Uploads formula as a workflow artifact.
-4. Pushes formula update to your tap repo (`homebrew-stackmap`) if configured.
+1. Builds the frontend static app from the tagged source.
+2. Syncs generated assets into the Python package bundle.
+3. Creates a release source archive and uploads it to the GitHub Release.
+4. Computes the archive SHA256 and renders a stable `stackmap.rb` formula.
+5. Uploads the formula as a workflow artifact.
+6. Pushes the formula update to your tap repo (`homebrew-stackmap`) if configured.
 
 ### Required configuration for automatic tap updates
 
@@ -53,7 +55,7 @@ On GitHub Release publish (`vX.Y.Z`), the `Homebrew Release` workflow:
 1. Bump version in `pyproject.toml`.
 2. Merge to `main`.
 3. Create and publish a GitHub Release tag in `vX.Y.Z` format.
-4. Wait for workflow `Homebrew Release` to complete.
+4. Wait for workflow `Homebrew Release` to complete. It will build the packaged release archive and update the Homebrew tap.
 5. Users can run `brew upgrade stackmap` and get the new version.
 
 ## Development setup (contributors)
