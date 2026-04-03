@@ -253,6 +253,311 @@ const RESOURCE_TYPE_ICONS: Array<{ match: (resourceType: string) => boolean; ico
   },
 ]
 
+const AWS_ICON_CATALOG_BASE = '/aws-icons/catalog'
+
+const RESOURCE_TYPE_ICON_ASSETS: Array<{ match: (resourceType: string) => boolean; asset: string }> = [
+  {
+    match: rt => rt.includes('apigatewayv2') || rt.includes('api_gateway') || rt.includes('apigateway') || rt.includes('restapi') || rt.includes('httapi'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Networking-Content-Delivery/32/Arch_Amazon-API-Gateway_32.svg`,
+  },
+  {
+    match: rt => rt.includes('appsync'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Application-Integration/32/Arch_AWS-AppSync_32.svg`,
+  },
+  {
+    match: rt => rt.includes('cloudfront'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Networking-Content-Delivery/32/Arch_Amazon-CloudFront_32.svg`,
+  },
+  {
+    match: rt => rt.includes('route53') || rt.includes('hostedzone') || rt.includes('dns'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Networking-Content-Delivery/32/Arch_Amazon-Route-53_32.svg`,
+  },
+  {
+    match: rt => rt.includes('load_balancer') || rt === 'aws_lb' || rt === 'aws_alb' || rt.includes('elasticloadbalancing'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Networking-Content-Delivery/32/Arch_Elastic-Load-Balancing_32.svg`,
+  },
+  {
+    match: rt => rt.includes('globalaccelerator'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Networking-Content-Delivery/32/Arch_AWS-Global-Accelerator_32.svg`,
+  },
+  {
+    match: rt => rt.includes('cloudmap') || rt.includes('service_discovery'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Networking-Content-Delivery/32/Arch_AWS-Cloud-Map_32.svg`,
+  },
+  {
+    match: rt => rt.includes('privatelink') || rt.includes('vpce') || rt.includes('vpcendpoint'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Networking-Content-Delivery/32/Arch_AWS-PrivateLink_32.svg`,
+  },
+  {
+    match: rt => rt.includes('transit_gateway'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Networking-Content-Delivery/32/Arch_AWS-Cloud-WAN_32.svg`,
+  },
+  {
+    match: rt => rt.includes('vpc') && !rt.includes('endpoint') && !rt.includes('flow_log'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Group-Icons_01302026/Virtual-private-cloud-VPC_32.svg`,
+  },
+  {
+    match: rt => rt.includes('subnet') && rt.includes('public'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Group-Icons_01302026/Public-subnet_32.svg`,
+  },
+  {
+    match: rt => rt.includes('subnet') && rt.includes('private'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Group-Icons_01302026/Private-subnet_32.svg`,
+  },
+  {
+    match: rt => rt.includes('subnet'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Group-Icons_01302026/Private-subnet_32.svg`,
+  },
+  {
+    match: rt => rt.includes('account'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Group-Icons_01302026/AWS-Account_32.svg`,
+  },
+  {
+    match: rt => rt.includes('lambda') || rt.includes('serverless::function'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Compute/32/Arch_AWS-Lambda_32.svg`,
+  },
+  {
+    match: rt => rt.includes('fargate'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Containers/32/Arch_AWS-Fargate_32.svg`,
+  },
+  {
+    match: rt => rt.includes('ecs'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Containers/32/Arch_Amazon-Elastic-Container-Service_32.svg`,
+  },
+  {
+    match: rt => rt.includes('eks'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Containers/32/Arch_Amazon-Elastic-Kubernetes-Service_32.svg`,
+  },
+  {
+    match: rt => rt.includes('ecr'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Containers/32/Arch_Amazon-Elastic-Container-Registry_32.svg`,
+  },
+  {
+    match: rt => rt.includes('app_runner') || rt.includes('apprunner'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Compute/32/Arch_AWS-App-Runner_32.svg`,
+  },
+  {
+    match: rt => rt === 'aws_instance' || rt.includes('ec2') || rt.includes('server') || rt.includes('instance'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Compute/32/Arch_Amazon-EC2_32.svg`,
+  },
+  {
+    match: rt => rt.includes('autoscaling') || rt.includes('auto_scaling'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Compute/32/Arch_Amazon-EC2-Auto-Scaling_32.svg`,
+  },
+  {
+    match: rt => rt.includes('beanstalk'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Compute/32/Arch_AWS-Elastic-Beanstalk_32.svg`,
+  },
+  {
+    match: rt => rt.includes('batch'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Compute/32/Arch_AWS-Batch_32.svg`,
+  },
+  {
+    match: rt => rt.includes('lightsail'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Compute/32/Arch_Amazon-Lightsail_32.svg`,
+  },
+  {
+    match: rt => rt.includes('sfn') || rt.includes('step_function') || rt.includes('statemachine'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Application-Integration/32/Arch_AWS-Step-Functions_32.svg`,
+  },
+  {
+    match: rt => rt.includes('eventbridge') || rt.includes('cloudwatch_event') || rt.includes('events'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Application-Integration/32/Arch_Amazon-EventBridge_32.svg`,
+  },
+  {
+    match: rt => rt.includes('sqs'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Application-Integration/32/Arch_Amazon-Simple-Queue-Service_32.svg`,
+  },
+  {
+    match: rt => rt.includes('sns'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Application-Integration/32/Arch_Amazon-Simple-Notification-Service_32.svg`,
+  },
+  {
+    match: rt => rt.includes('mq'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Application-Integration/32/Arch_Amazon-MQ_32.svg`,
+  },
+  {
+    match: rt => rt.includes('airflow') || rt.includes('mwaa'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Application-Integration/32/Arch_Amazon-Managed-Workflows-for-Apache-Airflow_32.svg`,
+  },
+  {
+    match: rt => rt.includes('kinesis'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Analytics/32/Arch_Amazon-Kinesis_32.svg`,
+  },
+  {
+    match: rt => rt.includes('firehose'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Analytics/32/Arch_Amazon-Data-Firehose_32.svg`,
+  },
+  {
+    match: rt => rt.includes('msk') || rt.includes('kafka'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Analytics/32/Arch_Amazon-Managed-Streaming-for-Apache-Kafka_32.svg`,
+  },
+  {
+    match: rt => rt.includes('athena'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Analytics/32/Arch_Amazon-Athena_32.svg`,
+  },
+  {
+    match: rt => rt.includes('glue'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Analytics/32/Arch_AWS-Glue_32.svg`,
+  },
+  {
+    match: rt => rt.includes('redshift'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Analytics/32/Arch_Amazon-Redshift_32.svg`,
+  },
+  {
+    match: rt => rt.includes('opensearch') || rt.includes('elasticsearch'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Analytics/32/Arch_Amazon-OpenSearch-Service_32.svg`,
+  },
+  {
+    match: rt => rt.includes('s3') || rt.includes('bucket'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Storage/32/Arch_Amazon-Simple-Storage-Service_32.svg`,
+  },
+  {
+    match: rt => rt.includes('efs'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Storage/32/Arch_Amazon-Elastic-File-System_32.svg`,
+  },
+  {
+    match: rt => rt.includes('fsx'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Storage/32/Arch_Amazon-FSx_32.svg`,
+  },
+  {
+    match: rt => rt.includes('backup'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Storage/32/Arch_AWS-Backup_32.svg`,
+  },
+  {
+    match: rt => rt.includes('dynamodb'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Databases/32/Arch_Amazon-DynamoDB_32.svg`,
+  },
+  {
+    match: rt => rt.includes('aurora'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Databases/32/Arch_Amazon-Aurora_32.svg`,
+  },
+  {
+    match: rt => rt.includes('documentdb'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Databases/32/Arch_Amazon-DocumentDB_32.svg`,
+  },
+  {
+    match: rt => rt.includes('memorydb'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Databases/32/Arch_Amazon-MemoryDB_32.svg`,
+  },
+  {
+    match: rt => rt.includes('neptune'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Databases/32/Arch_Amazon-Neptune_32.svg`,
+  },
+  {
+    match: rt => rt.includes('elasticache'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Databases/32/Arch_Amazon-ElastiCache_32.svg`,
+  },
+  {
+    match: rt => rt.includes('rds') || rt.includes('db_instance') || rt.includes('dbcluster') || rt.includes('database'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Databases/32/Arch_Amazon-RDS_32.svg`,
+  },
+  {
+    match: rt => rt.includes('cognito'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Security-Identity/32/Arch_Amazon-Cognito_32.svg`,
+  },
+  {
+    match: rt => rt.includes('secretsmanager') || rt.includes('secret'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Security-Identity/32/Arch_AWS-Secrets-Manager_32.svg`,
+  },
+  {
+    match: rt => rt.includes('kms') || rt.includes('key_management'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Security-Identity/32/Arch_AWS-Key-Management-Service_32.svg`,
+  },
+  {
+    match: rt => rt.includes('waf'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Security-Identity/32/Arch_AWS-WAF_32.svg`,
+  },
+  {
+    match: rt => rt.includes('shield'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Security-Identity/32/Arch_AWS-Shield_32.svg`,
+  },
+  {
+    match: rt => rt.includes('guardduty'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Security-Identity/32/Arch_Amazon-GuardDuty_32.svg`,
+  },
+  {
+    match: rt => rt.includes('detective'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Security-Identity/32/Arch_Amazon-Detective_32.svg`,
+  },
+  {
+    match: rt => rt.includes('inspector'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Security-Identity/32/Arch_Amazon-Inspector_32.svg`,
+  },
+  {
+    match: rt => rt.includes('securityhub'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Security-Identity/32/Arch_AWS-Security-Hub_32.svg`,
+  },
+  {
+    match: rt => rt.includes('iam') || rt.includes('role') || rt.includes('policy') || rt.includes('user') || rt.includes('group'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Security-Identity/32/Arch_AWS-Identity-and-Access-Management_32.svg`,
+  },
+  {
+    match: rt => rt.includes('cloudwatch'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Management-Tools/32/Arch_Amazon-CloudWatch_32.svg`,
+  },
+  {
+    match: rt => rt.includes('cloudtrail'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Management-Tools/32/Arch_AWS-CloudTrail_32.svg`,
+  },
+  {
+    match: rt => rt.includes('config'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Management-Tools/32/Arch_AWS-Config_32.svg`,
+  },
+  {
+    match: rt => rt.includes('systems_manager') || rt.includes('ssm'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Management-Tools/32/Arch_AWS-Systems-Manager_32.svg`,
+  },
+  {
+    match: rt => rt.includes('cloudformation') || rt.includes('stack'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Management-Tools/32/Arch_AWS-CloudFormation_32.svg`,
+  },
+  {
+    match: rt => rt.includes('organizations') || rt.includes('organization'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Management-Tools/32/Arch_AWS-Organizations_32.svg`,
+  },
+  {
+    match: rt => rt.includes('controltower'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Management-Tools/32/Arch_AWS-Control-Tower_32.svg`,
+  },
+  {
+    match: rt => rt.includes('codebuild'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Developer-Tools/32/Arch_AWS-CodeBuild_32.svg`,
+  },
+  {
+    match: rt => rt.includes('codedeploy'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Developer-Tools/32/Arch_AWS-CodeDeploy_32.svg`,
+  },
+  {
+    match: rt => rt.includes('codepipeline'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Developer-Tools/32/Arch_AWS-CodePipeline_32.svg`,
+  },
+  {
+    match: rt => rt.includes('codeartifact'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Developer-Tools/32/Arch_AWS-CodeArtifact_32.svg`,
+  },
+  {
+    match: rt => rt.includes('codecommit'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Developer-Tools/32/Arch_AWS-CodeCommit_32.svg`,
+  },
+  {
+    match: rt => rt.includes('xray'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Developer-Tools/32/Arch_AWS-X-Ray_32.svg`,
+  },
+  {
+    match: rt => rt.includes('amplify'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Front-End-Web-Mobile/32/Arch_AWS-Amplify_32.svg`,
+  },
+  {
+    match: rt => rt.includes('iot'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Internet-of-Things/32/Arch_AWS-IoT-Core_32.svg`,
+  },
+  {
+    match: rt => rt.includes('ses') || rt.includes('simple_email'),
+    asset: `${AWS_ICON_CATALOG_BASE}/Architecture-Service-Icons_01302026/Arch_Business-Applications/32/Arch_Amazon-Simple-Email-Service_32.svg`,
+  },
+]
+
 const PRIMARY_NODE_CATEGORIES = new Set([
   'compute',
   'database',
@@ -373,6 +678,16 @@ export function getNodeIconPath(node: Pick<StackMapNode, 'resource_type' | 'cate
   return getResourceIconPath(node.resource_type, node.category)
 }
 
+export function getResourceIconAsset(resourceType: string): string | null {
+  const normalized = resourceType.toLowerCase()
+  const match = RESOURCE_TYPE_ICON_ASSETS.find(entry => entry.match(normalized))
+  return match?.asset || null
+}
+
+export function getNodeIconAsset(node: Pick<StackMapNode, 'resource_type'>): string | null {
+  return getResourceIconAsset(node.resource_type)
+}
+
 export function useGraph() {
   return {
     CATEGORY_COLORS,
@@ -387,6 +702,8 @@ export function useGraph() {
     buildLayerDefinitions,
     normalizeLayerId,
     getResourceIconPath,
+    getResourceIconAsset,
     getNodeIconPath,
+    getNodeIconAsset,
   }
 }

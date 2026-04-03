@@ -248,7 +248,16 @@
       :style="{ color: categoryColor }"
       class="icon"
     >
-      <g v-html="iconPath" />
+      <image
+        v-if="iconAsset"
+        :href="iconAsset"
+        x="0"
+        y="0"
+        width="24"
+        height="24"
+        preserveAspectRatio="xMidYMid meet"
+      />
+      <g v-else v-html="iconPath" />
     </svg>
 
     <!-- Editable label (inline edit on double-click for user nodes) -->
@@ -460,6 +469,7 @@ import {
   CATEGORY_COLORS,
   formatResourceType,
   getNodeHeight,
+  getNodeIconAsset,
   getNodeIconPath,
   getNodeProminence,
   getNodeWidth,
@@ -506,6 +516,7 @@ const showDeleteConfirm = ref(false)
 let deleteConfirmTimer: ReturnType<typeof setTimeout> | null = null
 
 const categoryColor = computed(() => CATEGORY_COLORS[props.node.category] || '#9ca3af')
+const iconAsset = computed(() => getNodeIconAsset(props.node))
 const iconPath = computed(() => getNodeIconPath(props.node))
 const displayName = computed(() => truncate(props.node.name, 28))
 const shortType = computed(() => formatResourceType(props.node.resource_type))
