@@ -39,6 +39,32 @@ export interface StackMapEdge {
   color?: string
 }
 
+export type EditSubmode = 'inspect' | 'structure' | 'connect'
+
+export interface CustomLayerConfig {
+  id: string
+  label: string
+  icon?: string
+  accent?: string
+}
+
+export interface NodeOverrideMeta {
+  name?: string
+  provider?: string
+  resource_type?: string
+  category?: string
+  weight?: number
+}
+
+interface OriginalNodeSnapshot {
+  name: string
+  provider: string
+  resource_type: string
+  category: string
+  weight: number
+  tier: string
+}
+
 export interface StackMapGroup {
   id: string
   name: string
@@ -90,8 +116,9 @@ interface EditHistorySnapshot {
   hiddenNodeIdsBackup: string[] | null
   userEdges: StackMapEdge[]
   userNodes: StackMapNode[]
-  customLayers: Array<{ id: string; label: string }>
+  customLayers: CustomLayerConfig[]
   nodeTierOverrides: Record<string, string>
+  nodeOverrides: Record<string, NodeOverrideMeta>
   layoutLayers: string[]
 }
 
@@ -904,6 +931,7 @@ export const useGraphStore = defineStore('graph', {
 
     // Edit mode state
     editMode: false as boolean,
+    editSubmode: 'inspect' as EditSubmode,
     hiddenNodeIds: [] as string[],
     hiddenNodeIdsBackup: null as string[] | null,
     userEdges: [] as StackMapEdge[],
@@ -911,12 +939,19 @@ export const useGraphStore = defineStore('graph', {
     connectingFromNodeId: null as string | null,
     layoutVersion: 0 as number,
     layoutLayers: [...DEFAULT_LAYOUT_LAYERS] as string[],
-    customLayers: [] as Array<{ id: string; label: string }>,
+    customLayers: [] as CustomLayerConfig[],
     nodeTierOverrides: {} as Record<string, string>,
+    nodeOverrides: {} as Record<string, NodeOverrideMeta>,
     draggingNodeId: null as string | null,
     dragTargetLayerId: null as string | null,
+    selectedEdgeId: null as string | null,
     editHistoryPast: [] as EditHistorySnapshot[],
     editHistoryFuture: [] as EditHistorySnapshot[],
+    lastEditAction: '' as string,
+    editPersistenceStatus: 'idle' as 'idle' | 'saved' | 'restored' | 'imported',
+    presentationMode: false as boolean,
+    hasSeenEditWalkthrough: false as boolean,
+    originalNodeSnapshots: {} as Record<string, OriginalNodeSnapshot>,
   }),
 
   getters: {
@@ -925,6 +960,13 @@ export const useGraphStore = defineStore('graph', {
       return this.graphNodes.find((n: StackMapNode) => n.id === state.selectedNodeId)
         ?? state.userNodes.find(n => n.id === state.selectedNodeId)
         ?? state.nodes.find(n => n.id === state.selectedNodeId)
+        ?? null
+    },
+
+    selectedEdge(state): StackMapEdge | null {
+      if (!state.selectedEdgeId) return null
+      return state.userEdges.find(edge => edge.id === state.selectedEdgeId)
+        ?? this.graphEdges.find(edge => edge.id === state.selectedEdgeId)
         ?? null
     },
 
@@ -1323,6 +1365,16 @@ export const useGraphStore = defineStore('graph', {
     canRedo(state): boolean {
       return state.editHistoryFuture.length > 0
     },
+
+    editChangeSummary(state): { hidden: number; customNodes: number; customLinks: number; moved: number; customLayers: number } {
+      return {
+        hidden: state.hiddenNodeIds.length,
+        customNodes: state.userNodes.length,
+        customLinks: state.userEdges.length,
+        moved: Object.keys(state.nodeTierOverrides).length,
+        customLayers: state.customLayers.length,
+      }
+    },
   },
 
   actions: {
@@ -1334,6 +1386,7 @@ export const useGraphStore = defineStore('graph', {
         userNodes: this.userNodes,
         customLayers: this.customLayers,
         nodeTierOverrides: this.nodeTierOverrides,
+        nodeOverrides: this.nodeOverrides,
         layoutLayers: this.layoutLayers,
       }))
     },
@@ -1345,12 +1398,28 @@ export const useGraphStore = defineStore('graph', {
       this.userNodes = JSON.parse(JSON.stringify(snapshot.userNodes))
       this.customLayers = JSON.parse(JSON.stringify(snapshot.customLayers))
       this.nodeTierOverrides = { ...snapshot.nodeTierOverrides }
+      this.nodeOverrides = { ...snapshot.nodeOverrides }
       this.layoutLayers = [...snapshot.layoutLayers]
 
       for (const node of this.nodes) {
+        const original = this.originalNodeSnapshots[node.id]
+        if (original) {
+          node.name = original.name
+          node.provider = original.provider
+          node.resource_type = original.resource_type
+          node.category = original.category
+          if (!node.position_hint) node.position_hint = { tier: original.tier, weight: original.weight }
+          node.position_hint.weight = original.weight
+        }
         const override = this.nodeTierOverrides[node.id]
+        const meta = this.nodeOverrides[node.id]
         if (!node.position_hint) node.position_hint = { tier: 'compute', weight: 2 }
         node.position_hint.tier = override || normalizeNodeTier(node)
+        if (meta?.name) node.name = meta.name
+        if (meta?.provider) node.provider = meta.provider
+        if (meta?.resource_type) node.resource_type = meta.resource_type
+        if (meta?.category) node.category = meta.category
+        if (typeof meta?.weight === 'number') node.position_hint.weight = meta.weight
       }
 
       for (const node of this.userNodes) {
@@ -1359,6 +1428,10 @@ export const useGraphStore = defineStore('graph', {
       }
 
       this.requestRelayout()
+    },
+
+    _setLastEditAction(message: string) {
+      this.lastEditAction = message
     },
 
     _recordHistory() {
@@ -1406,6 +1479,22 @@ export const useGraphStore = defineStore('graph', {
           this.layoutLayers.push(node.position_hint.tier)
         }
       }
+      this.originalNodeSnapshots = Object.fromEntries(
+        this.nodes.map(node => [
+          node.id,
+          {
+            name: node.name,
+            provider: node.provider,
+            resource_type: node.resource_type,
+            category: node.category,
+            weight: node.position_hint?.weight || 2,
+            tier: node.position_hint?.tier || 'compute',
+          },
+        ])
+      )
+      if (typeof window !== 'undefined') {
+        this.hasSeenEditWalkthrough = localStorage.getItem('stackmap-edit-walkthrough-seen') === 'true'
+      }
 
       const cats = new Set(this.graphNodes.map(node => node.category))
       this.categoryFilters = Object.fromEntries([...cats].map(category => [category, true]))
@@ -1448,7 +1537,13 @@ export const useGraphStore = defineStore('graph', {
 
     selectNode(nodeId: string | null) {
       this.selectedNodeId = nodeId
+      if (nodeId) this.selectedEdgeId = null
       if (!nodeId) this.hopLimit = 0
+    },
+
+    selectEdge(edgeId: string | null) {
+      this.selectedEdgeId = edgeId
+      if (edgeId) this.selectedNodeId = null
     },
 
     hoverNode(nodeId: string | null) {
@@ -1483,6 +1578,7 @@ export const useGraphStore = defineStore('graph', {
       }
       if (mode === 'organization' || mode === 'components') {
         this.selectedNodeId = null
+        this.selectedEdgeId = null
       }
       if (mode !== 'architecture') {
         this.activeComponentId = null
@@ -1569,6 +1665,28 @@ export const useGraphStore = defineStore('graph', {
       this.editMode = !this.editMode
       if (!this.editMode) {
         this.connectingFromNodeId = null
+        this.editSubmode = 'inspect'
+      } else {
+        this.editSubmode = 'inspect'
+      }
+    },
+
+    setEditSubmode(mode: EditSubmode) {
+      this.editSubmode = mode
+      if (mode !== 'connect') {
+        this.connectingFromNodeId = null
+      }
+      this._setLastEditAction(`mode: ${mode}`)
+    },
+
+    setPresentationMode(enabled: boolean) {
+      this.presentationMode = enabled
+    },
+
+    dismissEditWalkthrough() {
+      this.hasSeenEditWalkthrough = true
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('stackmap-edit-walkthrough-seen', 'true')
       }
     },
 
@@ -1578,6 +1696,7 @@ export const useGraphStore = defineStore('graph', {
         this.hiddenNodeIds.push(nodeId)
       }
       if (this.selectedNodeId === nodeId) this.selectedNodeId = null
+      this._setLastEditAction('hid resource')
       this.requestRelayout()
       this._persistEdits()
     },
@@ -1589,6 +1708,7 @@ export const useGraphStore = defineStore('graph', {
         this.hiddenNodeIdsBackup = this.hiddenNodeIdsBackup.filter(id => id !== nodeId)
         if (this.hiddenNodeIdsBackup.length === 0) this.hiddenNodeIdsBackup = null
       }
+      this._setLastEditAction('restored resource')
       this.requestRelayout()
       this._persistEdits()
     },
@@ -1598,6 +1718,7 @@ export const useGraphStore = defineStore('graph', {
       this._recordHistory()
       this.hiddenNodeIdsBackup = [...this.hiddenNodeIds]
       this.hiddenNodeIds = []
+      this._setLastEditAction('showed all hidden resources')
       this.requestRelayout()
       this._persistEdits()
     },
@@ -1607,16 +1728,20 @@ export const useGraphStore = defineStore('graph', {
       this._recordHistory()
       this.hiddenNodeIds = [...new Set([...this.hiddenNodeIdsBackup, ...this.hiddenNodeIds])]
       this.hiddenNodeIdsBackup = null
+      this._setLastEditAction('rehid shown resources')
       this.requestRelayout()
       this._persistEdits()
     },
 
     startConnecting(nodeId: string) {
+      this.editSubmode = 'connect'
       this.connectingFromNodeId = nodeId
+      this._setLastEditAction('connect mode')
     },
 
     cancelConnecting() {
       this.connectingFromNodeId = null
+      if (this.editSubmode === 'connect') this.editSubmode = 'inspect'
     },
 
     completeConnection(targetNodeId: string) {
@@ -1635,11 +1760,13 @@ export const useGraphStore = defineStore('graph', {
         id: edgeId,
         source: this.connectingFromNodeId,
         target: targetNodeId,
-        edge_type: 'user_link',
-        label: 'user link',
+        edge_type: 'manual_generic',
+        label: 'Manual link',
         color: '#4ADE80',
       })
       this.connectingFromNodeId = null
+      this.selectedEdgeId = edgeId
+      this._setLastEditAction('created manual link')
       this.requestRelayout()
       this._persistEdits()
     },
@@ -1647,6 +1774,8 @@ export const useGraphStore = defineStore('graph', {
     removeUserEdge(edgeId: string) {
       this._recordHistory()
       this.userEdges = this.userEdges.filter(e => e.id !== edgeId)
+      if (this.selectedEdgeId === edgeId) this.selectedEdgeId = null
+      this._setLastEditAction('deleted manual link')
       this.requestRelayout()
       this._persistEdits()
     },
@@ -1656,6 +1785,24 @@ export const useGraphStore = defineStore('graph', {
       if (!edge || edge.color === color) return
       this._recordHistory()
       edge.color = color
+      this._setLastEditAction('changed link color')
+      this._persistEdits()
+    },
+
+    updateUserEdge(edgeId: string, updates: Partial<Pick<StackMapEdge, 'label' | 'edge_type' | 'color'>>) {
+      const edge = this.userEdges.find(candidate => candidate.id === edgeId)
+      if (!edge) return
+      const next = {
+        label: updates.label ?? edge.label,
+        edge_type: updates.edge_type ?? edge.edge_type,
+        color: updates.color ?? edge.color,
+      }
+      if (next.label === edge.label && next.edge_type === edge.edge_type && next.color === edge.color) return
+      this._recordHistory()
+      edge.label = next.label
+      edge.edge_type = next.edge_type
+      edge.color = next.color
+      this._setLastEditAction('updated manual link')
       this._persistEdits()
     },
 
@@ -1664,6 +1811,7 @@ export const useGraphStore = defineStore('graph', {
     },
 
     startDraggingNode(nodeId: string) {
+      if (this.editSubmode !== 'structure') return
       this.draggingNodeId = nodeId
       const node =
         this.userNodes.find(candidate => candidate.id === nodeId)
@@ -1707,6 +1855,7 @@ export const useGraphStore = defineStore('graph', {
       if (!this.customLayers.some(layer => layer.id === id) && !DEFAULT_LAYOUT_LAYERS.includes(id)) {
         this.customLayers.push({ id, label: trimmed })
       }
+      this._setLastEditAction('added layer')
       this.requestRelayout()
       this._persistEdits()
       return id
@@ -1727,9 +1876,26 @@ export const useGraphStore = defineStore('graph', {
       if (this.dragTargetLayerId === layerId) {
         this.dragTargetLayerId = null
       }
+      this._setLastEditAction('deleted custom layer')
       this.requestRelayout()
       this._persistEdits()
       return true
+    },
+
+    updateCustomLayer(layerId: string, updates: Partial<CustomLayerConfig>) {
+      const layer = this.customLayers.find(candidate => candidate.id === layerId)
+      if (!layer) return
+      const nextLabel = updates.label?.trim() || layer.label
+      const nextIcon = updates.icon ?? layer.icon
+      const nextAccent = updates.accent ?? layer.accent
+      if (nextLabel === layer.label && nextIcon === layer.icon && nextAccent === layer.accent) return
+      this._recordHistory()
+      layer.label = nextLabel
+      layer.icon = nextIcon
+      layer.accent = nextAccent
+      this._setLastEditAction('updated layer')
+      this.requestRelayout()
+      this._persistEdits()
     },
 
     reorderLayers(draggedLayerId: string, targetLayerId: string) {
@@ -1743,6 +1909,7 @@ export const useGraphStore = defineStore('graph', {
       const [moved] = updated.splice(fromIndex, 1)
       updated.splice(toIndex, 0, moved)
       this.layoutLayers = updated
+      this._setLastEditAction('reordered layers')
       this.requestRelayout()
       this._persistEdits()
     },
@@ -1767,6 +1934,7 @@ export const useGraphStore = defineStore('graph', {
         node.position_hint.tier = layerId
         this.nodeTierOverrides[nodeId] = layerId
       }
+      this._setLastEditAction('moved resource to layer')
       this.requestRelayout()
       this._persistEdits()
     },
@@ -1799,6 +1967,8 @@ export const useGraphStore = defineStore('graph', {
       if (!this.layoutLayers.includes(options.tier)) {
         this.layoutLayers.push(options.tier)
       }
+      this.selectedNodeId = id
+      this._setLastEditAction('added custom node')
       this.requestRelayout()
       this._persistEdits()
     },
@@ -1809,17 +1979,89 @@ export const useGraphStore = defineStore('graph', {
       // Also remove any edges (user or auto) that reference this node
       this.userEdges = this.userEdges.filter(e => e.source !== nodeId && e.target !== nodeId)
       if (this.selectedNodeId === nodeId) this.selectedNodeId = null
+      this._setLastEditAction('deleted custom node')
       this.requestRelayout()
       this._persistEdits()
     },
 
-    renameUserNode(nodeId: string, newName: string) {
-      const node = this.userNodes.find(n => n.id === nodeId)
-      if (node) {
+    renameNode(nodeId: string, newName: string) {
+      const trimmed = newName.trim()
+      if (!trimmed) return
+      const userNode = this.userNodes.find(n => n.id === nodeId)
+      if (userNode) {
+        if (userNode.name === trimmed) return
         this._recordHistory()
-        node.name = newName
+        userNode.name = trimmed
+        this._setLastEditAction('renamed custom node')
         this._persistEdits()
+        return
       }
+      const node = this.nodes.find(n => n.id === nodeId)
+      if (!node || node.name === trimmed) return
+      this._recordHistory()
+      node.name = trimmed
+      this.nodeOverrides[nodeId] = { ...this.nodeOverrides[nodeId], name: trimmed }
+      this._setLastEditAction('renamed resource')
+      this._persistEdits()
+    },
+
+    updateNodeDetails(
+      nodeId: string,
+      updates: Partial<Pick<StackMapNode, 'provider' | 'resource_type' | 'category'>> & { weight?: number }
+    ) {
+      const userNode = this.userNodes.find(node => node.id === nodeId)
+      if (userNode) {
+        const changed =
+          (updates.provider !== undefined && updates.provider !== userNode.provider)
+          || (updates.resource_type !== undefined && updates.resource_type !== userNode.resource_type)
+          || (updates.category !== undefined && updates.category !== userNode.category)
+          || (typeof updates.weight === 'number' && updates.weight !== (userNode.position_hint?.weight || 4))
+        if (!changed) return
+        this._recordHistory()
+        if (updates.provider !== undefined) userNode.provider = updates.provider
+        if (updates.resource_type !== undefined) userNode.resource_type = updates.resource_type
+        if (updates.category !== undefined) userNode.category = updates.category
+        if (!userNode.position_hint) userNode.position_hint = { tier: 'compute', weight: 4 }
+        if (typeof updates.weight === 'number') userNode.position_hint.weight = updates.weight
+        this._setLastEditAction('updated custom node')
+        this.requestRelayout()
+        this._persistEdits()
+        return
+      }
+
+      const node = this.nodes.find(candidate => candidate.id === nodeId)
+      if (!node) return
+      const original = this.originalNodeSnapshots[nodeId]
+      const nextProvider = updates.provider ?? node.provider
+      const nextResourceType = updates.resource_type ?? node.resource_type
+      const nextCategory = updates.category ?? node.category
+      const nextWeight = typeof updates.weight === 'number' ? updates.weight : (node.position_hint?.weight || 2)
+      if (
+        nextProvider === node.provider
+        && nextResourceType === node.resource_type
+        && nextCategory === node.category
+        && nextWeight === (node.position_hint?.weight || 2)
+      ) return
+      this._recordHistory()
+      node.provider = nextProvider
+      node.resource_type = nextResourceType
+      node.category = nextCategory
+      if (!node.position_hint) node.position_hint = { tier: original?.tier || 'compute', weight: original?.weight || 2 }
+      node.position_hint.weight = nextWeight
+      this.nodeOverrides[nodeId] = {
+        ...this.nodeOverrides[nodeId],
+        provider: nextProvider !== original?.provider ? nextProvider : undefined,
+        resource_type: nextResourceType !== original?.resource_type ? nextResourceType : undefined,
+        category: nextCategory !== original?.category ? nextCategory : undefined,
+        weight: nextWeight !== original?.weight ? nextWeight : undefined,
+        name: this.nodeOverrides[nodeId]?.name,
+      }
+      if (Object.values(this.nodeOverrides[nodeId]).every(value => value === undefined)) {
+        delete this.nodeOverrides[nodeId]
+      }
+      this._setLastEditAction('updated resource details')
+      this.requestRelayout()
+      this._persistEdits()
     },
 
     duplicateUserNode(nodeId: string) {
@@ -1840,6 +2082,27 @@ export const useGraphStore = defineStore('graph', {
           weight: original.position_hint?.weight || 4,
         },
       })
+      this._setLastEditAction('duplicated custom node')
+      this.requestRelayout()
+      this._persistEdits()
+    },
+
+    resetNodeEdits(nodeId: string) {
+      const node = this.nodes.find(candidate => candidate.id === nodeId)
+      const original = this.originalNodeSnapshots[nodeId]
+      if (!node || !original) return
+      this._recordHistory()
+      node.name = original.name
+      node.provider = original.provider
+      node.resource_type = original.resource_type
+      node.category = original.category
+      if (!node.position_hint) node.position_hint = { tier: original.tier, weight: original.weight }
+      node.position_hint.weight = original.weight
+      node.position_hint.tier = original.tier
+      delete this.nodeTierOverrides[nodeId]
+      delete this.nodeOverrides[nodeId]
+      this.hiddenNodeIds = this.hiddenNodeIds.filter(id => id !== nodeId)
+      this._setLastEditAction('reset resource edits')
       this.requestRelayout()
       this._persistEdits()
     },
@@ -1854,9 +2117,11 @@ export const useGraphStore = defineStore('graph', {
           userNodes: this.userNodes,
           customLayers: this.customLayers,
           nodeTierOverrides: this.nodeTierOverrides,
+          nodeOverrides: this.nodeOverrides,
           layoutLayers: this.layoutLayers,
         }
         localStorage.setItem('stackmap-edits', JSON.stringify(data))
+        this.editPersistenceStatus = 'saved'
       } catch { /* ignore quota errors */ }
     },
 
@@ -1899,6 +2164,9 @@ export const useGraphStore = defineStore('graph', {
             }
           }
         }
+        if (data.nodeOverrides && typeof data.nodeOverrides === 'object') {
+          this.nodeOverrides = data.nodeOverrides
+        }
         if (data.nodeTierOverrides && typeof data.nodeTierOverrides === 'object') {
           this.nodeTierOverrides = data.nodeTierOverrides
           for (const node of this.nodes) {
@@ -1912,11 +2180,71 @@ export const useGraphStore = defineStore('graph', {
             }
           }
         }
+        for (const node of this.nodes) {
+          const meta = this.nodeOverrides[node.id]
+          if (!meta) continue
+          if (meta.name) node.name = meta.name
+          if (meta.provider) node.provider = meta.provider
+          if (meta.resource_type) node.resource_type = meta.resource_type
+          if (meta.category) node.category = meta.category
+          if (!node.position_hint) node.position_hint = { tier: normalizeNodeTier(node), weight: 2 }
+          if (typeof meta.weight === 'number') node.position_hint.weight = meta.weight
+        }
         if (Array.isArray(data.layoutLayers)) {
           const extras = this.layoutLayers.filter(layerId => !data.layoutLayers.includes(layerId))
           this.layoutLayers = [...data.layoutLayers, ...extras]
         }
+        this.editPersistenceStatus = 'restored'
+        if (typeof window !== 'undefined') {
+          this.hasSeenEditWalkthrough = localStorage.getItem('stackmap-edit-walkthrough-seen') === 'true'
+        }
       } catch { /* ignore parse errors */ }
+    },
+
+    exportEditsPayload(): string {
+      return JSON.stringify({
+        hiddenNodeIds: this.hiddenNodeIds,
+        hiddenNodeIdsBackup: this.hiddenNodeIdsBackup,
+        userEdges: this.userEdges,
+        userNodes: this.userNodes,
+        customLayers: this.customLayers,
+        nodeTierOverrides: this.nodeTierOverrides,
+        nodeOverrides: this.nodeOverrides,
+        layoutLayers: this.layoutLayers,
+        exportedAt: new Date().toISOString(),
+      }, null, 2)
+    },
+
+    importEditsPayload(raw: string) {
+      const data = JSON.parse(raw)
+      this._recordHistory()
+      if (Array.isArray(data.hiddenNodeIds)) this.hiddenNodeIds = data.hiddenNodeIds
+      this.hiddenNodeIdsBackup = Array.isArray(data.hiddenNodeIdsBackup) ? data.hiddenNodeIdsBackup : null
+      if (Array.isArray(data.userEdges)) this.userEdges = data.userEdges
+      if (Array.isArray(data.userNodes)) this.userNodes = data.userNodes
+      if (Array.isArray(data.customLayers)) this.customLayers = data.customLayers
+      if (data.nodeTierOverrides && typeof data.nodeTierOverrides === 'object') this.nodeTierOverrides = data.nodeTierOverrides
+      if (data.nodeOverrides && typeof data.nodeOverrides === 'object') this.nodeOverrides = data.nodeOverrides
+      if (Array.isArray(data.layoutLayers)) this.layoutLayers = data.layoutLayers
+      this._applyEditSnapshot(this._createEditSnapshot())
+      this._setLastEditAction('imported edit overlay')
+      this.editPersistenceStatus = 'imported'
+      this._persistEdits()
+    },
+
+    exportCurrentGraphPayload(mode: 'raw' | 'corrected' | 'presentation' = 'corrected'): string {
+      const useVisible = mode !== 'raw'
+      const payload = {
+        metadata: {
+          ...this.metadata,
+          export_mode: mode,
+          exported_at: new Date().toISOString(),
+        },
+        nodes: useVisible ? this.visibleNodes : [...this.graphNodes, ...this.userNodes],
+        edges: useVisible ? this.visibleEdges : [...this.graphEdges, ...this.userEdges],
+        groups: this.graphGroups,
+      }
+      return JSON.stringify(payload, null, 2)
     },
 
     clearAllEdits() {
@@ -1928,13 +2256,22 @@ export const useGraphStore = defineStore('graph', {
       this.connectingFromNodeId = null
       this.customLayers = []
       this.nodeTierOverrides = {}
+      this.nodeOverrides = {}
       this.draggingNodeId = null
       this.dragTargetLayerId = null
+      this.selectedEdgeId = null
       this.layoutLayers = [...DEFAULT_LAYOUT_LAYERS]
       for (const node of this.nodes) {
         if (!node.position_hint) node.position_hint = { tier: 'compute', weight: 2 }
+        const original = this.originalNodeSnapshots[node.id]
+        node.name = original?.name || node.name
+        node.provider = original?.provider || node.provider
+        node.resource_type = original?.resource_type || node.resource_type
+        node.category = original?.category || node.category
         node.position_hint.tier = normalizeNodeTier(node)
+        node.position_hint.weight = original?.weight || node.position_hint.weight || 2
       }
+      this._setLastEditAction('cleared all edits')
       this.requestRelayout()
       if (typeof window !== 'undefined') {
         localStorage.removeItem('stackmap-edits')

@@ -169,7 +169,7 @@
     }"
     :opacity="nodeOpacity"
     :data-node-id="node.id"
-    :data-drag-enabled="store.editMode && !isAccountSummary && !store.connectingFromNodeId ? 'true' : 'false'"
+    :data-drag-enabled="store.editMode && store.editSubmode === 'structure' && !isAccountSummary && !store.connectingFromNodeId ? 'true' : 'false'"
     @click.stop="onClick"
     @mouseenter="onHover"
     @mouseleave="onLeave"
@@ -292,7 +292,7 @@
       font-weight="500"
       font-family="'JetBrains Mono', 'SF Mono', monospace"
       dominant-baseline="central"
-      :class="['node-name', { 'node-name--editable': store.editMode && !!node.tags?._user_created }]"
+      :class="['node-name', { 'node-name--editable': store.editMode }]"
       @click.stop="onLabelClick"
       @pointerdown.stop
     >{{ displayName }}</text>
@@ -332,7 +332,7 @@
 
     <!-- Edit mode action buttons -->
     <g
-      v-if="store.editMode && !isAccountSummary"
+      v-if="store.editMode && store.editSubmode !== 'inspect' && !isAccountSummary"
       class="edit-actions"
       :opacity="isHovered || isActionHovering || showDeleteConfirm ? 1 : 0"
       @mouseenter="onActionHoverEnter"
@@ -346,6 +346,14 @@
         fill="rgba(0,0,0,0.001)"
         class="edit-actions-bridge"
       />
+      <g
+        v-if="store.editSubmode === 'structure'"
+        class="drag-handle"
+        :transform="`translate(${-nodeWidth / 2 + 14}, ${-nodeHeight / 2 - 14})`"
+      >
+        <rect x="-8" y="-8" width="16" height="16" rx="4" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+        <text x="0" y="1" text-anchor="middle" dominant-baseline="central" fill="#9ca3af" font-size="8" font-family="'JetBrains Mono', monospace">⋮</text>
+      </g>
       <!-- Hide button -->
       <g
         class="edit-action-btn"
@@ -644,6 +652,7 @@ function onClick() {
 }
 
 function onConnectClick() {
+  store.setEditSubmode('connect')
   store.startConnecting(props.node.id)
 }
 
@@ -687,7 +696,7 @@ function onActionHoverLeave() {
 
 // ── Label editing ─────────────────────────────────────────────────
 function onLabelClick() {
-  if (!store.editMode || !props.node.tags?._user_created) return
+  if (!store.editMode) return
   isEditingLabel.value = true
   editLabelValue.value = props.node.name
   nextTick(() => {
@@ -700,7 +709,7 @@ function confirmLabelEdit() {
   if (!isEditingLabel.value) return
   const trimmed = editLabelValue.value.trim()
   if (trimmed && trimmed !== props.node.name) {
-    store.renameUserNode(props.node.id, trimmed)
+    store.renameNode(props.node.id, trimmed)
   }
   isEditingLabel.value = false
 }
@@ -731,7 +740,7 @@ function cancelDelete() {
 }
 
 function onPointerDown(event: PointerEvent) {
-  if (!store.editMode || isAccountSummary.value || store.connectingFromNodeId) return
+  if (!store.editMode || store.editSubmode !== 'structure' || isAccountSummary.value || store.connectingFromNodeId) return
   if (event.button !== 0) return
   const target = event.target as HTMLElement | null
   if (target?.closest('.edit-action-btn, .delete-confirm, .inline-label-input, .node-name--editable')) {
