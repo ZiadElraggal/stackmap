@@ -218,6 +218,44 @@
         </div>
 
         <div class="rounded-xl border border-white/[0.08] bg-white/[0.02]">
+          <button class="section-toggle" @click="toggleSection('focusTools')">
+            <span>Focus Tools</span>
+            <span class="section-toggle__meta">{{ sectionOpen.focusTools ? 'Hide' : 'Show' }}</span>
+          </button>
+          <Transition name="expand">
+            <div v-if="sectionOpen.focusTools" class="section-body">
+              <div class="flex flex-wrap gap-2">
+                <button
+                  class="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-mono text-gray-300 transition hover:bg-white/10 hover:text-white"
+                  @click="store.isolateSelectedNeighborhood(1)"
+                >
+                  Focus 1-Hop
+                </button>
+                <button
+                  class="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-mono text-gray-300 transition hover:bg-white/10 hover:text-white"
+                  @click="store.isolateSelectedNeighborhood(2)"
+                >
+                  Focus 2-Hop
+                </button>
+                <button
+                  class="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-mono text-gray-300 transition hover:bg-white/10 hover:text-white"
+                  @click="store.isolateSelectedLayer()"
+                >
+                  Isolate Layer
+                </button>
+                <button
+                  v-if="componentLabel"
+                  class="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-mono text-gray-300 transition hover:bg-white/10 hover:text-white"
+                  @click="store.isolateSelectedComponent()"
+                >
+                  Isolate Component
+                </button>
+              </div>
+            </div>
+          </Transition>
+        </div>
+
+        <div class="rounded-xl border border-white/[0.08] bg-white/[0.02]">
           <button class="section-toggle" @click="toggleSection('properties')">
             <span>Properties</span>
             <span class="section-toggle__meta">{{ sectionOpen.properties ? 'Hide' : 'Show' }}</span>
@@ -229,12 +267,20 @@
                   <div class="text-[10px] uppercase tracking-widest text-gray-600">Component</div>
                   <div class="mt-1 text-xs font-mono text-gray-300">{{ componentLabel }}</div>
                 </div>
-                <button
-                  class="rounded-md border border-cyan-400/20 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-mono text-cyan-300 transition hover:bg-cyan-500/15"
-                  @click="store.focusSelectedNodeComponent()"
-                >
-                  Focus component
-                </button>
+                <div class="flex items-center gap-1.5">
+                  <button
+                    class="rounded-md border border-cyan-400/20 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-mono text-cyan-300 transition hover:bg-cyan-500/15"
+                    @click="store.focusSelectedNodeComponent()"
+                  >
+                    Focus component
+                  </button>
+                  <button
+                    class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-mono text-gray-300 transition hover:bg-white/10 hover:text-white"
+                    @click="store.isolateSelectedComponent()"
+                  >
+                    Isolate
+                  </button>
+                </div>
               </div>
               <dl>
                 <div
@@ -602,6 +648,7 @@ const newLayerName = ref('')
 const userLinkColors = ['#4ADE80', '#38BDF8', '#C084FC', '#FB923C', '#F87171']
 const sectionOpen = ref<Record<string, boolean>>({
   nodeEditor: true,
+  focusTools: false,
   properties: true,
   tags: false,
   connections: true,

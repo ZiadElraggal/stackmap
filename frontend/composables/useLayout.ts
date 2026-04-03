@@ -40,7 +40,8 @@ export function useLayout() {
     nodes: StackMapNode[],
     edges: StackMapEdge[],
     groups: StackMapGroup[],
-    layerOrder?: string[]
+    layerOrder?: string[],
+    options?: { mode?: 'flow' | 'pack' }
   ): Record<string, NodePosition> {
     if (nodes.length === 0) return {}
     if (nodes.some(node => node.position_hint?.view_kind === 'account_summary')) {
@@ -59,7 +60,19 @@ export function useLayout() {
     }
 
     // Build dagre graph with just real nodes and edges
-    const params = getLayoutParams(nodes.length)
+    const layoutMode = options?.mode || 'flow'
+    const baseParams = getLayoutParams(nodes.length)
+    const params = layoutMode === 'pack'
+      ? {
+          ...baseParams,
+          nodesep: Math.max(44, Math.round(baseParams.nodesep * 0.72)),
+          ranksep: Math.max(132, Math.round(baseParams.ranksep * 0.72)),
+          edgesep: Math.max(18, Math.round(baseParams.edgesep * 0.78)),
+          marginx: Math.max(24, Math.round(baseParams.marginx * 0.7)),
+          marginy: Math.max(24, Math.round(baseParams.marginy * 0.7)),
+          minGap: Math.max(16, Math.round(baseParams.minGap * 0.55)),
+        }
+      : baseParams
     const g = new dagre.graphlib.Graph()
     g.setGraph({
       rankdir: 'TB',
@@ -118,7 +131,9 @@ export function useLayout() {
     // Fallback: simple horizontal spacing per tier
     if (Object.keys(positions).length < nodes.length) {
       const startX = 200
-      const rowGap = nodes.length > 60 ? 200 : 160
+      const rowGap = layoutMode === 'pack'
+        ? (nodes.length > 60 ? 148 : 122)
+        : (nodes.length > 60 ? 200 : 160)
       for (const tier of resolvedLayerOrder) {
         const tierNodes = (byTier.get(tier) || []).sort((a, b) => a.name.localeCompare(b.name))
         const tierWidth = tierNodes.length * rowGap
@@ -166,10 +181,29 @@ export function useLayout() {
 
         const tierXs = tierNodeIds.map(id => positions[id].x)
         const tierCenterX = (Math.min(...tierXs) + Math.max(...tierXs)) / 2
-        const shift = globalCenterX - tierCenterX
+        const shift = layoutMode === 'pack'
+          ? (globalCenterX - tierCenterX) * 0.82
+          : globalCenterX - tierCenterX
 
         for (const id of tierNodeIds) {
           positions[id].x += shift
+        }
+      }
+    }
+
+    if (layoutMode === 'pack') {
+      const xs = Object.values(positions).map(position => position.x)
+      if (xs.length > 0) {
+        const packCenter = (Math.min(...xs) + Math.max(...xs)) / 2
+        for (const tier of resolvedLayerOrder) {
+          const tierNodeIds = (byTier.get(tier) || []).map(node => node.id).filter(id => positions[id])
+          if (!tierNodeIds.length) continue
+          const tierXs = tierNodeIds.map(id => positions[id].x)
+          const tierCenter = (Math.min(...tierXs) + Math.max(...tierXs)) / 2
+          const correction = (packCenter - tierCenter) * 0.35
+          for (const id of tierNodeIds) {
+            positions[id].x += correction
+          }
         }
       }
     }
