@@ -4,8 +4,19 @@ import type { StackMapNode, StackMapEdge, StackMapGroup, NodePosition } from '~/
 
 const LAYOUT_EDGE_TYPES = new Set(['triggers', 'writes_to', 'reads_from', 'routes_to'])
 
+function compareNodesWithinTier(a: StackMapNode, b: StackMapNode): number {
+  const ao = a.position_hint?.manual_order
+  const bo = b.position_hint?.manual_order
+  if (typeof ao === 'number' && typeof bo === 'number' && ao !== bo) return ao - bo
+  if (typeof ao === 'number') return -1
+  if (typeof bo === 'number') return 1
+  return a.name.localeCompare(b.name)
+}
+
 function resolveLayerOrder(nodes: StackMapNode[], layerOrder?: string[]): string[] {
+  const presentTiers = new Set(nodes.map(node => node.position_hint?.tier || 'compute'))
   const base = (layerOrder && layerOrder.length ? [...layerOrder] : ['frontend', 'api', 'serverless', 'compute', 'security', 'data'])
+    .filter(layerId => presentTiers.has(layerId))
   for (const node of nodes) {
     const tier = node.position_hint?.tier || 'compute'
     if (!base.includes(tier)) base.push(tier)
@@ -38,7 +49,8 @@ export function useLayout() {
     nodes: StackMapNode[],
     edges: StackMapEdge[],
     groups: StackMapGroup[],
-    layerOrder?: string[]
+    layerOrder?: string[],
+    options?: { mode?: 'flow' | 'pack' }
   ): Record<string, NodePosition> {
     if (nodes.length === 0) return {}
     if (nodes.some(node => node.position_hint?.view_kind === 'account_summary')) {
@@ -57,7 +69,19 @@ export function useLayout() {
     }
 
     // Build dagre graph with just real nodes and edges
-    const params = getLayoutParams(nodes.length)
+    const layoutMode = options?.mode || 'flow'
+    const baseParams = getLayoutParams(nodes.length)
+    const params = layoutMode === 'pack'
+      ? {
+          ...baseParams,
+          nodesep: Math.max(44, Math.round(baseParams.nodesep * 0.72)),
+          ranksep: Math.max(132, Math.round(baseParams.ranksep * 0.72)),
+          edgesep: Math.max(18, Math.round(baseParams.edgesep * 0.78)),
+          marginx: Math.max(24, Math.round(baseParams.marginx * 0.7)),
+          marginy: Math.max(24, Math.round(baseParams.marginy * 0.7)),
+          minGap: Math.max(16, Math.round(baseParams.minGap * 0.55)),
+        }
+      : baseParams
     const g = new dagre.graphlib.Graph()
     g.setGraph({
       rankdir: 'TB',
@@ -116,9 +140,11 @@ export function useLayout() {
     // Fallback: simple horizontal spacing per tier
     if (Object.keys(positions).length < nodes.length) {
       const startX = 200
-      const rowGap = nodes.length > 60 ? 200 : 160
+      const rowGap = layoutMode === 'pack'
+        ? (nodes.length > 60 ? 148 : 122)
+        : (nodes.length > 60 ? 200 : 160)
       for (const tier of resolvedLayerOrder) {
-        const tierNodes = (byTier.get(tier) || []).sort((a, b) => a.name.localeCompare(b.name))
+        const tierNodes = (byTier.get(tier) || []).sort(compareNodesWithinTier)
         const tierWidth = tierNodes.length * rowGap
         tierNodes.forEach((node, idx) => {
           if (!positions[node.id]) {
@@ -138,7 +164,7 @@ export function useLayout() {
     for (const tier of resolvedLayerOrder) {
       const tierNodes = (byTier.get(tier) || [])
         .filter(n => positions[n.id])
-        .sort((a, b) => positions[a.id].x - positions[b.id].x)
+        .sort(compareNodesWithinTier)
 
       for (let i = 1; i < tierNodes.length; i++) {
         const prev = tierNodes[i - 1]
@@ -164,12 +190,41 @@ export function useLayout() {
 
         const tierXs = tierNodeIds.map(id => positions[id].x)
         const tierCenterX = (Math.min(...tierXs) + Math.max(...tierXs)) / 2
-        const shift = globalCenterX - tierCenterX
+        const shift = layoutMode === 'pack'
+          ? (globalCenterX - tierCenterX) * 0.82
+          : globalCenterX - tierCenterX
 
         for (const id of tierNodeIds) {
           positions[id].x += shift
         }
       }
+    }
+
+    if (layoutMode === 'pack') {
+      const xs = Object.values(positions).map(position => position.x)
+      if (xs.length > 0) {
+        const packCenter = (Math.min(...xs) + Math.max(...xs)) / 2
+        for (const tier of resolvedLayerOrder) {
+          const tierNodeIds = (byTier.get(tier) || []).map(node => node.id).filter(id => positions[id])
+          if (!tierNodeIds.length) continue
+          const tierXs = tierNodeIds.map(id => positions[id].x)
+          const tierCenter = (Math.min(...tierXs) + Math.max(...tierXs)) / 2
+          const correction = (packCenter - tierCenter) * 0.35
+          for (const id of tierNodeIds) {
+            positions[id].x += correction
+          }
+        }
+      }
+    }
+
+    for (const tier of resolvedLayerOrder) {
+      const tierNodes = (byTier.get(tier) || []).filter(node => positions[node.id])
+      if (tierNodes.length < 2) continue
+      const desiredOrder = [...tierNodes].sort(compareNodesWithinTier)
+      const xSlots = tierNodes.map(node => positions[node.id].x).sort((a, b) => a - b)
+      desiredOrder.forEach((node, index) => {
+        positions[node.id].x = xSlots[index]
+      })
     }
 
     return positions
@@ -261,7 +316,7 @@ export function useLayout() {
       const ta = rank[a.position_hint?.tier || 'compute'] ?? 99
       const tb = rank[b.position_hint?.tier || 'compute'] ?? 99
       if (ta !== tb) return ta - tb
-      return a.name.localeCompare(b.name)
+      return compareNodesWithinTier(a, b)
     })
   }
 
