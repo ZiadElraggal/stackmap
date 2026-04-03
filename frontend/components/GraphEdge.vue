@@ -1,11 +1,25 @@
 <template>
   <g
-    :class="['graph-edge', { dimmed: isDimmed }]"
+    :class="['graph-edge', { dimmed: isDimmed, 'user-link-hover': isUserLink && isHovered && store.editMode }]"
     :style="{
       '--edge-color': edgeColor,
       '--edge-delay': `${entryDelay}ms`,
+      opacity: fadingOut ? 0 : undefined,
+      transition: fadingOut ? 'opacity 300ms ease-out' : undefined,
     }"
+    @mouseenter="onEdgeEnter"
+    @mouseleave="onEdgeLeave"
   >
+    <!-- Invisible wider hit area for hover detection on edges -->
+    <path
+      v-if="isUserLink && store.editMode"
+      :d="pathD"
+      stroke="transparent"
+      :stroke-width="Math.max(strokeWidth * 3, 12)"
+      fill="none"
+      class="edge-hit-area"
+    />
+
     <path
       :d="pathD"
       :stroke="edgeColor"
@@ -47,12 +61,23 @@
       >{{ edge.edge_type }}</text>
     </g>
 
+    <!-- Delete button at midpoint for user_link edges in edit mode -->
+    <g
+      v-if="isUserLink && store.editMode && isHovered && !fadingOut"
+      class="edge-delete-btn"
+      :transform="`translate(${midpoint.x}, ${midpoint.y})`"
+      @click.stop="onDeleteEdge"
+    >
+      <circle r="10" fill="rgba(239,68,68,0.25)" stroke="rgba(239,68,68,0.6)" stroke-width="1" />
+      <path d="M-3.5,-3.5 L3.5,3.5 M3.5,-3.5 L-3.5,3.5" stroke="#ef4444" stroke-width="1.8" stroke-linecap="round" />
+    </g>
+
     <title>{{ edge.label || edge.edge_type }}</title>
   </g>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useGraphStore, type StackMapEdge } from '~/stores/graph'
 import { EDGE_COLORS } from '~/composables/useGraph'
 
@@ -205,6 +230,33 @@ const showLabel = computed(() => {
   if (props.zoomScale <= 0.6) return false
   return ['triggers', 'reads_from', 'writes_to', 'cross_account_reference', 'user_link'].includes(props.edge.edge_type)
 })
+
+const midpoint = computed(() => {
+  return {
+    x: (props.x1 + props.x2) / 2,
+    y: (props.y1 + props.y2) / 2,
+  }
+})
+
+const isHovered = ref(false)
+const fadingOut = ref(false)
+
+function onEdgeEnter() {
+  if (isUserLink.value && store.editMode) {
+    isHovered.value = true
+  }
+}
+
+function onEdgeLeave() {
+  isHovered.value = false
+}
+
+function onDeleteEdge() {
+  fadingOut.value = true
+  setTimeout(() => {
+    store.removeUserEdge(props.edge.id)
+  }, 300)
+}
 </script>
 
 <style scoped>
@@ -224,11 +276,37 @@ const showLabel = computed(() => {
 
 .edge-path,
 .flow-dot {
-  transition: opacity 200ms ease-out, stroke-width 200ms ease-out;
+  transition: opacity 200ms ease-out, stroke-width 200ms ease-out, filter 200ms ease-out;
   pointer-events: none;
+}
+
+.edge-hit-area {
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.user-link-hover .edge-path {
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--edge-color) 60%, transparent));
+  stroke-width: 2.4;
 }
 
 .flow-dot {
   filter: drop-shadow(0 0 4px color-mix(in srgb, var(--edge-color) 70%, transparent));
+}
+
+.edge-delete-btn {
+  cursor: pointer;
+  pointer-events: auto;
+  animation: edge-delete-appear 150ms ease-out;
+}
+
+.edge-delete-btn:hover circle {
+  fill: rgba(239, 68, 68, 0.45);
+  stroke: rgba(239, 68, 68, 0.9);
+}
+
+@keyframes edge-delete-appear {
+  from { opacity: 0; transform: scale(0.6); }
+  to { opacity: 1; transform: scale(1); }
 }
 </style>
