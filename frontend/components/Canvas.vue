@@ -239,18 +239,18 @@
       </button>
     </div>
 
-    <Transition name="fade">
+    <Transition name="help-panel">
       <div
         v-if="showHelp"
-        class="absolute right-4 top-14 z-50 w-52 rounded-xl border border-white/[0.08] bg-[#1a1a2e]/95 backdrop-blur-xl p-3 shadow-2xl shadow-black/40"
+        class="absolute right-4 top-14 z-50 w-52 rounded-xl border border-white/[0.08] bg-[#14141e]/95 backdrop-blur-xl p-3.5 shadow-[0_12px_40px_rgba(0,0,0,0.5)]"
       >
-        <h3 class="mb-2.5 text-[10px] uppercase tracking-widest text-gray-600 font-medium">Shortcuts</h3>
-        <div class="space-y-1.5 text-xs">
-          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.04] px-1.5 py-0.5 rounded text-[10px] font-mono">⌘K</kbd><span class="text-gray-500">Palette</span></div>
-          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.04] px-1.5 py-0.5 rounded text-[10px] font-mono">/</kbd><span class="text-gray-500">Search</span></div>
-          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.04] px-1.5 py-0.5 rounded text-[10px] font-mono">Esc</kbd><span class="text-gray-500">Close</span></div>
-          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.04] px-1.5 py-0.5 rounded text-[10px] font-mono">0</kbd><span class="text-gray-500">Fit to screen</span></div>
-          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.04] px-1.5 py-0.5 rounded text-[10px] font-mono">+/-</kbd><span class="text-gray-500">Zoom</span></div>
+        <h3 class="mb-3 text-[9px] font-semibold uppercase tracking-[0.15em] text-gray-500">Shortcuts</h3>
+        <div class="space-y-2 text-xs">
+          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.05] px-1.5 py-0.5 rounded-md text-[10px] font-mono border border-white/[0.06]">⌘K</kbd><span class="text-gray-500">Palette</span></div>
+          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.05] px-1.5 py-0.5 rounded-md text-[10px] font-mono border border-white/[0.06]">/</kbd><span class="text-gray-500">Search</span></div>
+          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.05] px-1.5 py-0.5 rounded-md text-[10px] font-mono border border-white/[0.06]">Esc</kbd><span class="text-gray-500">Close</span></div>
+          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.05] px-1.5 py-0.5 rounded-md text-[10px] font-mono border border-white/[0.06]">0</kbd><span class="text-gray-500">Fit to screen</span></div>
+          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.05] px-1.5 py-0.5 rounded-md text-[10px] font-mono border border-white/[0.06]">+/−</kbd><span class="text-gray-500">Zoom</span></div>
         </div>
       </div>
     </Transition>
@@ -878,6 +878,21 @@ defineExpose({ fitToViewport, panToNode })
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+.help-panel-enter-active {
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.help-panel-leave-active {
+  transition: all 0.12s ease;
+}
+.help-panel-enter-from {
+  opacity: 0;
+  transform: scale(0.95) translateY(-4px);
+}
+.help-panel-leave-to {
+  opacity: 0;
+  transform: scale(0.97);
 }
 
 .status-glow {
