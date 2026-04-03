@@ -36,7 +36,7 @@
         </marker>
       </defs>
 
-      <rect width="100%" height="100%" fill="#0a0a0f" @click="store.selectNode(null)" />
+      <rect width="100%" height="100%" fill="#0a0a0f" @click="clearSelection" />
 
       <g ref="zoomGroupRef">
         <g v-if="store.viewMode !== 'organization'">
@@ -75,7 +75,7 @@
           :width="graphBounds.width + 1000"
           :height="graphBounds.height + 1000"
           fill="url(#grid-cross)"
-          @click="store.selectNode(null)"
+          @click="clearSelection"
         />
 
         <g v-if="store.viewMode !== 'organization'" v-for="band in tierBands" :key="`tier-${band.id}`">
@@ -172,13 +172,13 @@
 
     <ComponentLanding v-if="store.viewMode === 'components'" />
 
-    <div class="absolute left-1/2 top-4 z-40 -translate-x-1/2">
+    <div v-if="!store.presentationMode" class="absolute left-1/2 top-4 z-40 -translate-x-1/2">
       <SearchBar ref="searchBarRef" @pan-to="panToNode" />
     </div>
 
     <Transition name="fade">
       <div
-        v-if="store.editMode && store.viewMode !== 'organization'"
+        v-if="store.editMode && store.editSubmode === 'structure' && store.viewMode !== 'organization' && !store.presentationMode"
         class="absolute left-[272px] top-4 z-40 w-56 rounded-2xl border border-white/[0.08] bg-[#12121a]/92 p-3 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,0,0,0.45)]"
       >
         <div class="mb-2 flex items-center justify-between gap-2">
@@ -229,6 +229,56 @@
 
     <Transition name="fade">
       <div
+        v-if="store.editMode && !store.presentationMode"
+        class="absolute left-1/2 top-4 z-40 -translate-x-1/2 rounded-2xl border border-white/[0.08] bg-[#0e0e18]/95 px-4 py-2 backdrop-blur-md shadow-xl"
+      >
+        <div class="flex items-center gap-3">
+          <span class="text-[9px] font-mono uppercase tracking-[0.18em] text-emerald-400">Editor</span>
+          <span class="rounded-full border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[10px] font-mono text-white">{{ store.editSubmode }}</span>
+          <span class="text-[10px] font-mono text-gray-500">{{ selectionStatus }}</span>
+          <span class="hidden md:inline text-[10px] font-mono text-gray-600">{{ modeHint }}</span>
+        </div>
+      </div>
+    </Transition>
+
+    <Transition name="fade">
+      <div
+        v-if="store.editMode && !store.hasSeenEditWalkthrough && !store.presentationMode"
+        class="absolute left-1/2 top-24 z-40 w-[420px] -translate-x-1/2 rounded-2xl border border-white/[0.08] bg-[#12121a]/96 p-4 backdrop-blur-xl shadow-[0_18px_48px_rgba(0,0,0,0.48)]"
+      >
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="text-[10px] font-mono uppercase tracking-[0.18em] text-emerald-400">Editor Tour</div>
+            <div class="mt-2 text-sm text-white">Inspect keeps the graph safe. Structure lets you move, hide, and layer resources. Connect is for manual links.</div>
+            <div class="mt-2 text-xs leading-relaxed text-gray-400">Select a node to edit it in the side panel, drag nodes only in Structure mode, and use the layer rail for empty-layer drops and reordering.</div>
+          </div>
+          <button
+            class="rounded-lg border border-white/10 px-2 py-1 text-[10px] font-mono text-gray-400 transition hover:bg-white/5 hover:text-white"
+            @click="store.dismissEditWalkthrough()"
+          >
+            Dismiss
+          </button>
+        </div>
+      </div>
+    </Transition>
+
+    <Transition name="fade">
+      <div
+        v-if="store.presentationMode"
+        class="absolute right-4 top-4 z-50 flex items-center gap-2 rounded-xl border border-white/[0.08] bg-[#0e0e18]/95 px-3 py-2 backdrop-blur-md shadow-xl"
+      >
+        <span class="text-[10px] font-mono uppercase tracking-[0.18em] text-emerald-400">Presentation</span>
+        <button
+          class="rounded-lg border border-white/10 px-2 py-1 text-[10px] font-mono text-gray-300 transition hover:bg-white/5 hover:text-white"
+          @click="store.setPresentationMode(false)"
+        >
+          Exit
+        </button>
+      </div>
+    </Transition>
+
+    <Transition name="fade">
+      <div
         v-if="draggingNodeName"
         class="pointer-events-none absolute left-1/2 top-20 z-50 -translate-x-1/2 rounded-xl border border-emerald-400/25 bg-[#0e0e18]/95 px-4 py-2 backdrop-blur-md shadow-xl"
       >
@@ -243,7 +293,7 @@
 
     <Transition name="fade">
       <div
-        v-if="store.activeBreadcrumb.length > 0"
+        v-if="store.activeBreadcrumb.length > 0 && !store.presentationMode"
         class="absolute left-1/2 top-16 z-40 -translate-x-1/2 flex items-center gap-2 rounded-xl border border-white/[0.08] bg-[#0e0e18]/95 px-4 py-2 backdrop-blur-md shadow-xl"
       >
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="1.5" stroke-linecap="round" opacity="0.6">
@@ -266,7 +316,7 @@
 
     <Transition name="fade">
       <div
-        v-if="diffSummaryMeta"
+        v-if="diffSummaryMeta && !store.presentationMode"
         class="absolute left-1/2 top-16 z-40 -translate-x-1/2 flex items-center gap-3 rounded-xl border border-white/[0.08] bg-[#0e0e18]/95 px-4 py-2 backdrop-blur-md shadow-xl"
       >
         <span class="text-[10px] font-mono text-gray-500 tracking-widest uppercase">Diff</span>
@@ -290,9 +340,9 @@
       </div>
     </Transition>
 
-    <Minimap :viewport="viewportRect" @pan-to-position="panToPosition" />
+    <Minimap v-if="!store.presentationMode" :viewport="viewportRect" @pan-to-position="panToPosition" />
 
-    <div class="absolute right-4 top-4 z-30">
+    <div v-if="!store.presentationMode" class="absolute right-4 top-4 z-30">
       <button
         class="flex h-7 w-7 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-xs text-gray-500 hover:text-gray-300 hover:bg-white/[0.06] transition-all backdrop-blur-sm"
         @click="showHelp = !showHelp"
@@ -306,7 +356,7 @@
 
     <Transition name="help-panel">
       <div
-        v-if="showHelp"
+        v-if="showHelp && !store.presentationMode"
         class="absolute right-4 top-14 z-50 w-52 rounded-xl border border-white/[0.08] bg-[#14141e]/95 backdrop-blur-xl p-3.5 shadow-[0_12px_40px_rgba(0,0,0,0.5)]"
       >
         <h3 class="mb-3 text-[9px] font-semibold uppercase tracking-[0.15em] text-gray-500">Shortcuts</h3>
@@ -323,7 +373,7 @@
     </Transition>
 
     <div
-      v-if="edgeTypesInGraph.length"
+      v-if="edgeTypesInGraph.length && !store.presentationMode"
       class="absolute bottom-9 left-3 z-30 rounded-lg border border-white/[0.06] bg-[#0e0e18]/80 px-2.5 py-1.5 backdrop-blur-md"
     >
       <div class="flex items-center gap-3">
@@ -334,9 +384,10 @@
       </div>
     </div>
 
-    <div class="status-glow absolute bottom-7 left-0 right-0 h-px" />
+    <div v-if="!store.presentationMode" class="status-glow absolute bottom-7 left-0 right-0 h-px" />
 
     <div
+      v-if="!store.presentationMode"
       class="absolute bottom-0 left-0 right-0 flex h-7 items-center gap-3 border-t border-white/[0.04] bg-[#0e0e18]/95 backdrop-blur-sm px-4 font-mono text-[10px] text-gray-500"
     >
       <div class="flex items-center gap-1.5 text-gray-400">
@@ -542,6 +593,23 @@ const dragTargetLayerLabel = computed(() => {
   if (!store.dragTargetLayerId) return null
   return layerDefinitions.value.find(layer => layer.id === store.dragTargetLayerId)?.label || store.dragTargetLayerId
 })
+const selectionStatus = computed(() => {
+  if (store.selectedNode) return `selected: ${store.selectedNode.name}`
+  if (store.selectedEdge) return `selected link: ${store.selectedEdge.label || store.selectedEdge.edge_type}`
+  return 'nothing selected'
+})
+const modeHint = computed(() => {
+  switch (store.editSubmode) {
+    case 'inspect':
+      return 'safe mode: review and select items'
+    case 'structure':
+      return 'move nodes, manage layers, add components'
+    case 'connect':
+      return store.connectingFromNodeId ? 'choose a target node to create a link' : 'select a node and start a link'
+    default:
+      return ''
+  }
+})
 
 const viewModeLabel = computed(() => {
   if (store.viewMode === 'architecture') return 'architecture view'
@@ -715,7 +783,11 @@ function onKeydown(e: KeyboardEvent) {
       searchBarRef.value?.focus()
       break
     case 'Escape':
-      store.selectNode(null)
+      if (store.connectingFromNodeId) {
+        store.cancelConnecting()
+      } else {
+        clearSelection()
+      }
       showHelp.value = false
       break
     case '0':
@@ -734,6 +806,10 @@ function onKeydown(e: KeyboardEvent) {
       break
     case '?':
       showHelp.value = !showHelp.value
+      break
+    case 'p':
+    case 'P':
+      store.setPresentationMode(!store.presentationMode)
       break
   }
 }
@@ -768,6 +844,11 @@ function fitToViewport() {
   svgSelection.transition().duration(500).call(zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(scale))
 }
 
+function clearSelection() {
+  store.selectNode(null)
+  store.selectEdge(null)
+}
+
 function recomputeLayout() {
   const allNodes = store.visibleNodes
   const allEdges = store.visibleEdges
@@ -778,7 +859,7 @@ function recomputeLayout() {
 }
 
 function onNodeDragStart(payload: { nodeId: string; clientX: number; clientY: number }) {
-  if (!store.editMode || store.viewMode === 'organization') return
+  if (!store.editMode || store.editSubmode !== 'structure' || store.viewMode === 'organization') return
   store.startDraggingNode(payload.nodeId)
   updateDragTargetFromPointer(payload.clientX, payload.clientY)
 }
