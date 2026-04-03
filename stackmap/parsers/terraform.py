@@ -121,6 +121,53 @@ RESOURCE_CATEGORY_MAP: dict[str, ResourceCategory] = {
     # SES
     "aws_ses_domain_identity": ResourceCategory.INTEGRATION,
     "aws_ses_email_identity": ResourceCategory.INTEGRATION,
+    # MSK (Kafka)
+    "aws_msk_cluster": ResourceCategory.QUEUE,
+    "aws_msk_configuration": ResourceCategory.QUEUE,
+    # OpenSearch / Elasticsearch
+    "aws_opensearch_domain": ResourceCategory.DATABASE,
+    "aws_elasticsearch_domain": ResourceCategory.DATABASE,
+    # Redshift
+    "aws_redshift_cluster": ResourceCategory.DATABASE,
+    "aws_redshift_subnet_group": ResourceCategory.DATABASE,
+    # Glue
+    "aws_glue_catalog_database": ResourceCategory.DATABASE,
+    "aws_glue_crawler": ResourceCategory.INTEGRATION,
+    "aws_glue_job": ResourceCategory.COMPUTE,
+    # Athena
+    "aws_athena_workgroup": ResourceCategory.DATABASE,
+    "aws_athena_named_query": ResourceCategory.DATABASE,
+    # MediaConvert
+    "aws_media_convert_queue": ResourceCategory.INTEGRATION,
+    # Amplify
+    "aws_amplify_app": ResourceCategory.COMPUTE,
+    "aws_amplify_branch": ResourceCategory.COMPUTE,
+    # CodePipeline / CodeBuild
+    "aws_codepipeline": ResourceCategory.INTEGRATION,
+    "aws_codebuild_project": ResourceCategory.COMPUTE,
+    # CloudWatch Alarms (additional)
+    "aws_cloudwatch_dashboard": ResourceCategory.MONITORING,
+    "aws_cloudwatch_composite_alarm": ResourceCategory.MONITORING,
+    # Transfer Family
+    "aws_transfer_server": ResourceCategory.INTEGRATION,
+    # App Runner
+    "aws_apprunner_service": ResourceCategory.COMPUTE,
+    # Backup
+    "aws_backup_vault": ResourceCategory.STORAGE,
+    "aws_backup_plan": ResourceCategory.STORAGE,
+    # Global Accelerator
+    "aws_globalaccelerator_accelerator": ResourceCategory.NETWORK,
+    "aws_globalaccelerator_listener": ResourceCategory.NETWORK,
+    # MQ (RabbitMQ / ActiveMQ)
+    "aws_mq_broker": ResourceCategory.QUEUE,
+    # EFS
+    "aws_efs_file_system": ResourceCategory.STORAGE,
+    "aws_efs_mount_target": ResourceCategory.STORAGE,
+    # CloudMap / Service Discovery
+    "aws_service_discovery_service": ResourceCategory.NETWORK,
+    "aws_service_discovery_private_dns_namespace": ResourceCategory.NETWORK,
+    # X-Ray
+    "aws_xray_sampling_rule": ResourceCategory.MONITORING,
 }
 
 # Tier assignments for layout hints
@@ -179,6 +226,17 @@ WEIGHT_MAP: dict[str, int] = {
     "aws_route53_zone": 3,
     "aws_route53_record": 2,
     "aws_acm_certificate": 2,
+    "aws_msk_cluster": 5,
+    "aws_opensearch_domain": 5,
+    "aws_redshift_cluster": 5,
+    "aws_glue_job": 4,
+    "aws_codepipeline": 4,
+    "aws_codebuild_project": 3,
+    "aws_apprunner_service": 5,
+    "aws_mq_broker": 5,
+    "aws_efs_file_system": 4,
+    "aws_amplify_app": 4,
+    "aws_transfer_server": 4,
 }
 
 # Attribute names to try for human-readable name, in priority order
@@ -613,6 +671,92 @@ RELATIONSHIP_RULES: list[tuple[str, str, EdgeType, str, str | None]] = [
         "pulls from",
         None,
     ),
+    # MSK Cluster → VPC/Subnets
+    (
+        "aws_msk_cluster",
+        "broker_node_group_info.0.client_subnets",
+        EdgeType.REFERENCES,
+        "in subnet",
+        None,
+    ),
+    (
+        "aws_msk_cluster",
+        "broker_node_group_info.0.security_groups",
+        EdgeType.REFERENCES,
+        "secured by",
+        None,
+    ),
+    # OpenSearch → VPC
+    (
+        "aws_opensearch_domain",
+        "vpc_options.0.subnet_ids",
+        EdgeType.REFERENCES,
+        "in subnet",
+        None,
+    ),
+    (
+        "aws_opensearch_domain",
+        "vpc_options.0.security_group_ids",
+        EdgeType.REFERENCES,
+        "secured by",
+        None,
+    ),
+    # Redshift → Subnet Group
+    (
+        "aws_redshift_cluster",
+        "cluster_subnet_group_name",
+        EdgeType.REFERENCES,
+        "in subnet group",
+        None,
+    ),
+    # Redshift → Security Groups
+    (
+        "aws_redshift_cluster",
+        "vpc_security_group_ids",
+        EdgeType.REFERENCES,
+        "secured by",
+        None,
+    ),
+    # ECS Service → Service Discovery
+    (
+        "aws_ecs_service",
+        "service_registries.0.registry_arn",
+        EdgeType.REFERENCES,
+        "registers with",
+        None,
+    ),
+    # Glue Crawler → Glue Database
+    (
+        "aws_glue_crawler",
+        "database_name",
+        EdgeType.REFERENCES,
+        "writes to",
+        "aws_glue_catalog_database",
+    ),
+    # EFS Mount Target → Subnet
+    (
+        "aws_efs_mount_target",
+        "subnet_id",
+        EdgeType.REFERENCES,
+        "in subnet",
+        "aws_subnet",
+    ),
+    # EFS Mount Target → File System
+    (
+        "aws_efs_mount_target",
+        "file_system_id",
+        EdgeType.REFERENCES,
+        "mounts",
+        "aws_efs_file_system",
+    ),
+    # App Runner → ECR
+    (
+        "aws_apprunner_service",
+        "source_configuration.0.image_repository.0.image_identifier",
+        EdgeType.REFERENCES,
+        "pulls from",
+        None,
+    ),
 ]
 
 
@@ -645,6 +789,13 @@ _SECONDARY_RESOURCE_TYPES = {
     "aws_ecr_lifecycle_policy",
     "aws_appsync_resolver",
     "aws_appsync_datasource",
+    "aws_efs_mount_target",
+    "aws_redshift_subnet_group",
+    "aws_msk_configuration",
+    "aws_glue_catalog_database",
+    "aws_amplify_branch",
+    "aws_globalaccelerator_listener",
+    "aws_service_discovery_private_dns_namespace",
 }
 
 
@@ -911,6 +1062,7 @@ class TerraformParser(BaseParser):
         # Pass 3: Parse embedded definitions (Step Functions ASL, IAM policies)
         self._parse_step_function_definitions(nodes, edges, edge_set, arn_index, node_map)
         self._parse_iam_policies(nodes, edges, edge_set, arn_index, id_index, node_map)
+        self._parse_lambda_env_vars(nodes, edges, edge_set, id_index, arn_index, node_map)
 
         # Pass 3.5: mark helper resources for architecture-mode collapse
         self._mark_logical_helpers(nodes, id_index, arn_index)
@@ -1053,6 +1205,205 @@ class TerraformParser(BaseParser):
                                     label=_action_label(actions),
                                 )
                             )
+
+    def _parse_lambda_env_vars(
+        self,
+        nodes: list[StackMapNode],
+        edges: list[StackMapEdge],
+        edge_set: set[tuple[str, str, str]],
+        id_index: dict[str, str],
+        arn_index: dict[str, str],
+        node_map: dict[str, StackMapNode],
+    ) -> None:
+        """Infer relationships from Lambda environment variables.
+
+        Lambda functions often reference other AWS resources via environment
+        variables (table names, bucket names, queue URLs, etc.). This pass
+        detects these references and creates edges.
+        """
+        # Build reverse indexes for common resource identifiers
+        table_name_index: dict[str, str] = {}  # DynamoDB table name -> node_id
+        bucket_name_index: dict[str, str] = {}  # S3 bucket name -> node_id
+        queue_url_index: dict[str, str] = {}  # SQS queue URL parts -> node_id
+        topic_arn_index: dict[str, str] = {}  # SNS topic name -> node_id
+        cluster_index: dict[str, str] = {}  # ECS cluster/MSK name -> node_id
+        api_id_index: dict[str, str] = {}  # API Gateway ID -> node_id
+        secret_name_index: dict[str, str] = {}  # Secrets Manager name -> node_id
+        state_machine_index: dict[str, str] = {}  # Step Functions name/ARN -> node_id
+        opensearch_index: dict[str, str] = {}  # OpenSearch domain -> node_id
+
+        for node in nodes:
+            props = node.properties
+            if node.resource_type == "aws_dynamodb_table":
+                name = props.get("name", "")
+                if name:
+                    table_name_index[name] = node.id
+            elif node.resource_type == "aws_s3_bucket":
+                bucket = props.get("bucket", "")
+                if bucket:
+                    bucket_name_index[bucket] = node.id
+            elif node.resource_type == "aws_sqs_queue":
+                # Queue URL contains the queue name at the end
+                name = props.get("name", "")
+                url = props.get("url", "") or props.get("id", "")
+                if name:
+                    queue_url_index[name] = node.id
+                if url:
+                    queue_url_index[url] = node.id
+            elif node.resource_type == "aws_sns_topic":
+                name = props.get("name", "")
+                arn = props.get("arn", "")
+                if name:
+                    topic_arn_index[name] = node.id
+                if arn:
+                    topic_arn_index[arn] = node.id
+            elif node.resource_type == "aws_secretsmanager_secret":
+                name = props.get("name", "")
+                if name:
+                    secret_name_index[name] = node.id
+            elif node.resource_type == "aws_sfn_state_machine":
+                name = props.get("name", "")
+                arn = props.get("arn", "")
+                if name:
+                    state_machine_index[name] = node.id
+                if arn:
+                    state_machine_index[arn] = node.id
+            elif node.resource_type in ("aws_opensearch_domain", "aws_elasticsearch_domain"):
+                name = props.get("domain_name", "")
+                endpoint = props.get("endpoint", "")
+                if name:
+                    opensearch_index[name] = node.id
+                if endpoint:
+                    opensearch_index[endpoint] = node.id
+            elif node.resource_type in ("aws_msk_cluster",):
+                name = props.get("cluster_name", "")
+                if name:
+                    cluster_index[name] = node.id
+
+        # Env var key patterns that hint at specific resource types
+        _TABLE_KEYS = {"TABLE_NAME", "TABLE", "DYNAMODB_TABLE", "DDB_TABLE", "DB_TABLE"}
+        _BUCKET_KEYS = {"BUCKET", "BUCKET_NAME", "S3_BUCKET", "ASSETS_BUCKET", "UPLOAD_BUCKET", "STORAGE_BUCKET"}
+        _QUEUE_KEYS = {"QUEUE_URL", "QUEUE_NAME", "SQS_QUEUE", "SQS_URL", "QUEUE_ENDPOINT"}
+        _TOPIC_KEYS = {"TOPIC_ARN", "SNS_TOPIC", "SNS_TOPIC_ARN", "NOTIFICATION_TOPIC"}
+        _SECRET_KEYS = {"SECRET_NAME", "SECRET_ARN", "SECRET_ID"}
+        _STATE_MACHINE_KEYS = {"STATE_MACHINE_ARN", "SFN_ARN", "STEP_FUNCTION_ARN"}
+        _API_KEYS = {"API_URL", "API_ENDPOINT", "API_ID", "REST_API_ID"}
+
+        for node in nodes:
+            if node.resource_type not in ("aws_lambda_function", "aws_ecs_task_definition"):
+                continue
+
+            # Extract environment variables
+            env_vars: dict[str, str] = {}
+            if node.resource_type == "aws_lambda_function":
+                env_block = node.properties.get("environment", [])
+                if isinstance(env_block, list):
+                    for block in env_block:
+                        if isinstance(block, dict):
+                            variables = block.get("variables", {})
+                            if isinstance(variables, dict):
+                                env_vars.update(variables)
+                elif isinstance(env_block, dict):
+                    variables = env_block.get("variables", {})
+                    if isinstance(variables, dict):
+                        env_vars.update(variables)
+            elif node.resource_type == "aws_ecs_task_definition":
+                # ECS container definitions have environment blocks
+                container_defs = node.properties.get("container_definitions", "")
+                if isinstance(container_defs, str):
+                    try:
+                        container_defs = json.loads(container_defs)
+                    except (json.JSONDecodeError, TypeError):
+                        container_defs = []
+                if isinstance(container_defs, list):
+                    for container in container_defs:
+                        if isinstance(container, dict):
+                            for env in container.get("environment", []):
+                                if isinstance(env, dict) and "name" in env and "value" in env:
+                                    env_vars[env["name"]] = str(env.get("value", ""))
+
+            if not env_vars:
+                continue
+
+            for key, value in env_vars.items():
+                if not isinstance(value, str) or not value:
+                    continue
+
+                target_id: str | None = None
+                edge_type = EdgeType.REFERENCES
+                label = "env ref"
+
+                key_upper = key.upper()
+
+                # Check explicit key patterns first
+                if any(k in key_upper for k in _TABLE_KEYS):
+                    target_id = table_name_index.get(value)
+                    edge_type = EdgeType.WRITES_TO
+                    label = "uses table"
+                elif any(k in key_upper for k in _BUCKET_KEYS):
+                    target_id = bucket_name_index.get(value)
+                    edge_type = EdgeType.WRITES_TO
+                    label = "uses bucket"
+                elif any(k in key_upper for k in _QUEUE_KEYS):
+                    target_id = queue_url_index.get(value)
+                    edge_type = EdgeType.WRITES_TO
+                    label = "uses queue"
+                elif any(k in key_upper for k in _TOPIC_KEYS):
+                    target_id = topic_arn_index.get(value) or _lookup_target(value, id_index, arn_index)
+                    edge_type = EdgeType.WRITES_TO
+                    label = "publishes to"
+                elif any(k in key_upper for k in _SECRET_KEYS):
+                    target_id = secret_name_index.get(value) or _lookup_target(value, id_index, arn_index)
+                    edge_type = EdgeType.READS_FROM
+                    label = "reads secret"
+                elif any(k in key_upper for k in _STATE_MACHINE_KEYS):
+                    target_id = state_machine_index.get(value) or _lookup_target(value, id_index, arn_index)
+                    edge_type = EdgeType.TRIGGERS
+                    label = "starts execution"
+                elif any(k in key_upper for k in _API_KEYS):
+                    target_id = _lookup_target(value, id_index, arn_index)
+                    edge_type = EdgeType.REFERENCES
+                    label = "calls API"
+                else:
+                    # Generic: try matching value against known resources
+                    # Try ARN match first
+                    if value.startswith("arn:aws:"):
+                        target_id = _lookup_target(value, id_index, arn_index)
+                        if target_id:
+                            target_node = node_map.get(target_id)
+                            if target_node:
+                                if target_node.category in ("database", "storage", "queue"):
+                                    edge_type = EdgeType.WRITES_TO
+                                    label = "env ref"
+                                elif target_node.category in ("compute", "integration"):
+                                    edge_type = EdgeType.TRIGGERS
+                                    label = "env ref"
+                    else:
+                        # Try table/bucket/queue name match (only for unambiguous values)
+                        target_id = (
+                            table_name_index.get(value)
+                            or bucket_name_index.get(value)
+                            or queue_url_index.get(value)
+                        )
+                        if target_id:
+                            target_node = node_map.get(target_id)
+                            if target_node:
+                                edge_type = EdgeType.WRITES_TO
+                                label = f"env:{key.lower()}"
+
+                if target_id and target_id != node.id:
+                    edge_key = (node.id, target_id, edge_type.value)
+                    if edge_key not in edge_set:
+                        edge_set.add(edge_key)
+                        edges.append(
+                            StackMapEdge(
+                                id=f"{node.id}->{target_id}",
+                                source=node.id,
+                                target=target_id,
+                                edge_type=edge_type,
+                                label=label,
+                            )
+                        )
 
     def _extract_groups(
         self,
@@ -1286,6 +1637,32 @@ class TerraformParser(BaseParser):
             if node.resource_type == "aws_appsync_resolver":
                 api_id = attrs.get("api_id", "")
                 parent_id = _lookup_target(api_id, id_index, arn_index)
+                _assign(node, parent_id)
+                continue
+
+            if node.resource_type == "aws_efs_mount_target":
+                fs_id = attrs.get("file_system_id", "")
+                parent_id = _lookup_target(fs_id, id_index, arn_index)
+                _assign(node, parent_id)
+                continue
+
+            if node.resource_type == "aws_redshift_subnet_group":
+                _assign(node, None)
+                continue
+
+            if node.resource_type == "aws_msk_configuration":
+                _assign(node, None)
+                continue
+
+            if node.resource_type == "aws_amplify_branch":
+                app_id = attrs.get("app_id", "")
+                parent_id = _lookup_target(app_id, id_index, arn_index)
+                _assign(node, parent_id)
+                continue
+
+            if node.resource_type == "aws_globalaccelerator_listener":
+                acc_arn = attrs.get("accelerator_arn", "")
+                parent_id = _lookup_target(acc_arn, id_index, arn_index)
                 _assign(node, parent_id)
                 continue
 
