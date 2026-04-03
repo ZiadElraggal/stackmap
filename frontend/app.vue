@@ -72,16 +72,30 @@ function onFit() {
   /* StackMap Design Tokens */
   --sm-bg: #0a0a0f;
   --sm-surface: #12121a;
+  --sm-surface-raised: #16161f;
   --sm-border: rgba(255, 255, 255, 0.06);
   --sm-border-hover: rgba(255, 255, 255, 0.10);
+  --sm-border-subtle: rgba(255, 255, 255, 0.04);
   --sm-primary: #4ADE80;
   --sm-primary-glow: rgba(74, 222, 128, 0.15);
   --sm-secondary: #38BDF8;
   --sm-tertiary: #C084FC;
   --sm-warning: #FB923C;
+  --sm-danger: #ef4444;
+  --sm-danger-muted: rgba(239, 68, 68, 0.6);
   --sm-text: #f5f5f7;
   --sm-text-muted: rgba(245, 245, 247, 0.5);
+  --sm-text-faint: rgba(245, 245, 247, 0.3);
   --sm-terminal-bg: #0d0d14;
+  --sm-spacing-unit: 8px;
+  --sm-radius-sm: 6px;
+  --sm-radius-md: 10px;
+  --sm-radius-lg: 16px;
+  --sm-transition-fast: 120ms ease-out;
+  --sm-transition-normal: 180ms ease-out;
+  --sm-shadow-panel: 0 1px 3px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  --sm-shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --sm-shadow-overlay: 0 24px 64px rgba(0, 0, 0, 0.55);
 }
 
 html, body {

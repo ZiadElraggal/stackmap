@@ -771,19 +771,27 @@ onUnmounted(() => {
 }
 
 .graph-node:hover .outer-shell {
-  stroke: color-mix(in srgb, var(--node-color) 40%, transparent);
-  stroke-width: 2;
-  filter: drop-shadow(0 0 16px color-mix(in srgb, var(--node-color) 25%, transparent));
+  stroke: color-mix(in srgb, var(--node-color) 35%, transparent);
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--node-color) 18%, transparent));
+}
+
+.graph-node:hover .inner-shell {
+  fill: #0e0e16;
 }
 
 .graph-node:hover .accent-bar {
-  filter: drop-shadow(0 0 6px var(--node-color));
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--node-color) 50%, transparent));
 }
 
 .graph-node.selected .outer-shell {
-  stroke: color-mix(in srgb, var(--node-color) 80%, transparent);
-  stroke-width: 2;
-  filter: drop-shadow(0 0 20px color-mix(in srgb, var(--node-color) 30%, transparent));
+  stroke: color-mix(in srgb, var(--node-color) 60%, transparent);
+  stroke-width: 1.8;
+  filter: drop-shadow(0 0 16px color-mix(in srgb, var(--node-color) 22%, transparent));
+}
+
+.graph-node.selected .inner-shell {
+  fill: #0f0f18;
 }
 
 .diff-glow {

@@ -26,12 +26,14 @@
         </button>
       </div>
 
-      <!-- Actions -->
+      <!-- Actions — grouped by domain -->
       <template v-if="!store.connectingFromNodeId">
-        <div class="hidden md:flex items-center rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-gray-500">
-          Drag nodes between layers
+        <div class="hidden md:flex items-center rounded-md border border-white/[0.06] bg-white/[0.03] px-2.5 py-1 text-[9px] font-mono uppercase tracking-[0.15em] text-gray-600">
+          Drag to reorder
         </div>
 
+        <!-- Node actions -->
+        <span class="h-4 w-px bg-white/[0.08]" />
         <button
           class="edit-btn"
           title="Add a custom component"
@@ -41,6 +43,8 @@
           <span>Add Node</span>
         </button>
 
+        <!-- Layout actions -->
+        <span class="h-4 w-px bg-white/[0.08]" />
         <button
           class="edit-btn"
           title="Re-arrange the graph after edits"
@@ -64,6 +68,8 @@
           <span>Layers</span>
         </button>
 
+        <!-- Global actions -->
+        <span class="h-4 w-px bg-white/[0.08]" />
         <button
           v-if="store.hiddenNodeIds.length > 0"
           class="edit-btn"
@@ -75,7 +81,7 @@
 
         <button
           v-if="hasAnyEdits"
-          class="edit-btn text-red-400 hover:!bg-red-500/15"
+          class="edit-btn text-red-400/80 hover:!text-red-400 hover:!bg-red-500/10"
           @click="store.clearAllEdits()"
         >
           <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h9M4.5 4V3a1 1 0 011-1h2a1 1 0 011 1v1M5.5 6v4M7.5 6v4"/><path d="M3 4l.5 7a1 1 0 001 1h4a1 1 0 001-1L10 4"/></svg>
@@ -369,8 +375,17 @@ watch(selectedTemplate, template => {
 
 <style scoped>
 .edit-btn {
-  @apply flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-mono text-gray-300 transition;
-  @apply hover:bg-white/5 hover:text-white;
+  @apply flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-mono text-gray-400 transition-all duration-150;
+  @apply hover:bg-white/[0.06] hover:text-white active:scale-[0.97];
+}
+
+.edit-btn svg {
+  opacity: 0.7;
+  transition: opacity 150ms ease;
+}
+
+.edit-btn:hover svg {
+  opacity: 1;
 }
 
 .slide-up-enter-active {
@@ -388,11 +403,19 @@ watch(selectedTemplate, template => {
   transform: translate(-50%, 10px);
 }
 
-.fade-enter-active, .fade-leave-active {
-  transition: opacity 0.15s ease;
+.fade-enter-active {
+  transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.fade-enter-from, .fade-leave-to {
+.fade-leave-active {
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+.fade-enter-from {
   opacity: 0;
+  transform: scale(0.97) translateY(4px);
+}
+.fade-leave-to {
+  opacity: 0;
+  transform: scale(0.98);
 }
 
 select option {

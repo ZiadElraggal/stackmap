@@ -4,23 +4,23 @@
       'fixed left-0 top-0 h-full border-r z-40 transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] flex flex-col',
       collapsed ? 'w-10' : 'w-64',
     ]"
-    style="backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); background: rgba(18, 18, 26, 0.92); border-color: var(--sm-border)"
+    style="backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); background: rgba(18, 18, 26, 0.94); border-color: var(--sm-border); box-shadow: 1px 0 8px rgba(0,0,0,0.2)"
   >
     <button
-      class="h-9 flex items-center justify-center text-gray-500 hover:text-gray-300 border-b border-white/[0.06] text-xs transition-colors"
+      class="h-10 flex items-center justify-center text-gray-500 hover:text-gray-300 border-b border-white/[0.06] text-xs transition-all duration-150 hover:bg-white/[0.03]"
       @click="collapsed = !collapsed"
     >
       <svg
         width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"
         class="transition-transform duration-200" :class="collapsed ? '' : 'rotate-180'"
       ><path d="M5 3l4 4-4 4"/></svg>
-      <span v-if="!collapsed" class="ml-1.5 tracking-wide">Filters</span>
+      <span v-if="!collapsed" class="ml-1.5 tracking-wide font-medium">Filters</span>
     </button>
 
-    <div v-if="!collapsed" class="flex-1 overflow-y-auto p-3 transition-opacity duration-150 opacity-100">
-      <section class="pb-4 border-b border-white/5">
-        <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">View</h3>
-        <div class="inline-flex rounded border border-white/10 overflow-hidden text-xs">
+    <div v-if="!collapsed" class="flex-1 overflow-y-auto p-4 transition-opacity duration-150 opacity-100">
+      <section class="pb-4 border-b border-white/[0.05]">
+        <h3 class="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500 mb-2.5">View</h3>
+        <div class="inline-flex rounded-lg border border-white/10 overflow-hidden text-xs">
           <button
             v-if="store.shouldUseComponentLanding || store.activeAccountId"
             class="px-2 py-1 transition"
@@ -58,13 +58,13 @@
         </div>
       </section>
 
-      <section class="py-4 border-b border-white/5">
-        <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">Categories</h3>
-        <div class="space-y-1">
+      <section class="py-4 border-b border-white/[0.05]">
+        <h3 class="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500 mb-2.5">Categories</h3>
+        <div class="space-y-0.5">
           <button
             v-for="cat in categories"
             :key="cat.name"
-            class="w-full flex items-center gap-2 text-xs cursor-pointer hover:bg-white/5 rounded px-1 py-1"
+            class="w-full flex items-center gap-2.5 text-xs cursor-pointer hover:bg-white/[0.04] rounded-md px-2 py-1.5 transition-all duration-150"
             @click="store.toggleCategory(cat.name)"
           >
             <span class="icon-wrap" :style="{ color: cat.color }">
@@ -81,8 +81,8 @@
         </div>
       </section>
 
-      <section class="py-4 border-b border-white/5">
-        <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">Min importance</h3>
+      <section class="py-4 border-b border-white/[0.05]">
+        <h3 class="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500 mb-2.5">Min importance</h3>
         <svg
           ref="sliderRef"
           class="w-full h-7 cursor-pointer"
@@ -106,8 +106,8 @@
         </div>
       </section>
 
-      <section v-if="store.graphGroups.length > 0" class="py-4 border-b border-white/5">
-        <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">Groups</h3>
+      <section v-if="store.graphGroups.length > 0" class="py-4 border-b border-white/[0.05]">
+        <h3 class="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500 mb-2.5">Groups</h3>
         <div class="space-y-1">
           <div
             v-for="group in topGroups"
@@ -122,7 +122,7 @@
         </div>
       </section>
 
-      <section v-if="store.hasOrganizationData" class="py-4 border-b border-white/5">
+      <section v-if="store.hasOrganizationData" class="py-4 border-b border-white/[0.05]">
         <div class="flex items-center justify-between mb-2">
           <div class="flex items-center gap-1.5">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.7">
@@ -197,8 +197,8 @@
         </div>
       </section>
 
-      <section v-if="store.hasOrganizationData" class="py-4 border-b border-white/5">
-        <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">Cross-account</h3>
+      <section v-if="store.hasOrganizationData" class="py-4 border-b border-white/[0.05]">
+        <h3 class="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500 mb-2.5">Cross-account</h3>
         <button
           class="w-full flex items-center justify-between text-xs rounded px-2 py-1 transition hover:bg-white/5"
           @click="store.setShowCrossAccountEdges(!store.showCrossAccountEdges)"
@@ -210,8 +210,8 @@
         </button>
       </section>
 
-      <section v-if="store.shouldUseComponentLanding || store.activeComponentId" class="py-4 border-b border-white/5">
-        <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">Components</h3>
+      <section v-if="store.shouldUseComponentLanding || store.activeComponentId" class="py-4 border-b border-white/[0.05]">
+        <h3 class="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500 mb-2.5">Components</h3>
         <div class="space-y-2">
           <button
             class="w-full flex items-center justify-between text-xs rounded px-2 py-1 transition hover:bg-white/5"
@@ -245,7 +245,7 @@
 
       <section class="pt-4">
         <button
-          class="w-full text-xs text-gray-500 hover:text-gray-300 border border-white/[0.08] rounded-md px-2 py-1.5 transition-all hover:bg-white/[0.03] active:scale-[0.98]"
+          class="w-full text-xs text-gray-500 hover:text-gray-300 border border-white/[0.08] rounded-lg px-2.5 py-2 transition-all duration-150 hover:bg-white/[0.04] hover:border-white/[0.12] active:scale-[0.98]"
           @click="resetFilters"
         >
           Reset all filters
