@@ -69,7 +69,7 @@
           <span>View</span>
           <span class="section-heading__meta">{{ sourceLabel }}</span>
         </div>
-        <div class="inline-flex rounded-xl border border-white/[0.08] overflow-hidden text-xs bg-black/20">
+        <div class="grid grid-cols-2 gap-2 text-xs">
           <button
             v-if="store.shouldUseComponentLanding || store.activeAccountId"
             class="view-btn"
@@ -86,7 +86,7 @@
             Architecture
           </button>
           <button
-            class="view-btn border-l border-white/10"
+            class="view-btn"
             :class="store.viewMode === 'raw' ? 'view-btn--active' : 'view-btn--inactive'"
             @click="store.setViewMode('raw')"
           >
@@ -94,7 +94,7 @@
           </button>
           <button
             v-if="store.hasOrganizationData"
-            class="view-btn border-l border-white/10 flex items-center gap-1"
+            class="view-btn flex items-center gap-1"
             :class="store.viewMode === 'organization' ? 'view-btn--active' : 'view-btn--inactive'"
             @click="store.setViewMode('organization')"
           >
@@ -617,6 +617,13 @@ function onOrgTreeClick(item: { id: string; account_id?: string }) {
 }
 
 .view-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
   padding: 7px 10px;
   transition: background-color 150ms ease, color 150ms ease;
 }

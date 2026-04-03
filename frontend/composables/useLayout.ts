@@ -4,6 +4,15 @@ import type { StackMapNode, StackMapEdge, StackMapGroup, NodePosition } from '~/
 
 const LAYOUT_EDGE_TYPES = new Set(['triggers', 'writes_to', 'reads_from', 'routes_to'])
 
+function compareNodesWithinTier(a: StackMapNode, b: StackMapNode): number {
+  const ao = a.position_hint?.manual_order
+  const bo = b.position_hint?.manual_order
+  if (typeof ao === 'number' && typeof bo === 'number' && ao !== bo) return ao - bo
+  if (typeof ao === 'number') return -1
+  if (typeof bo === 'number') return 1
+  return a.name.localeCompare(b.name)
+}
+
 function resolveLayerOrder(nodes: StackMapNode[], layerOrder?: string[]): string[] {
   const presentTiers = new Set(nodes.map(node => node.position_hint?.tier || 'compute'))
   const base = (layerOrder && layerOrder.length ? [...layerOrder] : ['frontend', 'api', 'serverless', 'compute', 'security', 'data'])
@@ -135,7 +144,7 @@ export function useLayout() {
         ? (nodes.length > 60 ? 148 : 122)
         : (nodes.length > 60 ? 200 : 160)
       for (const tier of resolvedLayerOrder) {
-        const tierNodes = (byTier.get(tier) || []).sort((a, b) => a.name.localeCompare(b.name))
+        const tierNodes = (byTier.get(tier) || []).sort(compareNodesWithinTier)
         const tierWidth = tierNodes.length * rowGap
         tierNodes.forEach((node, idx) => {
           if (!positions[node.id]) {
@@ -155,7 +164,7 @@ export function useLayout() {
     for (const tier of resolvedLayerOrder) {
       const tierNodes = (byTier.get(tier) || [])
         .filter(n => positions[n.id])
-        .sort((a, b) => positions[a.id].x - positions[b.id].x)
+        .sort(compareNodesWithinTier)
 
       for (let i = 1; i < tierNodes.length; i++) {
         const prev = tierNodes[i - 1]
@@ -206,6 +215,16 @@ export function useLayout() {
           }
         }
       }
+    }
+
+    for (const tier of resolvedLayerOrder) {
+      const tierNodes = (byTier.get(tier) || []).filter(node => positions[node.id])
+      if (tierNodes.length < 2) continue
+      const desiredOrder = [...tierNodes].sort(compareNodesWithinTier)
+      const xSlots = tierNodes.map(node => positions[node.id].x).sort((a, b) => a - b)
+      desiredOrder.forEach((node, index) => {
+        positions[node.id].x = xSlots[index]
+      })
     }
 
     return positions
@@ -297,7 +316,7 @@ export function useLayout() {
       const ta = rank[a.position_hint?.tier || 'compute'] ?? 99
       const tb = rank[b.position_hint?.tier || 'compute'] ?? 99
       if (ta !== tb) return ta - tb
-      return a.name.localeCompare(b.name)
+      return compareNodesWithinTier(a, b)
     })
   }
 

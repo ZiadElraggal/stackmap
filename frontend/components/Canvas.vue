@@ -179,13 +179,18 @@
     <Transition name="fade">
       <div
         v-if="store.editMode && store.editSubmode === 'structure' && store.viewMode !== 'organization' && !store.presentationMode"
-        class="absolute left-[272px] top-4 z-40 w-56 rounded-2xl border border-white/[0.08] bg-[#12121a]/92 p-3 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,0,0,0.45)]"
+        class="absolute z-50 w-56 rounded-2xl border border-white/[0.08] bg-[#12121a]/92 p-3 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,0,0,0.45)]"
+        :style="layerRailStyle"
       >
-        <div class="mb-2 flex items-center justify-between gap-2">
+        <div
+          class="mb-2 flex cursor-move items-center justify-between gap-2 rounded-xl border border-white/[0.06] bg-white/[0.03] px-2.5 py-2"
+          @pointerdown="onLayerRailPointerDown"
+        >
           <div>
             <div class="text-[9px] font-semibold uppercase tracking-[0.15em] text-gray-500">Layers</div>
             <div class="mt-1 text-[11px] text-gray-400">Drag rows to reorder. Drop nodes onto any row.</div>
           </div>
+          <span class="select-none text-xs font-mono text-gray-600">move</span>
         </div>
 
         <div class="space-y-1.5">
@@ -351,7 +356,7 @@
 
     <Transition name="fade">
       <div
-        v-if="store.editMode && store.editSubmode === 'connect' && !store.presentationMode"
+        v-if="store.editMode && store.editSubmode === 'connect' && !store.presentationMode && showConnectHint"
         class="absolute left-1/2 top-[7.75rem] z-40 w-[460px] max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-2xl border border-amber-400/18 bg-[#12121a]/96 p-4 backdrop-blur-xl shadow-[0_18px_48px_rgba(0,0,0,0.45)]"
       >
         <div class="flex items-start justify-between gap-3">
@@ -364,12 +369,20 @@
               Manual links appear in the side panel after creation, where you can rename them, recolor them, and set whether they represent request flow, events, data access, auth, or a generic relationship.
             </div>
           </div>
-          <button
-            class="rounded-lg border border-white/10 px-2 py-1 text-[10px] font-mono text-gray-400 transition hover:bg-white/5 hover:text-white"
-            @click="store.cancelConnecting()"
-          >
-            Cancel
-          </button>
+          <div class="flex items-start gap-2">
+            <button
+              class="rounded-lg border border-white/10 px-2 py-1 text-[10px] font-mono text-gray-400 transition hover:bg-white/5 hover:text-white"
+              @click="dismissConnectHint"
+            >
+              Hide hint
+            </button>
+            <button
+              class="rounded-lg border border-white/10 px-2 py-1 text-[10px] font-mono text-gray-400 transition hover:bg-white/5 hover:text-white"
+              @click="store.cancelConnecting()"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
         <div class="mt-3 flex flex-wrap gap-2">
           <span
@@ -861,6 +874,10 @@ const connectHints = computed(() =>
     color: EDGE_COLORS[type.id] || '#94a3b8',
   }))
 )
+const showConnectHint = ref(true)
+const layerRailPosition = ref({ x: 0, y: 152 })
+const layerRailDragOffset = ref({ x: 0, y: 0 })
+const draggingLayerRail = ref(false)
 const showLayerEditor = ref(false)
 const editingLayerId = ref<string | null>(null)
 const layerEditLabel = ref('')
@@ -869,6 +886,10 @@ const layerEditAccent = ref('#4ADE80')
 const editingLayer = computed(() =>
   editingLayerId.value ? store.customLayers.find(layer => layer.id === editingLayerId.value) || null : null
 )
+const layerRailStyle = computed(() => ({
+  left: `${layerRailPosition.value.x}px`,
+  top: `${layerRailPosition.value.y}px`,
+}))
 
 function tierBandOpacity(bandName: string): number {
   if (store.dragTargetLayerId) return store.dragTargetLayerId === bandName ? 0.95 : 0.36
@@ -974,11 +995,13 @@ onMounted(async () => {
 
   window.addEventListener('keydown', onKeydown)
   window.addEventListener('stackmap-fit-view', onFitViewEvent)
+  initializeLayerRailPosition()
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('stackmap-fit-view', onFitViewEvent)
+  stopLayerRailDrag()
 })
 
 watch(
@@ -1001,8 +1024,36 @@ watch(
   }
 )
 
+watch(
+  () => [store.editSubmode, store.connectingFromNodeId],
+  ([submode, connectingFromNodeId], [prevSubmode, prevConnectingFromNodeId]) => {
+    if (submode !== 'connect') {
+      showConnectHint.value = true
+      return
+    }
+    if (prevSubmode !== 'connect' || connectingFromNodeId !== prevConnectingFromNodeId) {
+      showConnectHint.value = true
+    }
+  }
+)
+
 function onFitViewEvent() {
   fitToViewport()
+}
+
+function dismissConnectHint() {
+  showConnectHint.value = false
+}
+
+function initializeLayerRailPosition() {
+  const container = containerRef.value
+  if (!container) return
+  const width = container.clientWidth || 1200
+  const maxX = Math.max(16, width - 240)
+  layerRailPosition.value = {
+    x: Math.min(maxX, Math.max(Math.floor(width * 0.72), width - 280)),
+    y: 152,
+  }
 }
 
 function onKeydown(e: KeyboardEvent) {
@@ -1140,8 +1191,39 @@ async function onNodeDragEnd(payload: { nodeId: string; clientX: number; clientY
   updateDragTargetFromPointer(payload.clientX, payload.clientY)
   const targetLayerId = store.dragTargetLayerId
   store.finishDraggingNode(targetLayerId)
+  if (targetLayerId) {
+    reorderNodeWithinLayer(payload.nodeId, targetLayerId, payload.clientX, payload.clientY)
+  }
   await nextTick()
   fitToViewport()
+}
+
+function reorderNodeWithinLayer(nodeId: string, layerId: string, clientX: number, clientY: number) {
+  const graphPoint = graphPointFromClient(clientX, clientY)
+  if (!graphPoint) return
+  const peerNodes = store.visibleNodes
+    .filter(node => node.id !== nodeId && (node.position_hint?.tier || 'compute') === layerId)
+    .sort((a, b) => (store.positions[a.id]?.x || 0) - (store.positions[b.id]?.x || 0))
+
+  const orderedIds = peerNodes.map(node => node.id)
+  const insertionIndex = peerNodes.findIndex(node => graphPoint.x < (store.positions[node.id]?.x || 0))
+  if (insertionIndex === -1) {
+    orderedIds.push(nodeId)
+  } else {
+    orderedIds.splice(insertionIndex, 0, nodeId)
+  }
+  store.reorderNodesWithinLayer(orderedIds, layerId)
+}
+
+function graphPointFromClient(clientX: number, clientY: number) {
+  const svg = svgRef.value
+  if (!svg || !zoomGroupRef.value || !zoomBehavior) return null
+  const screenPoint = svg.createSVGPoint()
+  screenPoint.x = clientX
+  screenPoint.y = clientY
+  const zoomMatrix = zoomGroupRef.value.getScreenCTM()
+  if (!zoomMatrix) return null
+  return screenPoint.matrixTransform(zoomMatrix.inverse())
 }
 
 function updateDragTargetFromPointer(clientX: number, clientY: number) {
@@ -1152,16 +1234,8 @@ function updateDragTargetFromPointer(clientX: number, clientY: number) {
     return
   }
 
-  const svg = svgRef.value
-  if (!svg || !zoomGroupRef.value || !zoomBehavior) return
-  const screenPoint = svg.createSVGPoint()
-  screenPoint.x = 0
-  screenPoint.y = clientY
-
-  const zoomMatrix = zoomGroupRef.value.getScreenCTM()
-  if (!zoomMatrix) return
-
-  const graphPoint = screenPoint.matrixTransform(zoomMatrix.inverse())
+  const graphPoint = graphPointFromClient(clientX, clientY)
+  if (!graphPoint) return
   const targetBand = tierBands.value.find(band => graphPoint.y >= band.yStart && graphPoint.y <= band.yEnd)
   if (targetBand) {
     store.setDragTargetLayer(targetBand.id)
@@ -1174,6 +1248,40 @@ function updateDragTargetFromPointer(clientX: number, clientY: number) {
     return Math.abs(aCenter - graphPoint.y) - Math.abs(bCenter - graphPoint.y)
   })[0]
   store.setDragTargetLayer(nearestBand?.id || null)
+}
+
+function onLayerRailPointerDown(event: PointerEvent) {
+  if (event.button !== 0) return
+  const container = containerRef.value
+  if (!container) return
+  const rect = container.getBoundingClientRect()
+  draggingLayerRail.value = true
+  layerRailDragOffset.value = {
+    x: event.clientX - rect.left - layerRailPosition.value.x,
+    y: event.clientY - rect.top - layerRailPosition.value.y,
+  }
+  window.addEventListener('pointermove', onLayerRailPointerMove)
+  window.addEventListener('pointerup', stopLayerRailDrag)
+  window.addEventListener('pointercancel', stopLayerRailDrag)
+}
+
+function onLayerRailPointerMove(event: PointerEvent) {
+  const container = containerRef.value
+  if (!container || !draggingLayerRail.value) return
+  const rect = container.getBoundingClientRect()
+  const nextX = event.clientX - rect.left - layerRailDragOffset.value.x
+  const nextY = event.clientY - rect.top - layerRailDragOffset.value.y
+  layerRailPosition.value = {
+    x: Math.min(Math.max(16, nextX), Math.max(16, rect.width - 240)),
+    y: Math.min(Math.max(16, nextY), Math.max(16, rect.height - 220)),
+  }
+}
+
+function stopLayerRailDrag() {
+  draggingLayerRail.value = false
+  window.removeEventListener('pointermove', onLayerRailPointerMove)
+  window.removeEventListener('pointerup', stopLayerRailDrag)
+  window.removeEventListener('pointercancel', stopLayerRailDrag)
 }
 
 function onLayerRailDragStart(event: DragEvent, layerId: string) {
