@@ -37,7 +37,7 @@
       "tagging"
     ],
     "auth_mode": "explicit multi-account via AWS profiles",
-    "scanned_at": "2026-04-03T05:02:50.360345+00:00",
+    "scanned_at": "2026-04-03T05:35:19.824611+00:00",
     "source_path": "multi.json"
   },
   "nodes": [
@@ -350,17 +350,17 @@
       }
     },
     {
-      "id": "aws:931112879148:us-east-1:aws_subnet:subnet-00a18c76d1ca51a82",
-      "name": "subnet-00a18c76d1ca51a82",
+      "id": "aws:931112879148:us-east-1:aws_subnet:subnet-0cc4f2dce4f84b502",
+      "name": "subnet-0cc4f2dce4f84b502",
       "resource_type": "aws_subnet",
       "provider": "aws",
       "category": "network",
       "properties": {
-        "id": "subnet-00a18c76d1ca51a82",
-        "arn": "arn:aws:ec2:us-east-1:931112879148:subnet/subnet-00a18c76d1ca51a82",
+        "id": "subnet-0cc4f2dce4f84b502",
+        "arn": "arn:aws:ec2:us-east-1:931112879148:subnet/subnet-0cc4f2dce4f84b502",
         "vpc_id": "vpc-0981b92ab94523e98",
-        "cidr_block": "172.31.32.0/20",
-        "availability_zone": "us-east-1d"
+        "cidr_block": "172.31.80.0/20",
+        "availability_zone": "us-east-1b"
       },
       "tags": {},
       "metadata": {
@@ -379,17 +379,17 @@
       }
     },
     {
-      "id": "aws:931112879148:us-east-1:aws_subnet:subnet-0cc4f2dce4f84b502",
-      "name": "subnet-0cc4f2dce4f84b502",
+      "id": "aws:931112879148:us-east-1:aws_subnet:subnet-00a18c76d1ca51a82",
+      "name": "subnet-00a18c76d1ca51a82",
       "resource_type": "aws_subnet",
       "provider": "aws",
       "category": "network",
       "properties": {
-        "id": "subnet-0cc4f2dce4f84b502",
-        "arn": "arn:aws:ec2:us-east-1:931112879148:subnet/subnet-0cc4f2dce4f84b502",
+        "id": "subnet-00a18c76d1ca51a82",
+        "arn": "arn:aws:ec2:us-east-1:931112879148:subnet/subnet-00a18c76d1ca51a82",
         "vpc_id": "vpc-0981b92ab94523e98",
-        "cidr_block": "172.31.80.0/20",
-        "availability_zone": "us-east-1b"
+        "cidr_block": "172.31.32.0/20",
+        "availability_zone": "us-east-1d"
       },
       "tags": {},
       "metadata": {
@@ -3012,15 +3012,15 @@
       "label": "in vpc"
     },
     {
-      "id": "aws:931112879148:us-east-1:aws_subnet:subnet-00a18c76d1ca51a82->aws:931112879148:us-east-1:aws_vpc:vpc-0981b92ab94523e98:references",
-      "source": "aws:931112879148:us-east-1:aws_subnet:subnet-00a18c76d1ca51a82",
+      "id": "aws:931112879148:us-east-1:aws_subnet:subnet-0cc4f2dce4f84b502->aws:931112879148:us-east-1:aws_vpc:vpc-0981b92ab94523e98:references",
+      "source": "aws:931112879148:us-east-1:aws_subnet:subnet-0cc4f2dce4f84b502",
       "target": "aws:931112879148:us-east-1:aws_vpc:vpc-0981b92ab94523e98",
       "edge_type": "references",
       "label": "in vpc"
     },
     {
-      "id": "aws:931112879148:us-east-1:aws_subnet:subnet-0cc4f2dce4f84b502->aws:931112879148:us-east-1:aws_vpc:vpc-0981b92ab94523e98:references",
-      "source": "aws:931112879148:us-east-1:aws_subnet:subnet-0cc4f2dce4f84b502",
+      "id": "aws:931112879148:us-east-1:aws_subnet:subnet-00a18c76d1ca51a82->aws:931112879148:us-east-1:aws_vpc:vpc-0981b92ab94523e98:references",
+      "source": "aws:931112879148:us-east-1:aws_subnet:subnet-00a18c76d1ca51a82",
       "target": "aws:931112879148:us-east-1:aws_vpc:vpc-0981b92ab94523e98",
       "edge_type": "references",
       "label": "in vpc"
@@ -3462,8 +3462,8 @@
         "aws:931112879148:us-east-1:aws_vpc:vpc-0910f7b4d4afa2ee2",
         "aws:931112879148:us-east-1:aws_vpc:vpc-0981b92ab94523e98",
         "aws:931112879148:us-east-1:aws_subnet:subnet-0a835f0e11cbdd752",
-        "aws:931112879148:us-east-1:aws_subnet:subnet-00a18c76d1ca51a82",
         "aws:931112879148:us-east-1:aws_subnet:subnet-0cc4f2dce4f84b502",
+        "aws:931112879148:us-east-1:aws_subnet:subnet-00a18c76d1ca51a82",
         "aws:931112879148:us-east-1:aws_subnet:subnet-0e7de86ef0747e839",
         "aws:931112879148:us-east-1:aws_subnet:subnet-04557b9eae754148a",
         "aws:931112879148:us-east-1:aws_subnet:subnet-0516787cdd73b2f9d",
