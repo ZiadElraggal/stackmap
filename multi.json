@@ -37,7 +37,7 @@
       "tagging"
     ],
     "auth_mode": "explicit multi-account via AWS profiles",
-    "scanned_at": "2026-04-03T03:36:02.200494+00:00",
+    "scanned_at": "2026-04-03T03:48:36.416252+00:00",
     "source_path": "multi.json"
   },
   "nodes": [

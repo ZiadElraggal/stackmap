@@ -43,6 +43,18 @@
           <span>Add Node</span>
         </button>
 
+        <button
+          class="edit-btn"
+          title="Create a new architecture layer"
+          @click="showAddLayerDialog = true"
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 4h9M2 6.5h9M2 9h9"/>
+            <path d="M10 2.5v3M8.5 4h3"/>
+          </svg>
+          <span>Add Layer</span>
+        </button>
+
         <!-- Layout actions -->
         <span class="h-4 w-px bg-white/[0.08]" />
         <button
@@ -54,18 +66,6 @@
             <path d="M2 3.5h4M2 9.5h9M7 3.5l1.5-1.5M7 3.5L8.5 5M9 9.5l1.5-1.5M9 9.5l1.5 1.5"/>
           </svg>
           <span>Reflow</span>
-        </button>
-
-        <button
-          class="edit-btn"
-          title="Reorder architecture layers"
-          @click="showLayersDialog = true"
-        >
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-            <path d="M3 3.5h7M3 6.5h7M3 9.5h7"/>
-            <path d="M1.5 3.5h.01M1.5 6.5h.01M1.5 9.5h.01"/>
-          </svg>
-          <span>Layers</span>
         </button>
 
         <!-- Global actions -->
@@ -129,76 +129,6 @@
       >
         Done
       </button>
-    </div>
-  </Transition>
-
-  <Transition name="fade">
-    <div
-      v-if="showLayersDialog"
-      class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      @click.self="showLayersDialog = false"
-    >
-      <div class="w-[420px] rounded-2xl border border-white/10 bg-[#12121a] p-6 shadow-[0_30px_80px_rgba(0,0,0,0.5)]">
-        <div class="mb-4 flex items-start justify-between gap-4">
-          <div>
-            <h3 class="text-sm font-semibold text-white">Reorder Layers</h3>
-            <p class="mt-1 text-xs text-gray-500">Drag layers to change the architecture flow from top to bottom.</p>
-          </div>
-          <button
-            class="rounded-lg border border-white/10 px-2 py-1 text-[10px] font-mono text-gray-400 transition hover:bg-white/5 hover:text-white"
-            @click="showLayersDialog = false"
-          >
-            Close
-          </button>
-        </div>
-
-        <div class="space-y-2">
-          <div
-            v-for="(layer, index) in layerDefinitions"
-            :key="layer.id"
-            draggable="true"
-            class="layer-item"
-            :class="{
-              'layer-item--dragging': draggingLayerId === layer.id,
-              'layer-item--target': layerDropTargetId === layer.id,
-            }"
-            @dragstart="onLayerDragStart($event, layer.id)"
-            @dragover.prevent="onLayerDragOver(layer.id)"
-            @drop.prevent="onLayerDrop(layer.id)"
-            @dragend="onLayerDragEnd"
-          >
-            <div class="flex items-center gap-3">
-              <span class="text-sm leading-none text-gray-500">⋮⋮</span>
-              <span class="text-sm">{{ layer.icon }}</span>
-              <div>
-                <div class="text-sm font-medium text-white">{{ layer.label }}</div>
-                <div class="text-[10px] font-mono uppercase tracking-wider text-gray-500">{{ layer.id }}</div>
-              </div>
-            </div>
-            <span class="rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-mono text-gray-400">
-              {{ store.visibleNodes.filter(node => (node.position_hint?.tier || 'compute') === layer.id).length }}
-            </span>
-            <div class="flex items-center gap-1">
-              <button
-                class="layer-move-btn"
-                :disabled="index === 0"
-                title="Move layer up"
-                @click="moveLayerByOffset(layer.id, -1)"
-              >
-                ↑
-              </button>
-              <button
-                class="layer-move-btn"
-                :disabled="index === layerDefinitions.length - 1"
-                title="Move layer down"
-                @click="moveLayerByOffset(layer.id, 1)"
-              >
-                ↓
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   </Transition>
 
@@ -266,24 +196,6 @@
           </select>
         </label>
 
-        <label class="block mb-5">
-          <span class="text-[10px] font-mono uppercase tracking-wider text-gray-500 mb-1 block">New Layer</span>
-          <div class="flex gap-2">
-            <input
-              v-model="newLayerName"
-              class="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white font-mono placeholder-gray-600 outline-none focus:border-emerald-400/40"
-              placeholder="e.g. edge, authz, shared"
-              @keydown.enter.prevent="addLayer"
-            />
-            <button
-              class="rounded-lg border border-emerald-400/30 bg-emerald-500/15 px-3 py-2 text-xs font-mono text-emerald-300 transition hover:bg-emerald-500/25"
-              @click="addLayer"
-            >
-              Add Layer
-            </button>
-          </div>
-        </label>
-
         <div class="flex justify-end gap-2">
           <button
             class="rounded-lg border border-white/10 px-4 py-2 text-xs font-mono text-gray-400 transition hover:bg-white/5"
@@ -302,6 +214,44 @@
       </div>
     </div>
   </Transition>
+
+  <Transition name="fade">
+    <div
+      v-if="showAddLayerDialog"
+      class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      @click.self="showAddLayerDialog = false"
+    >
+      <div class="w-[360px] rounded-2xl border border-white/10 bg-[#12121a] p-6 shadow-[0_30px_80px_rgba(0,0,0,0.5)]">
+        <h3 class="mb-4 text-sm font-semibold text-white">Add Layer</h3>
+
+        <label class="block mb-5">
+          <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Layer Name</span>
+          <input
+            v-model="newLayerName"
+            class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white font-mono placeholder-gray-600 outline-none focus:border-emerald-400/40"
+            placeholder="e.g. edge, authz, shared"
+            @keydown.enter.prevent="addLayerFromDialog"
+          />
+        </label>
+
+        <div class="flex justify-end gap-2">
+          <button
+            class="rounded-lg border border-white/10 px-4 py-2 text-xs font-mono text-gray-400 transition hover:bg-white/5"
+            @click="showAddLayerDialog = false"
+          >
+            Cancel
+          </button>
+          <button
+            class="rounded-lg border border-emerald-400/30 bg-emerald-500/15 px-4 py-2 text-xs font-mono text-emerald-300 transition hover:bg-emerald-500/25"
+            :disabled="!newLayerName.trim()"
+            @click="addLayerFromDialog"
+          >
+            Add Layer
+          </button>
+        </div>
+      </div>
+    </div>
+  </Transition>
 </template>
 
 <script setup lang="ts">
@@ -312,13 +262,11 @@ import { useGraphStore } from '~/stores/graph'
 const store = useGraphStore()
 
 const showAddDialog = ref(false)
-const showLayersDialog = ref(false)
+const showAddLayerDialog = ref(false)
 const newNodeName = ref('')
 const newNodeTemplateId = ref('lambda')
 const newNodeLayerId = ref('serverless')
 const newLayerName = ref('')
-const draggingLayerId = ref<string | null>(null)
-const layerDropTargetId = ref<string | null>(null)
 const userNodeTemplates = USER_NODE_TEMPLATES
 
 const selectedTemplate = computed(() =>
@@ -335,13 +283,14 @@ const hasAnyEdits = computed(() =>
   || store.layoutLayers.join('|') !== [...DEFAULT_GRAPH_LAYERS.map(layer => layer.id), ...store.customLayers.map(layer => layer.id)].join('|')
 )
 
-function addLayer() {
+function addLayerFromDialog() {
   if (!newLayerName.value.trim()) return
   const layerId = store.addCustomLayer(newLayerName.value)
-  if (layerId) {
-    newNodeLayerId.value = layerId
-    newLayerName.value = ''
-  }
+  if (!layerId) return
+  newNodeLayerId.value = layerId
+  newLayerName.value = ''
+  showAddLayerDialog.value = false
+  relayoutGraph()
 }
 
 function addNode() {
@@ -364,39 +313,6 @@ function relayoutGraph() {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event('stackmap-fit-view'))
   }
-}
-
-function onLayerDragStart(event: DragEvent, layerId: string) {
-  event.dataTransfer?.setData('text/plain', layerId)
-  event.dataTransfer!.effectAllowed = 'move'
-  draggingLayerId.value = layerId
-  layerDropTargetId.value = layerId
-}
-
-function onLayerDragOver(layerId: string) {
-  layerDropTargetId.value = layerId
-}
-
-function onLayerDrop(layerId: string) {
-  if (!draggingLayerId.value) return
-  store.reorderLayers(draggingLayerId.value, layerId)
-  relayoutGraph()
-  draggingLayerId.value = null
-  layerDropTargetId.value = null
-}
-
-function onLayerDragEnd() {
-  draggingLayerId.value = null
-  layerDropTargetId.value = null
-}
-
-function moveLayerByOffset(layerId: string, offset: number) {
-  const index = store.layoutLayers.indexOf(layerId)
-  const targetIndex = index + offset
-  if (index === -1 || targetIndex < 0 || targetIndex >= store.layoutLayers.length) return
-  const targetLayerId = store.layoutLayers[targetIndex]
-  store.reorderLayers(layerId, targetLayerId)
-  relayoutGraph()
 }
 
 watch(selectedTemplate, template => {
@@ -454,50 +370,5 @@ watch(selectedTemplate, template => {
 select option {
   background: #12121a;
   color: #e5e7eb;
-}
-
-.layer-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  border-radius: 0.875rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  padding: 0.875rem 0.95rem;
-  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
-  cursor: grab;
-}
-
-.layer-item--dragging {
-  opacity: 0.5;
-}
-
-.layer-item--target {
-  border-color: rgba(74, 222, 128, 0.35);
-  background: rgba(74, 222, 128, 0.08);
-  transform: translateY(-1px);
-}
-
-.layer-move-btn {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
-  color: #9ca3af;
-  border-radius: 0.5rem;
-  padding: 0.15rem 0.45rem;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.75rem;
-  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
-}
-
-.layer-move-btn:hover:not(:disabled) {
-  background: rgba(74, 222, 128, 0.12);
-  border-color: rgba(74, 222, 128, 0.28);
-  color: #d1fae5;
-}
-
-.layer-move-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
 }
 </style>
