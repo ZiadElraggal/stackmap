@@ -1662,8 +1662,38 @@ export const useGraphStore = defineStore('graph', {
 
     removeUserNode(nodeId: string) {
       this.userNodes = this.userNodes.filter(n => n.id !== nodeId)
+      // Also remove any edges (user or auto) that reference this node
       this.userEdges = this.userEdges.filter(e => e.source !== nodeId && e.target !== nodeId)
       if (this.selectedNodeId === nodeId) this.selectedNodeId = null
+      this.requestRelayout()
+      this._persistEdits()
+    },
+
+    renameUserNode(nodeId: string, newName: string) {
+      const node = this.userNodes.find(n => n.id === nodeId)
+      if (node) {
+        node.name = newName
+        this._persistEdits()
+      }
+    },
+
+    duplicateUserNode(nodeId: string) {
+      const original = this.userNodes.find(n => n.id === nodeId)
+      if (!original) return
+      const id = `user:${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      this.userNodes.push({
+        id,
+        name: `${original.name} (copy)`,
+        resource_type: original.resource_type,
+        provider: original.provider,
+        category: original.category,
+        properties: { ...original.properties },
+        tags: { ...original.tags, _user_created: 'true' },
+        position_hint: {
+          tier: original.position_hint?.tier || 'compute',
+          weight: original.position_hint?.weight || 4,
+        },
+      })
       this.requestRelayout()
       this._persistEdits()
     },
