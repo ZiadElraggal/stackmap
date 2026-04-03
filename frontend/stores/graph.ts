@@ -19,6 +19,7 @@ export interface StackMapNode {
   position_hint: {
     tier: string
     weight: number
+    manual_order?: number
     logical_parent?: string
     is_helper?: boolean
     diff_status?: string
@@ -54,6 +55,7 @@ export interface NodeOverrideMeta {
   resource_type?: string
   category?: string
   weight?: number
+  order?: number
 }
 
 interface OriginalNodeSnapshot {
@@ -2034,14 +2036,56 @@ export const useGraphStore = defineStore('graph', {
       if (userNode) {
         if (!userNode.position_hint) userNode.position_hint = { tier: layerId, weight: 4 }
         userNode.position_hint.tier = layerId
+        const peerOrders = this.userNodes
+          .filter(node => node.id !== nodeId && (node.position_hint?.tier || 'compute') === layerId)
+          .map(node => node.position_hint?.manual_order)
+          .filter((value): value is number => typeof value === 'number')
+        userNode.position_hint.manual_order = peerOrders.length ? Math.max(...peerOrders) + 100 : 100
       } else {
         const node = this.nodes.find(candidate => candidate.id === nodeId)
         if (!node) return
         if (!node.position_hint) node.position_hint = { tier: layerId, weight: 2 }
         node.position_hint.tier = layerId
         this.nodeTierOverrides[nodeId] = layerId
+        const peerOrders = this.nodes
+          .filter(candidate => candidate.id !== nodeId && (candidate.position_hint?.tier || 'compute') === layerId)
+          .map(candidate => candidate.position_hint?.manual_order)
+          .filter((value): value is number => typeof value === 'number')
+        node.position_hint.manual_order = peerOrders.length ? Math.max(...peerOrders) + 100 : 100
+        this.nodeOverrides[nodeId] = {
+          ...this.nodeOverrides[nodeId],
+          order: node.position_hint.manual_order,
+        }
       }
       this._setLastEditAction('moved resource to layer')
+      this.requestRelayout()
+      this._persistEdits()
+    },
+
+    reorderNodesWithinLayer(nodeIdsInOrder: string[], layerId: string) {
+      if (!nodeIdsInOrder.length) return
+      this._recordHistory()
+      nodeIdsInOrder.forEach((nodeId, index) => {
+        const order = (index + 1) * 100
+        const userNode = this.userNodes.find(node => node.id === nodeId)
+        if (userNode) {
+          if (!userNode.position_hint) userNode.position_hint = { tier: layerId, weight: 4 }
+          userNode.position_hint.tier = layerId
+          userNode.position_hint.manual_order = order
+          return
+        }
+        const node = this.nodes.find(candidate => candidate.id === nodeId)
+        if (!node) return
+        if (!node.position_hint) node.position_hint = { tier: layerId, weight: 2 }
+        node.position_hint.tier = layerId
+        node.position_hint.manual_order = order
+        this.nodeTierOverrides[nodeId] = layerId
+        this.nodeOverrides[nodeId] = {
+          ...this.nodeOverrides[nodeId],
+          order,
+        }
+      })
+      this._setLastEditAction('reordered resources in layer')
       this.requestRelayout()
       this._persistEdits()
     },
@@ -2209,6 +2253,7 @@ export const useGraphStore = defineStore('graph', {
       delete this.nodeTierOverrides[nodeId]
       delete this.nodeOverrides[nodeId]
       this.hiddenNodeIds = this.hiddenNodeIds.filter(id => id !== nodeId)
+      delete node.position_hint.manual_order
       this._setLastEditAction('reset resource edits')
       this.requestRelayout()
       this._persistEdits()
@@ -2254,7 +2299,7 @@ export const useGraphStore = defineStore('graph', {
         if (Array.isArray(data.userNodes)) {
           this.userNodes = data.userNodes
           for (const node of this.userNodes) {
-            if (!node.position_hint) {
+          if (!node.position_hint) {
               node.position_hint = { tier: 'compute', weight: 4 }
             }
             node.position_hint.tier = normalizeNodeTier(node)
@@ -2296,6 +2341,7 @@ export const useGraphStore = defineStore('graph', {
           if (meta.category) node.category = meta.category
           if (!node.position_hint) node.position_hint = { tier: normalizeNodeTier(node), weight: 2 }
           if (typeof meta.weight === 'number') node.position_hint.weight = meta.weight
+          if (typeof meta.order === 'number') node.position_hint.manual_order = meta.order
         }
         if (Array.isArray(data.layoutLayers)) {
           const extras = this.layoutLayers.filter(layerId => !data.layoutLayers.includes(layerId))
@@ -2377,6 +2423,7 @@ export const useGraphStore = defineStore('graph', {
         node.category = original?.category || node.category
         node.position_hint.tier = normalizeNodeTier(node)
         node.position_hint.weight = original?.weight || node.position_hint.weight || 2
+        delete node.position_hint.manual_order
       }
       this._setLastEditAction('cleared all edits')
       this.requestRelayout()
