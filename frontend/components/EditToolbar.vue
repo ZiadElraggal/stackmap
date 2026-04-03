@@ -71,12 +71,45 @@
         <!-- Global actions -->
         <span class="h-4 w-px bg-white/[0.08]" />
         <button
+          class="edit-btn"
+          :class="{ 'opacity-40 pointer-events-none': !store.canUndo }"
+          title="Undo"
+          @click="store.undoEdits()"
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 3L2 6l3 3"/><path d="M2 6h5.5a3.5 3.5 0 1 1 0 7H6"/>
+          </svg>
+          <span>Undo</span>
+        </button>
+
+        <button
+          class="edit-btn"
+          :class="{ 'opacity-40 pointer-events-none': !store.canRedo }"
+          title="Redo"
+          @click="store.redoEdits()"
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 3l3 3-3 3"/><path d="M11 6H5.5a3.5 3.5 0 1 0 0 7H7"/>
+          </svg>
+          <span>Redo</span>
+        </button>
+
+        <button
           v-if="store.hiddenNodeIds.length > 0"
           class="edit-btn"
           @click="store.showAllNodes()"
         >
           <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 6.5s2.5-4 5.5-4 5.5 4 5.5 4-2.5 4-5.5 4-5.5-4-5.5-4z"/><circle cx="6.5" cy="6.5" r="1.5"/></svg>
           <span>Show All ({{ store.hiddenNodeIds.length }})</span>
+        </button>
+
+        <button
+          v-if="store.hiddenNodeIdsBackup?.length"
+          class="edit-btn"
+          @click="store.rehideShownNodes()"
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 6.5s2.5-4 5.5-4 5.5 4 5.5 4-2.5 4-5.5 4-5.5-4-5.5-4z"/><path d="M2 11L11 2"/></svg>
+          <span>Rehide ({{ store.hiddenNodeIdsBackup.length }})</span>
         </button>
 
         <button
