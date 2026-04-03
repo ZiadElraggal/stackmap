@@ -43,6 +43,16 @@ export const USER_NODE_TEMPLATES: UserNodeTemplate[] = [
   { id: 's3', label: 'S3 Bucket', resourceType: 'aws_s3_bucket', category: 'storage', tier: 'data', provider: 'aws', weight: 4 },
   { id: 'sqs', label: 'SQS Queue', resourceType: 'aws_sqs_queue', category: 'queue', tier: 'compute', provider: 'aws', weight: 4 },
   { id: 'sns', label: 'SNS Topic', resourceType: 'aws_sns_topic', category: 'integration', tier: 'api', provider: 'aws', weight: 4 },
+  { id: 'step-functions', label: 'Step Functions', resourceType: 'aws_sfn_state_machine', category: 'serverless', tier: 'serverless', provider: 'aws', weight: 5 },
+  { id: 'eventbridge', label: 'EventBridge', resourceType: 'aws_cloudwatch_event_rule', category: 'integration', tier: 'api', provider: 'aws', weight: 4 },
+  { id: 'cloudwatch', label: 'CloudWatch', resourceType: 'aws_cloudwatch_metric_alarm', category: 'monitoring', tier: 'compute', provider: 'aws', weight: 3 },
+  { id: 'vpc', label: 'VPC', resourceType: 'aws_vpc', category: 'network', tier: 'compute', provider: 'aws', weight: 3 },
+  { id: 'cloudformation', label: 'CloudFormation', resourceType: 'aws_cloudformation_stack', category: 'other', tier: 'compute', provider: 'aws', weight: 3 },
+  { id: 'secrets-manager', label: 'Secrets Manager', resourceType: 'aws_secretsmanager_secret', category: 'security', tier: 'security', provider: 'aws', weight: 3 },
+  { id: 'kms', label: 'KMS', resourceType: 'aws_kms_key', category: 'security', tier: 'security', provider: 'aws', weight: 3 },
+  { id: 'kinesis', label: 'Kinesis', resourceType: 'aws_kinesis_stream', category: 'queue', tier: 'compute', provider: 'aws', weight: 4 },
+  { id: 'elastic-beanstalk', label: 'Elastic Beanstalk', resourceType: 'aws_elastic_beanstalk_environment', category: 'compute', tier: 'compute', provider: 'aws', weight: 4 },
+  { id: 'ecr', label: 'ECR', resourceType: 'aws_ecr_repository', category: 'container', tier: 'compute', provider: 'aws', weight: 3 },
   { id: 'custom', label: 'Custom Service', resourceType: 'user_defined', category: 'other', tier: 'compute', provider: 'user', weight: 4 },
 ]
 
@@ -103,62 +113,143 @@ export const CATEGORY_ICONS: Record<string, string> = {
     '<circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="2" fill="none"/><path d="M9.8 9.2a2.4 2.4 0 1 1 4.2 1.6c-.8.7-1.4 1.1-1.4 2.2" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/><circle cx="12" cy="16.8" r="1" fill="currentColor"/>',
 }
 
+// AWS Architecture Icon-inspired SVG icons — designed for light-on-dark rendering.
+// Each icon uses stroke-based rendering at 24x24 viewBox to match the official style.
 const RESOURCE_TYPE_ICONS: Array<{ match: (resourceType: string) => boolean; icon: string }> = [
+  // ── Serverless / Lambda ─────────────────────────────────────────
   {
-    match: resourceType => resourceType.includes('lambda'),
-    icon: '<path d="M13.8 3.5L6.5 13.2h4.3l-1 7.3 7.7-10h-4.4l.7-7z" stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round"/>',
+    match: rt => rt.includes('lambda') || rt.includes('Lambda'),
+    icon: '<path d="M4.5 19.5L9.2 4.5h2.2l3.2 10.5h2.9l2 4.5H4.5z" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/><path d="M9.8 4.5l5 15" stroke="currentColor" stroke-width="1.8" fill="none"/>',
   },
+  // ── S3 ──────────────────────────────────────────────────────────
   {
-    match: resourceType => resourceType === 'aws_s3_bucket' || resourceType.includes('s3_bucket'),
-    icon: '<path d="M5 9.5h14v8H5z" stroke="currentColor" stroke-width="2" fill="none"/><path d="M7 9.5V7.8A2.8 2.8 0 0 1 9.8 5h4.4A2.8 2.8 0 0 1 17 7.8v1.7" stroke="currentColor" stroke-width="2" fill="none"/><path d="M8 13.5h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+    match: rt => rt === 'aws_s3_bucket' || rt.includes('s3_bucket') || rt.includes('S3::Bucket'),
+    icon: '<path d="M5.5 7c0-1.1 2.9-2 6.5-2s6.5.9 6.5 2v10c0 1.1-2.9 2-6.5 2s-6.5-.9-6.5-2V7z" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M5.5 7c0 1.1 2.9 2 6.5 2s6.5-.9 6.5-2" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M5.5 12c0 1.1 2.9 2 6.5 2s6.5-.9 6.5-2" stroke="currentColor" stroke-width="1.8" fill="none"/>',
   },
+  // ── DynamoDB ────────────────────────────────────────────────────
   {
-    match: resourceType => resourceType.includes('dynamodb'),
-    icon: '<ellipse cx="12" cy="6" rx="5.8" ry="2.6" stroke="currentColor" stroke-width="2" fill="none"/><path d="M6.2 6v7.8c0 1.5 2.6 2.7 5.8 2.7s5.8-1.2 5.8-2.7V6" stroke="currentColor" stroke-width="2" fill="none"/><path d="M8 10.2h8M8 13.6h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+    match: rt => rt.includes('dynamodb') || rt.includes('DynamoDB'),
+    icon: '<path d="M6 6.5c0-1.4 2.7-2.5 6-2.5s6 1.1 6 2.5" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M6 6.5v11c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-11" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M18 12c0 1.4-2.7 2.5-6 2.5S6 13.4 6 12" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M9 9l6 2M9 11l6-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
   },
+  // ── EC2 ─────────────────────────────────────────────────────────
   {
-    match: resourceType => resourceType === 'aws_instance' || resourceType.includes('ec2'),
-    icon: '<rect x="4" y="6" width="16" height="10" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><path d="M8 18h8M9 10h1M12 10h1M15 10h1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+    match: rt => rt === 'aws_instance' || rt.includes('ec2') || rt.includes('EC2::Instance'),
+    icon: '<rect x="4" y="5" width="16" height="14" rx="2" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M4 9h16" stroke="currentColor" stroke-width="1.8"/><circle cx="7" cy="7" r="1" fill="currentColor"/><path d="M9 13h6M9 16h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
   },
+  // ── ECS ─────────────────────────────────────────────────────────
   {
-    match: resourceType => resourceType.includes('ecs'),
-    icon: '<rect x="4" y="6" width="16" height="12" rx="2.5" stroke="currentColor" stroke-width="2" fill="none"/><path d="M8 6v12M16 6v12M4 10h16M4 14h16" stroke="currentColor" stroke-width="2"/>',
+    match: rt => rt.includes('ecs') || rt.includes('ECS'),
+    icon: '<rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.8" fill="none"/><rect x="6" y="6" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="13" y="6" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="6" y="13" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="13" y="13" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>',
   },
+  // ── ECR ─────────────────────────────────────────────────────────
   {
-    match: resourceType => resourceType.includes('cognito'),
-    icon: '<path d="M12 4l6 3v5c0 3.5-2.3 6.4-6 7.6-3.7-1.2-6-4.1-6-7.6V7l6-3z" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="12" cy="10" r="1.8" fill="currentColor"/><path d="M9.5 14.5c.8-.9 1.7-1.3 2.5-1.3s1.7.4 2.5 1.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+    match: rt => rt.includes('ecr') || rt.includes('ECR'),
+    icon: '<rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M8 9l-3 3 3 3M16 9l3 3-3 3M13 8l-2 8" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
   },
+  // ── Cognito ─────────────────────────────────────────────────────
   {
-    match: resourceType => resourceType.includes('api_gateway') || resourceType.includes('apigateway'),
-    icon: '<path d="M4 8h8M9 5l3 3-3 3" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 16h-8M15 13l-3 3 3 3" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
+    match: rt => rt.includes('cognito') || rt.includes('Cognito'),
+    icon: '<circle cx="12" cy="8" r="3" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M6 19v-1c0-2.2 2.7-4 6-4s6 1.8 6 4v1" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M12 3v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M17.5 5.5l-1.4 1.4M6.5 5.5l1.4 1.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
   },
+  // ── API Gateway ─────────────────────────────────────────────────
   {
-    match: resourceType => resourceType === 'aws_lb' || resourceType.includes('load_balancer'),
-    icon: '<circle cx="7" cy="8" r="2.2" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="17" cy="8" r="2.2" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="12" cy="16" r="2.4" stroke="currentColor" stroke-width="2" fill="none"/><path d="M9 8h6M8 9.5l2.5 4M16 9.5l-2.5 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+    match: rt => rt.includes('api_gateway') || rt.includes('apigateway') || rt.includes('ApiGateway'),
+    icon: '<rect x="9" y="3" width="6" height="18" rx="1.5" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M9 8H4.5M9 12H4.5M9 16H4.5M15 8h4.5M15 12h4.5M15 16h4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
   },
+  // ── Load Balancer (ELB) ─────────────────────────────────────────
   {
-    match: resourceType => resourceType.includes('cloudfront'),
-    icon: '<circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="2" fill="none"/><path d="M5 12h14M12 5c-2.2 2-2.2 12 0 14M12 5c2.2 2 2.2 12 0 14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>',
+    match: rt => rt === 'aws_lb' || rt.includes('load_balancer') || rt.includes('ElasticLoadBalancing'),
+    icon: '<circle cx="6" cy="7" r="2.5" stroke="currentColor" stroke-width="1.8" fill="none"/><circle cx="6" cy="17" r="2.5" stroke="currentColor" stroke-width="1.8" fill="none"/><circle cx="18" cy="12" r="2.5" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M8.3 8L15.5 11M8.3 16L15.5 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
   },
+  // ── CloudFront ──────────────────────────────────────────────────
   {
-    match: resourceType => resourceType.includes('route53'),
-    icon: '<path d="M6 6h6v6H6zM12 12h6v6h-6z" stroke="currentColor" stroke-width="2" fill="none"/><path d="M12 9h4M9 12v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+    match: rt => rt.includes('cloudfront') || rt.includes('CloudFront'),
+    icon: '<circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" fill="none"/><ellipse cx="12" cy="12" rx="3.5" ry="8" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M4 12h16" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 7.5h13M5.5 16.5h13" stroke="currentColor" stroke-width="1" stroke-opacity="0.5"/>',
   },
+  // ── Route 53 ────────────────────────────────────────────────────
   {
-    match: resourceType => resourceType.includes('db_instance') || resourceType.includes('rds_cluster') || resourceType.includes('redshift'),
-    icon: '<ellipse cx="12" cy="6" rx="6.5" ry="2.8" stroke="currentColor" stroke-width="2" fill="none"/><path d="M5.5 6v10c0 1.6 2.9 2.8 6.5 2.8s6.5-1.2 6.5-2.8V6" stroke="currentColor" stroke-width="2" fill="none"/><path d="M7 10.5h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+    match: rt => rt.includes('route53') || rt.includes('Route53'),
+    icon: '<circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" fill="none"/><text x="12" y="16" text-anchor="middle" fill="currentColor" font-size="11" font-weight="700" font-family="sans-serif">53</text>',
   },
+  // ── RDS ─────────────────────────────────────────────────────────
   {
-    match: resourceType => resourceType.includes('sqs'),
-    icon: '<rect x="4" y="6" width="14" height="3" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/><rect x="4" y="11" width="14" height="3" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/><rect x="4" y="16" width="14" height="3" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/><path d="M18 12h3M19.8 10.2l1.8 1.8-1.8 1.8" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
+    match: rt => rt.includes('db_instance') || rt.includes('rds_cluster') || rt.includes('rds') || rt.includes('RDS') || rt.includes('redshift'),
+    icon: '<path d="M6 5.5c0-1.4 2.7-2.5 6-2.5s6 1.1 6 2.5" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M6 5.5v13c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-13" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M6 10c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M6 14.5c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5" stroke="currentColor" stroke-width="1.8" fill="none"/>',
   },
+  // ── SQS ─────────────────────────────────────────────────────────
   {
-    match: resourceType => resourceType.includes('sns'),
-    icon: '<path d="M5 15V9l6-3v12l-6-3z" stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round"/><path d="M14 9c1 .6 1.5 1.5 1.5 3S15 14.4 14 15M16.5 7.2C18.1 8.2 19 9.8 19 12s-.9 3.8-2.5 4.8" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>',
+    match: rt => rt.includes('sqs') || rt.includes('SQS'),
+    icon: '<path d="M4 6h12v4H4zM4 14h12v4H4z" stroke="currentColor" stroke-width="1.8" fill="none" rx="1"/><path d="M16 8h3M16 16h3M19 6l2 2-2 2M19 14l2 2-2 2" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 12h12" stroke="currentColor" stroke-width="1" stroke-dasharray="2 2" stroke-opacity="0.4"/>',
   },
+  // ── SNS ─────────────────────────────────────────────────────────
   {
-    match: resourceType => resourceType.includes('iam') || resourceType.includes('waf') || resourceType.includes('security_group'),
-    icon: '<path d="M12 3.2l7 2.8v5.8c0 4.1-2.8 7.7-7 8.9-4.2-1.2-7-4.8-7-8.9V6l7-2.8z" stroke="currentColor" stroke-width="2" fill="none"/><path d="M8.6 12.2l2.2 2.2 4.6-4.6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
+    match: rt => rt.includes('sns') || rt.includes('SNS'),
+    icon: '<circle cx="8" cy="12" r="4" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M12 12l5-5M12 12l5 0M12 12l5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="17" cy="7" r="1.5" fill="currentColor" opacity="0.7"/><circle cx="17" cy="12" r="1.5" fill="currentColor" opacity="0.7"/><circle cx="17" cy="17" r="1.5" fill="currentColor" opacity="0.7"/>',
+  },
+  // ── Step Functions ──────────────────────────────────────────────
+  {
+    match: rt => rt.includes('sfn') || rt.includes('step_function') || rt.includes('StepFunctions'),
+    icon: '<circle cx="12" cy="4.5" r="2" stroke="currentColor" stroke-width="1.8" fill="none"/><circle cx="12" cy="12" r="2" stroke="currentColor" stroke-width="1.8" fill="none"/><circle cx="12" cy="19.5" r="2" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M12 6.5v3.5M12 14v3.5" stroke="currentColor" stroke-width="1.8"/><path d="M14 4.5h4v7.5h-4M10 12h-4v7.5h4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round"/>',
+  },
+  // ── EventBridge ─────────────────────────────────────────────────
+  {
+    match: rt => rt.includes('eventbridge') || rt.includes('cloudwatch_event') || rt.includes('Events'),
+    icon: '<rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="1" fill="currentColor"/><path d="M4 9h2M4 15h2M18 9h2M18 15h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  },
+  // ── CloudWatch ──────────────────────────────────────────────────
+  {
+    match: rt => rt.includes('cloudwatch') || rt.includes('CloudWatch'),
+    icon: '<circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M7 14l2.5-4 2 2.5 3-5L17 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
+  },
+  // ── IAM ─────────────────────────────────────────────────────────
+  {
+    match: rt => rt.includes('iam') || rt.includes('IAM'),
+    icon: '<circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M5.5 20v-1.5c0-2.5 2.9-4.5 6.5-4.5s6.5 2 6.5 4.5V20" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M15 7l2 1M15 9l2-1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  },
+  // ── VPC ─────────────────────────────────────────────────────────
+  {
+    match: rt => rt.includes('vpc') || rt.includes('VPC') || rt.includes('subnet'),
+    icon: '<rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M3 10h18M10 3v18" stroke="currentColor" stroke-width="1" stroke-dasharray="3 2" stroke-opacity="0.4"/><circle cx="7" cy="7" r="1.5" fill="currentColor" opacity="0.6"/><circle cx="15" cy="15" r="1.5" fill="currentColor" opacity="0.6"/>',
+  },
+  // ── CloudFormation ──────────────────────────────────────────────
+  {
+    match: rt => rt.includes('cloudformation') || rt.includes('CloudFormation'),
+    icon: '<path d="M12 3L4 7v10l8 4 8-4V7l-8-4z" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/><path d="M4 7l8 4 8-4M12 11v10" stroke="currentColor" stroke-width="1.5" fill="none"/>',
+  },
+  // ── Secrets Manager ─────────────────────────────────────────────
+  {
+    match: rt => rt.includes('secretsmanager') || rt.includes('SecretsManager'),
+    icon: '<rect x="5" y="10" width="14" height="10" rx="2" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="1.8" fill="none"/><circle cx="12" cy="15" r="1.5" fill="currentColor"/><path d="M12 16.5V18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  },
+  // ── KMS ─────────────────────────────────────────────────────────
+  {
+    match: rt => rt.includes('kms') || rt.includes('KMS'),
+    icon: '<circle cx="10" cy="12" r="5" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M14 12h6M17 10v4M19 10v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="10" cy="12" r="1.5" fill="currentColor"/>',
+  },
+  // ── Kinesis ─────────────────────────────────────────────────────
+  {
+    match: rt => rt.includes('kinesis') || rt.includes('Kinesis'),
+    icon: '<path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M14 3l3 3-3 3M10 9l-3 3 3 3M14 15l3 3-3 3" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
+  },
+  // ── Elastic Beanstalk ───────────────────────────────────────────
+  {
+    match: rt => rt.includes('elastic_beanstalk') || rt.includes('ElasticBeanstalk'),
+    icon: '<path d="M12 3c-3 4-5 6-5 9a5 5 0 0 0 10 0c0-3-2-5-5-9z" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M12 13v5M9 16h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  },
+  // ── WAF / Security Group ────────────────────────────────────────
+  {
+    match: rt => rt.includes('waf') || rt.includes('WAF') || rt.includes('security_group'),
+    icon: '<path d="M12 3.2l7 2.8v5.8c0 4.1-2.8 7.7-7 8.9-4.2-1.2-7-4.8-7-8.9V6l7-2.8z" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M8.6 12.2l2.2 2.2 4.6-4.6" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
+  },
+  // ── AppSync ─────────────────────────────────────────────────────
+  {
+    match: rt => rt.includes('appsync') || rt.includes('AppSync'),
+    icon: '<circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8" fill="none"/><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.5" fill="none" stroke-dasharray="4 2"/><path d="M12 4v4M12 16v4M4 12h4M16 12h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  },
+  // ── ElastiCache ─────────────────────────────────────────────────
+  {
+    match: rt => rt.includes('elasticache') || rt.includes('ElastiCache'),
+    icon: '<rect x="4" y="7" width="16" height="10" rx="2" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M8 10v4M12 9v6M16 10v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 12h16" stroke="currentColor" stroke-width="1" stroke-opacity="0.3"/>',
   },
 ]
 
