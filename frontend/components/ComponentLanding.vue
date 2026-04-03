@@ -6,17 +6,17 @@
       <div class="mb-8 rounded-[28px] border border-white/[0.07] bg-[#0f131b]/88 px-6 py-6 shadow-[0_30px_100px_rgba(0,0,0,0.32)] backdrop-blur-md md:px-8">
         <div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           <div class="max-w-3xl">
-            <p class="mb-3 text-[10px] font-mono uppercase tracking-[0.32em] text-emerald-300/75">Architecture Overview</p>
+            <p class="mb-3 text-[10px] font-mono uppercase tracking-[0.32em] text-emerald-300/75">Component View</p>
             <div class="flex items-start gap-4">
               <div class="hidden rounded-2xl border border-emerald-400/10 bg-emerald-500/[0.05] p-3 md:block">
                 <PixelMascot :size="52" state="idle" :animate="true" />
               </div>
               <div>
                 <h2 class="text-[28px] font-semibold leading-tight tracking-tight text-white md:text-[32px]">
-                  Service islands, before the soup.
+                  Start with the systems, then open the details.
                 </h2>
                 <p class="mt-3 max-w-2xl text-sm leading-6 text-gray-400">
-                  StackMap separated the visible infrastructure into service-shaped components so you can understand the landscape first, then open the part that matters.
+                  StackMap grouped the current architecture into cleaner service-sized slices so you can orient yourself quickly before diving into a single component.
                 </p>
               </div>
             </div>
@@ -46,7 +46,7 @@
         <div class="mb-4 flex items-end justify-between gap-6">
           <div>
             <p class="text-[10px] font-mono uppercase tracking-[0.24em] text-gray-600">Service Components</p>
-            <h3 class="mt-2 text-xl font-semibold text-white">Explore the architecture surface</h3>
+            <h3 class="mt-2 text-xl font-semibold text-white">Open the part of the map that matters</h3>
           </div>
           <div class="text-right text-xs font-mono text-gray-500">
             {{ primarySummaries.length }} service island{{ primarySummaries.length === 1 ? '' : 's' }}
@@ -62,7 +62,7 @@
             <div class="max-w-3xl">
               <div class="mb-3 flex items-center gap-2">
                 <span class="rounded-full border border-emerald-400/15 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.22em] text-emerald-300">
-                  Top component
+                  Recommended
                 </span>
                 <span
                   v-if="featuredSummary.entrypoints.length"
@@ -96,8 +96,8 @@
               <div class="text-xs text-gray-500">
                 {{ metaLine(featuredSummary) }}
               </div>
-              <div class="text-xs font-mono text-emerald-300 transition group-hover:text-emerald-200">
-                Open map →
+              <div class="inline-flex items-center gap-2 rounded-full border border-emerald-400/15 bg-emerald-500/10 px-3 py-1 text-[10px] font-mono uppercase tracking-[0.18em] text-emerald-300 transition group-hover:border-emerald-300/25 group-hover:text-emerald-200">
+                Open component
               </div>
             </div>
           </div>
@@ -150,7 +150,7 @@
 
             <div class="mt-5 flex items-center justify-between border-t border-white/[0.06] pt-3 text-[11px] font-mono text-gray-500">
               <span>{{ metaLine(component) }}</span>
-              <span class="text-emerald-300 transition group-hover:text-emerald-200">Open map →</span>
+              <span class="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-emerald-300 transition group-hover:border-emerald-300/20 group-hover:text-emerald-200">Open</span>
             </div>
           </button>
         </div>
@@ -163,9 +163,9 @@
         <div class="mb-4 flex items-end justify-between gap-6">
           <div>
             <p class="text-[10px] font-mono uppercase tracking-[0.24em] text-gray-600">Unlinked Resources</p>
-            <h3 class="mt-2 text-lg font-semibold text-white">Quiet inventory, separate from the main architecture</h3>
+            <h3 class="mt-2 text-lg font-semibold text-white">Resources that still need stronger grouping</h3>
             <p class="mt-2 max-w-3xl text-sm leading-6 text-gray-400">
-              These resources are present in the scan but do not currently form strong service-shaped clusters.
+              These resources were detected successfully, but they do not yet form a strong component or service boundary.
             </p>
           </div>
           <div class="text-right text-xs font-mono text-gray-500">
@@ -204,7 +204,7 @@
                 </span>
               </div>
               <div class="text-[11px] font-mono text-gray-500">{{ metaLine(unlinkedSummary) }}</div>
-              <div class="text-xs font-mono text-amber-300 transition group-hover:text-amber-200">Inspect bucket →</div>
+              <div class="rounded-full border border-amber-400/15 bg-amber-500/10 px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.18em] text-amber-300 transition group-hover:border-amber-300/20 group-hover:text-amber-200">Inspect bucket</div>
             </div>
           </div>
         </button>

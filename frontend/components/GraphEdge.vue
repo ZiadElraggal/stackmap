@@ -1,11 +1,26 @@
 <template>
   <g
-    :class="['graph-edge', { dimmed: isDimmed }]"
+    :class="['graph-edge', { dimmed: isDimmed, selected: isSelected, 'user-link-hover': isUserLink && (isHovered || isControlHovering || isSelected) && store.editMode }]"
     :style="{
       '--edge-color': edgeColor,
       '--edge-delay': `${entryDelay}ms`,
+      opacity: fadingOut ? 0 : undefined,
+      transition: fadingOut ? 'opacity 300ms ease-out' : undefined,
     }"
+    @mouseenter="onEdgeEnter"
+    @mouseleave="onEdgeLeave"
+    @click.stop="onEdgeClick"
   >
+    <!-- Invisible wider hit area for hover detection on edges -->
+    <path
+      v-if="isUserLink && store.editMode"
+      :d="pathD"
+      stroke="transparent"
+      :stroke-width="Math.max(strokeWidth * 3, 12)"
+      fill="none"
+      class="edge-hit-area"
+    />
+
     <path
       :d="pathD"
       :stroke="edgeColor"
@@ -13,7 +28,7 @@
       :stroke-dasharray="dashPattern"
       fill="none"
       :opacity="computedOpacity"
-      :marker-end="`url(#arrow-${edge.edge_type})`"
+      :marker-end="`url(#${markerId})`"
       class="edge-path"
     />
 
@@ -44,7 +59,39 @@
         fill="#6b7280"
         font-size="8"
         font-family="'JetBrains Mono', 'SF Mono', monospace"
-      >{{ edge.edge_type }}</text>
+      >{{ edgeLabelText }}</text>
+    </g>
+
+    <g
+      v-if="isUserLink && store.editMode && (isHovered || isControlHovering) && !fadingOut"
+      class="edge-color-palette"
+      :transform="`translate(${midpoint.x - 34}, ${midpoint.y - 22})`"
+      @mouseenter="onControlHoverEnter"
+      @mouseleave="onControlHoverLeave"
+    >
+      <rect x="-10" y="-12" width="92" height="24" fill="rgba(0,0,0,0.001)" />
+      <g
+        v-for="(color, idx) in userLinkColors"
+        :key="color"
+        class="edge-color-chip"
+        :transform="`translate(${idx * 18}, 0)`"
+        @click.stop="onSetEdgeColor(color)"
+      >
+        <circle r="6" :fill="color" :stroke="edge.color === color ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.22)'" stroke-width="1.5" />
+      </g>
+    </g>
+
+    <!-- Delete button at midpoint for user_link edges in edit mode -->
+    <g
+      v-if="isUserLink && store.editMode && (isHovered || isControlHovering) && !fadingOut"
+      class="edge-delete-btn"
+      :transform="`translate(${midpoint.x}, ${midpoint.y - 46})`"
+      @mouseenter="onControlHoverEnter"
+      @mouseleave="onControlHoverLeave"
+      @click.stop="onDeleteEdge"
+    >
+      <circle r="10" fill="rgba(239,68,68,0.3)" stroke="rgba(239,68,68,0.75)" stroke-width="1" />
+      <path d="M-3.5,-3.5 L3.5,3.5 M3.5,-3.5 L-3.5,3.5" stroke="#ef4444" stroke-width="1.8" stroke-linecap="round" />
     </g>
 
     <title>{{ edge.label || edge.edge_type }}</title>
@@ -52,9 +99,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useGraphStore, type StackMapEdge } from '~/stores/graph'
-import { EDGE_COLORS } from '~/composables/useGraph'
+import { EDGE_COLORS, MANUAL_EDGE_TYPES } from '~/composables/useGraph'
 
 const props = withDefaults(
   defineProps<{
@@ -76,18 +123,26 @@ const store = useGraphStore()
 
 const isUserLink = computed(() =>
   props.edge.edge_type === 'user_link'
+  || props.edge.edge_type.startsWith('manual_')
   || props.edge.label === 'user link'
   || props.edge.id.startsWith('user:')
 )
 
 const edgeDiffStatus = computed(() => store.edgeDiffStatus[props.edge.id] as string | undefined)
+const userLinkColors = ['#4ADE80', '#38BDF8', '#C084FC', '#FB923C', '#F87171']
 
 const edgeColor = computed(() => {
   if (store.diffMode && edgeDiffStatus.value === 'added') return '#22c55e'
   if (store.diffMode && edgeDiffStatus.value === 'removed') return '#ef4444'
-  if (isUserLink.value) return EDGE_COLORS.user_link
+  if (isUserLink.value) return props.edge.color || EDGE_COLORS.user_link
   return EDGE_COLORS[props.edge.edge_type] || '#64748b'
 })
+
+const markerId = computed(() => {
+  if (!isUserLink.value) return `arrow-${props.edge.edge_type}`
+  return `arrow-user-${props.edge.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`
+})
+const isSelected = computed(() => store.selectedEdgeId === props.edge.id)
 
 const isConnectedToHovered = computed(() => {
   const hovered = store.hoveredNodeId
@@ -200,11 +255,83 @@ const labelPosition = computed(() => {
   return { x: midX, y: midY - 10 }
 })
 
-const labelWidth = computed(() => Math.max(36, props.edge.edge_type.length * 5.4 + 8))
+const edgeLabelText = computed(() => {
+  if (isUserLink.value && props.edge.label) return props.edge.label
+  return MANUAL_EDGE_TYPES.find(type => type.id === props.edge.edge_type)?.label || props.edge.edge_type
+})
+const labelWidth = computed(() => Math.max(36, edgeLabelText.value.length * 5.4 + 8))
 const showLabel = computed(() => {
   if (props.zoomScale <= 0.6) return false
-  return ['triggers', 'reads_from', 'writes_to', 'cross_account_reference', 'user_link'].includes(props.edge.edge_type)
+  return ['triggers', 'reads_from', 'writes_to', 'cross_account_reference', 'user_link', 'manual_generic', 'manual_request', 'manual_event', 'manual_data', 'manual_auth'].includes(props.edge.edge_type)
 })
+
+const midpoint = computed(() => {
+  return {
+    x: (props.x1 + props.x2) / 2,
+    y: (props.y1 + props.y2) / 2,
+  }
+})
+
+const isHovered = ref(false)
+const isControlHovering = ref(false)
+const fadingOut = ref(false)
+let hoverLeaveTimer: ReturnType<typeof setTimeout> | null = null
+
+function onEdgeEnter() {
+  if (isUserLink.value && store.editMode) {
+    if (hoverLeaveTimer) {
+      clearTimeout(hoverLeaveTimer)
+      hoverLeaveTimer = null
+    }
+    isHovered.value = true
+  }
+}
+
+function onEdgeLeave() {
+  if (hoverLeaveTimer) clearTimeout(hoverLeaveTimer)
+  hoverLeaveTimer = setTimeout(() => {
+    if (!isControlHovering.value) {
+      isHovered.value = false
+    }
+    hoverLeaveTimer = null
+  }, 90)
+}
+
+function onControlHoverEnter() {
+  if (hoverLeaveTimer) {
+    clearTimeout(hoverLeaveTimer)
+    hoverLeaveTimer = null
+  }
+  isControlHovering.value = true
+  isHovered.value = true
+}
+
+function onControlHoverLeave() {
+  isControlHovering.value = false
+  if (hoverLeaveTimer) clearTimeout(hoverLeaveTimer)
+  hoverLeaveTimer = setTimeout(() => {
+    if (!isControlHovering.value) {
+      isHovered.value = false
+    }
+    hoverLeaveTimer = null
+  }, 90)
+}
+
+function onDeleteEdge() {
+  fadingOut.value = true
+  setTimeout(() => {
+    store.removeUserEdge(props.edge.id)
+  }, 300)
+}
+
+function onSetEdgeColor(color: string) {
+  store.setUserEdgeColor(props.edge.id, color)
+}
+
+function onEdgeClick() {
+  if (!store.editMode || !isUserLink.value) return
+  store.selectEdge(isSelected.value ? null : props.edge.id)
+}
 </script>
 
 <style scoped>
@@ -224,11 +351,47 @@ const showLabel = computed(() => {
 
 .edge-path,
 .flow-dot {
-  transition: opacity 200ms ease-out, stroke-width 200ms ease-out;
+  transition: opacity 200ms ease-out, stroke-width 200ms ease-out, filter 200ms ease-out;
   pointer-events: none;
+}
+
+.edge-hit-area {
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.user-link-hover .edge-path {
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--edge-color) 60%, transparent));
+  stroke-width: 2.4;
+}
+
+.graph-edge.selected .edge-path {
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--edge-color) 80%, transparent));
+  stroke-width: 2.6;
 }
 
 .flow-dot {
   filter: drop-shadow(0 0 4px color-mix(in srgb, var(--edge-color) 70%, transparent));
+}
+
+.edge-delete-btn,
+.edge-color-chip {
+  cursor: pointer;
+}
+
+.edge-delete-btn {
+  cursor: pointer;
+  pointer-events: auto;
+  animation: edge-delete-appear 150ms ease-out;
+}
+
+.edge-delete-btn:hover circle {
+  fill: rgba(239, 68, 68, 0.45);
+  stroke: rgba(239, 68, 68, 0.9);
+}
+
+@keyframes edge-delete-appear {
+  from { opacity: 0; transform: scale(0.6); }
+  to { opacity: 1; transform: scale(1); }
 }
 </style>

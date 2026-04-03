@@ -2,51 +2,100 @@
   <div
     :class="[
       'fixed left-0 top-0 h-full border-r z-40 transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] flex flex-col',
-      collapsed ? 'w-10' : 'w-64',
+      collapsed ? 'w-14' : 'w-[18rem]',
     ]"
-    style="backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); background: rgba(18, 18, 26, 0.92); border-color: var(--sm-border)"
+    style="backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); background: linear-gradient(180deg, rgba(18, 18, 26, 0.97), rgba(10, 10, 15, 0.96)); border-color: var(--sm-border); box-shadow: 1px 0 14px rgba(0,0,0,0.28)"
   >
     <button
-      class="h-9 flex items-center justify-center text-gray-500 hover:text-gray-300 border-b border-white/[0.06] text-xs transition-colors"
+      class="sidebar-collapse-btn"
       @click="collapsed = !collapsed"
     >
       <svg
         width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"
         class="transition-transform duration-200" :class="collapsed ? '' : 'rotate-180'"
       ><path d="M5 3l4 4-4 4"/></svg>
-      <span v-if="!collapsed" class="ml-1.5 tracking-wide">Filters</span>
+      <span v-if="!collapsed" class="ml-2 tracking-wide font-medium">Workspace</span>
     </button>
 
-    <div v-if="!collapsed" class="flex-1 overflow-y-auto p-3 transition-opacity duration-150 opacity-100">
-      <section class="pb-4 border-b border-white/5">
-        <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">View</h3>
-        <div class="inline-flex rounded border border-white/10 overflow-hidden text-xs">
+    <div v-if="collapsed" class="flex flex-1 flex-col items-center gap-3 px-2 py-4">
+      <div class="collapsed-mascot-shell">
+        <PixelMascot :size="28" state="idle" :animate="true" />
+      </div>
+      <div class="collapsed-pill">{{ visibleResourceCount }}</div>
+      <div class="collapsed-rail">
+        <button class="collapsed-icon-btn" title="Architecture view" @click="store.setViewMode('architecture')">A</button>
+        <button
+          v-if="store.shouldUseComponentLanding || store.activeAccountId"
+          class="collapsed-icon-btn"
+          title="Components view"
+          @click="store.setViewMode('components')"
+        >C</button>
+        <button class="collapsed-icon-btn" title="Raw view" @click="store.setViewMode('raw')">R</button>
+      </div>
+    </div>
+
+    <div v-if="!collapsed" class="flex-1 overflow-y-auto p-4 transition-opacity duration-150 opacity-100">
+      <section class="hero-card">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="text-[10px] font-mono uppercase tracking-[0.18em] text-emerald-400">StackMap</div>
+            <h2 class="mt-2 text-sm font-semibold text-white">Infrastructure workspace</h2>
+            <p class="mt-2 text-xs leading-relaxed text-gray-400">
+              Filter the live map, switch views, and trim noise before editing or presenting.
+            </p>
+          </div>
+          <div class="mascot-shell">
+            <PixelMascot :size="42" :state="store.editMode ? 'scanning' : 'idle'" :animate="true" />
+          </div>
+        </div>
+        <div class="mt-4 grid grid-cols-3 gap-2">
+          <div class="summary-chip">
+            <span class="summary-chip__label">Visible</span>
+            <span class="summary-chip__value">{{ visibleResourceCount }}</span>
+          </div>
+          <div class="summary-chip">
+            <span class="summary-chip__label">Links</span>
+            <span class="summary-chip__value">{{ visibleEdgeCount }}</span>
+          </div>
+          <div class="summary-chip">
+            <span class="summary-chip__label">View</span>
+            <span class="summary-chip__value">{{ activeViewLabel }}</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="sidebar-section">
+        <div class="section-heading">
+          <span>View</span>
+          <span class="section-heading__meta">{{ sourceLabel }}</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-xs">
           <button
             v-if="store.shouldUseComponentLanding || store.activeAccountId"
-            class="px-2 py-1 transition"
-            :class="store.viewMode === 'components' ? 'bg-blue-500/20 text-blue-400' : 'bg-transparent text-gray-400 hover:bg-white/5'"
+            class="view-btn"
+            :class="store.viewMode === 'components' ? 'view-btn--active' : 'view-btn--inactive'"
             @click="store.setViewMode('components')"
           >
             Components
           </button>
           <button
-            class="px-2 py-1 transition"
-            :class="store.viewMode === 'architecture' ? 'bg-blue-500/20 text-blue-400' : 'bg-transparent text-gray-400 hover:bg-white/5'"
+            class="view-btn"
+            :class="store.viewMode === 'architecture' ? 'view-btn--active' : 'view-btn--inactive'"
             @click="store.setViewMode('architecture')"
           >
             Architecture
           </button>
           <button
-            class="px-2 py-1 transition border-l border-white/10"
-            :class="store.viewMode === 'raw' ? 'bg-blue-500/20 text-blue-400' : 'bg-transparent text-gray-400 hover:bg-white/5'"
+            class="view-btn"
+            :class="store.viewMode === 'raw' ? 'view-btn--active' : 'view-btn--inactive'"
             @click="store.setViewMode('raw')"
           >
             Raw
           </button>
           <button
             v-if="store.hasOrganizationData"
-            class="px-2 py-1 transition border-l border-white/10 flex items-center gap-1"
-            :class="store.viewMode === 'organization' ? 'bg-blue-500/20 text-blue-400' : 'bg-transparent text-gray-400 hover:bg-white/5'"
+            class="view-btn flex items-center gap-1"
+            :class="store.viewMode === 'organization' ? 'view-btn--active' : 'view-btn--inactive'"
             @click="store.setViewMode('organization')"
           >
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
@@ -58,13 +107,16 @@
         </div>
       </section>
 
-      <section class="py-4 border-b border-white/5">
-        <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">Categories</h3>
-        <div class="space-y-1">
+      <section class="sidebar-section">
+        <div class="section-heading">
+          <span>Categories</span>
+          <span class="section-heading__meta">{{ categories.length }}</span>
+        </div>
+        <div class="space-y-0.5">
           <button
             v-for="cat in categories"
             :key="cat.name"
-            class="w-full flex items-center gap-2 text-xs cursor-pointer hover:bg-white/5 rounded px-1 py-1"
+            class="filter-row"
             @click="store.toggleCategory(cat.name)"
           >
             <span class="icon-wrap" :style="{ color: cat.color }">
@@ -81,8 +133,49 @@
         </div>
       </section>
 
-      <section class="py-4 border-b border-white/5">
-        <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">Min importance</h3>
+      <section v-if="edgeTypes.length > 0" class="sidebar-section">
+        <div class="section-heading">
+          <span>Relationships</span>
+          <span class="section-heading__meta">{{ edgeTypes.length }}</span>
+        </div>
+        <div class="mb-3 flex flex-wrap gap-2">
+          <button
+            v-for="preset in relationshipPresets"
+            :key="preset.id"
+            class="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[10px] font-mono text-gray-400 transition hover:bg-white/[0.06] hover:text-white"
+            @click="store.setEdgeTypePreset(preset.id)"
+          >
+            {{ preset.label }}
+          </button>
+        </div>
+        <div class="space-y-1">
+          <button
+            v-for="edgeType in edgeTypes"
+            :key="edgeType.id"
+            class="filter-row"
+            @click="store.toggleEdgeType(edgeType.id)"
+          >
+            <span
+              class="inline-flex h-3 w-5 rounded-full"
+              :style="{ backgroundColor: EDGE_COLORS[edgeType.id] || '#64748b', opacity: 0.9 }"
+            />
+            <div class="min-w-0 flex-1 text-left">
+              <div class="truncate text-xs text-gray-300">{{ edgeTypeLabel(edgeType.id) }}</div>
+              <div class="text-[10px] font-mono uppercase tracking-wider text-gray-600">{{ edgeKindLabel(edgeType.kind) }}</div>
+            </div>
+            <span class="text-gray-600">{{ edgeType.count }}</span>
+            <span class="toggle" :class="{ on: store.edgeTypeFilters[edgeType.id] !== false }" :style="{ '--toggle-color': EDGE_COLORS[edgeType.id] || '#64748b' }">
+              <span class="knob" />
+            </span>
+          </button>
+        </div>
+      </section>
+
+      <section class="sidebar-section">
+        <div class="section-heading">
+          <span>Min importance</span>
+          <span class="section-heading__meta">{{ minWeight }}</span>
+        </div>
         <svg
           ref="sliderRef"
           class="w-full h-7 cursor-pointer"
@@ -106,8 +199,11 @@
         </div>
       </section>
 
-      <section v-if="store.graphGroups.length > 0" class="py-4 border-b border-white/5">
-        <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">Groups</h3>
+      <section v-if="store.graphGroups.length > 0" class="sidebar-section">
+        <div class="section-heading">
+          <span>Groups</span>
+          <span class="section-heading__meta">{{ topGroups.length }}</span>
+        </div>
         <div class="space-y-1">
           <div
             v-for="group in topGroups"
@@ -122,20 +218,20 @@
         </div>
       </section>
 
-      <section v-if="store.hasOrganizationData" class="py-4 border-b border-white/5">
-        <div class="flex items-center justify-between mb-2">
+      <section v-if="store.hasOrganizationData" class="sidebar-section">
+        <div class="section-heading mb-2">
           <div class="flex items-center gap-1.5">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.7">
               <path d="M4 21V8l8-5 8 5v13M9 21v-5h6v5"/>
             </svg>
-            <h3 class="text-xs uppercase tracking-wider text-gray-500">Accounts</h3>
+            <span>Accounts</span>
           </div>
-          <span class="text-[10px] font-mono text-gray-600">{{ accountCount }}</span>
+          <span class="section-heading__meta">{{ accountCount }}</span>
         </div>
         <div class="space-y-0.5">
           <button
-            class="w-full text-left text-xs rounded px-2 py-1 transition flex items-center gap-2"
-            :class="store.activeAccountId === null && store.activeOrgGroupId === null ? 'bg-white/5 text-white' : 'text-gray-400 hover:bg-white/5'"
+            class="org-row"
+            :class="store.activeAccountId === null && store.activeOrgGroupId === null ? 'org-row--active' : 'org-row--inactive'"
             @click="clearOrganizationScope"
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.5">
@@ -176,13 +272,13 @@
               }"
             />
             <button
-              class="w-full text-left text-xs rounded py-1 transition flex items-center gap-1.5"
+              class="w-full text-left text-xs rounded-xl py-1.5 transition flex items-center gap-1.5"
               :class="[
                 item.account_id && store.activeAccountId === item.account_id
-                  ? 'bg-cyan-500/10 text-cyan-300'
+                  ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-400/15'
                   : store.activeOrgGroupId === item.id
-                    ? 'bg-amber-500/10 text-amber-300'
-                    : 'text-gray-400 hover:bg-white/5',
+                    ? 'bg-amber-500/10 text-amber-300 border border-amber-400/15'
+                    : 'text-gray-400 hover:bg-white/5 border border-transparent',
               ]"
               :style="{ paddingLeft: `${8 + item.depth * 14}px`, paddingRight: '8px' }"
               @click="onOrgTreeClick(item)"
@@ -197,10 +293,13 @@
         </div>
       </section>
 
-      <section v-if="store.hasOrganizationData" class="py-4 border-b border-white/5">
-        <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">Cross-account</h3>
+      <section v-if="store.hasOrganizationData" class="sidebar-section">
+        <div class="section-heading">
+          <span>Cross-account</span>
+          <span class="section-heading__meta">{{ store.showCrossAccountEdges ? 'On' : 'Off' }}</span>
+        </div>
         <button
-          class="w-full flex items-center justify-between text-xs rounded px-2 py-1 transition hover:bg-white/5"
+          class="filter-row"
           @click="store.setShowCrossAccountEdges(!store.showCrossAccountEdges)"
         >
           <span class="text-gray-300">Show cross-account links</span>
@@ -210,11 +309,14 @@
         </button>
       </section>
 
-      <section v-if="store.shouldUseComponentLanding || store.activeComponentId" class="py-4 border-b border-white/5">
-        <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">Components</h3>
+      <section v-if="store.shouldUseComponentLanding || store.activeComponentId" class="sidebar-section">
+        <div class="section-heading">
+          <span>Components</span>
+          <span class="section-heading__meta">Focus</span>
+        </div>
         <div class="space-y-2">
           <button
-            class="w-full flex items-center justify-between text-xs rounded px-2 py-1 transition hover:bg-white/5"
+            class="filter-row"
             @click="store.setShowUnlinkedResources(!store.showUnlinkedResources)"
           >
             <span class="text-gray-300">Show unlinked resources</span>
@@ -223,7 +325,7 @@
             </span>
           </button>
           <button
-            class="w-full flex items-center justify-between text-xs rounded px-2 py-1 transition hover:bg-white/5"
+            class="filter-row"
             @click="store.setShowWeaklyLinkedComponents(!store.showWeaklyLinkedComponents)"
           >
             <span class="text-gray-300">Show weakly linked cards</span>
@@ -232,7 +334,7 @@
             </span>
           </button>
           <button
-            class="w-full flex items-center justify-between text-xs rounded px-2 py-1 transition hover:bg-white/5"
+            class="filter-row"
             @click="store.setCollapseNetworkScaffolding(!store.collapseNetworkScaffolding)"
           >
             <span class="text-gray-300">Collapse network scaffolding</span>
@@ -243,9 +345,9 @@
         </div>
       </section>
 
-      <section class="pt-4">
+      <section class="pt-2">
         <button
-          class="w-full text-xs text-gray-500 hover:text-gray-300 border border-white/[0.08] rounded-md px-2 py-1.5 transition-all hover:bg-white/[0.03] active:scale-[0.98]"
+          class="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-xs text-gray-400 transition-all duration-150 hover:border-white/[0.12] hover:bg-white/[0.06] hover:text-white active:scale-[0.98]"
           @click="resetFilters"
         >
           Reset all filters
@@ -258,7 +360,7 @@
 <script setup lang="ts">
 import { computed, ref, onUnmounted } from 'vue'
 import { useGraphStore } from '~/stores/graph'
-import { CATEGORY_COLORS, CATEGORY_ICONS } from '~/composables/useGraph'
+import { CATEGORY_COLORS, CATEGORY_ICONS, EDGE_COLORS } from '~/composables/useGraph'
 
 const store = useGraphStore()
 const collapsed = ref(false)
@@ -283,6 +385,25 @@ const categories = computed(() => {
 const topGroups = computed(() => store.graphGroups.filter(g => g.parent === null))
 const orgTree = computed(() => store.organizationTree)
 const accountCount = computed(() => orgTree.value.filter(i => i.group_type === 'account').length)
+const visibleResourceCount = computed(() => store.visibleNodes.length)
+const visibleEdgeCount = computed(() => store.visibleEdges.length)
+const edgeTypes = computed(() => store.availableEdgeTypes)
+const activeViewLabel = computed(() => {
+  if (store.viewMode === 'architecture') return 'Arch'
+  if (store.viewMode === 'components') return 'Comp'
+  if (store.viewMode === 'organization') return 'Org'
+  return 'Raw'
+})
+const sourceLabel = computed(() => {
+  const sourceType = String(store.metadata?.source_type || '').replace(/_/g, ' ')
+  return sourceType || 'workspace'
+})
+const relationshipPresets = [
+  { id: 'all', label: 'All' },
+  { id: 'manual', label: 'Manual Only' },
+  { id: 'inferred', label: 'Inferred Only' },
+  { id: 'presentation', label: 'Presentation' },
+] as const
 
 const ORG_ICONS: Record<string, string> = {
   account:
@@ -329,6 +450,19 @@ const sliderFill = computed(() => Math.max(0, sliderX.value - 8))
 
 function iconPath(category: string): string {
   return CATEGORY_ICONS[category] || CATEGORY_ICONS.other
+}
+
+function edgeTypeLabel(edgeType: string): string {
+  return edgeType
+    .replace(/^manual_/, '')
+    .replace(/cross_account_reference/g, 'cross-account')
+    .replace(/_/g, ' ')
+}
+
+function edgeKindLabel(kind: 'manual' | 'cross-account' | 'inferred'): string {
+  if (kind === 'manual') return 'manual'
+  if (kind === 'cross-account') return 'cross-account'
+  return 'inferred'
 }
 
 function setWeightFromClientX(clientX: number) {
@@ -396,6 +530,184 @@ function onOrgTreeClick(item: { id: string; account_id?: string }) {
 </script>
 
 <style scoped>
+.sidebar-collapse-btn {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(156, 163, 175, 0.9);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  font-size: 12px;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.sidebar-collapse-btn:hover {
+  background: rgba(255,255,255,0.03);
+  color: rgba(229, 231, 235, 0.95);
+}
+
+.hero-card,
+.sidebar-section {
+  border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.025);
+  border-radius: 18px;
+  padding: 14px;
+  margin-bottom: 12px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+}
+
+.mascot-shell,
+.collapsed-mascot-shell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  border: 1px solid rgba(74, 222, 128, 0.14);
+  background: radial-gradient(circle at 50% 35%, rgba(74,222,128,0.12), rgba(255,255,255,0.02));
+}
+
+.mascot-shell {
+  padding: 10px;
+}
+
+.collapsed-mascot-shell {
+  padding: 6px;
+}
+
+.summary-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.05);
+  background: rgba(0,0,0,0.22);
+  padding: 8px 10px;
+}
+
+.summary-chip__label {
+  font-size: 9px;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(107, 114, 128, 0.95);
+}
+
+.summary-chip__value {
+  font-size: 12px;
+  color: rgba(255,255,255,0.95);
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(156, 163, 175, 0.92);
+}
+
+.section-heading__meta {
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: normal;
+  text-transform: none;
+  color: rgba(107, 114, 128, 0.95);
+}
+
+.view-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  padding: 7px 10px;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.view-btn--active {
+  background: rgba(74, 222, 128, 0.12);
+  color: rgba(167, 243, 208, 0.96);
+}
+
+.view-btn--inactive {
+  background: transparent;
+  color: rgba(156, 163, 175, 0.95);
+}
+
+.view-btn--inactive:hover {
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.92);
+}
+
+.filter-row,
+.org-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 12px;
+  padding: 8px 10px;
+  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+  border: 1px solid transparent;
+}
+
+.filter-row:hover,
+.org-row--inactive:hover {
+  background: rgba(255,255,255,0.04);
+}
+
+.org-row--active {
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.95);
+  border-color: rgba(255,255,255,0.06);
+}
+
+.org-row--inactive {
+  color: rgba(156,163,175,0.95);
+}
+
+.collapsed-pill {
+  min-width: 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  padding: 4px 6px;
+  text-align: center;
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  color: rgba(229,231,235,0.95);
+}
+
+.collapsed-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.collapsed-icon-btn {
+  display: inline-flex;
+  height: 28px;
+  width: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  color: rgba(156,163,175,0.95);
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.collapsed-icon-btn:hover {
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.95);
+}
+
 .toggle {
   width: 24px;
   height: 14px;

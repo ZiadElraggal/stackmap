@@ -20,9 +20,23 @@
         >
           <path d="M 0 0 L 6 2.5 L 0 5 Z" :fill="edgeColor(edgeType)" />
         </marker>
+
+        <marker
+          v-for="edge in visibleUserLinks"
+          :id="`arrow-user-${sanitizeMarkerId(edge.id)}`"
+          :key="`marker-user-${edge.id}`"
+          viewBox="0 0 6 5"
+          refX="8"
+          refY="2.5"
+          markerWidth="6"
+          markerHeight="5"
+          orient="auto-start-reverse"
+        >
+          <path d="M 0 0 L 6 2.5 L 0 5 Z" :fill="edge.color || edgeColor(edge.edge_type)" />
+        </marker>
       </defs>
 
-      <rect width="100%" height="100%" fill="#0a0a0f" @click="store.selectNode(null)" />
+      <rect width="100%" height="100%" fill="#0a0a0f" @click="clearSelection" />
 
       <g ref="zoomGroupRef">
         <g v-if="store.viewMode !== 'organization'">
@@ -61,7 +75,7 @@
           :width="graphBounds.width + 1000"
           :height="graphBounds.height + 1000"
           fill="url(#grid-cross)"
-          @click="store.selectNode(null)"
+          @click="clearSelection"
         />
 
         <g v-if="store.viewMode !== 'organization'" v-for="band in tierBands" :key="`tier-${band.id}`">
@@ -158,9 +172,319 @@
 
     <ComponentLanding v-if="store.viewMode === 'components'" />
 
-    <div class="absolute left-1/2 top-4 z-40 -translate-x-1/2">
+    <div v-if="!store.presentationMode" class="absolute left-1/2 top-4 z-40 -translate-x-1/2">
       <SearchBar ref="searchBarRef" @pan-to="panToNode" />
     </div>
+
+    <Transition name="fade">
+      <div
+        v-if="store.editMode && store.editSubmode === 'structure' && store.viewMode !== 'organization' && !store.presentationMode"
+        class="absolute z-50 w-56 rounded-2xl border border-white/[0.08] bg-[#12121a]/92 p-3 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,0,0,0.45)]"
+        :style="layerRailStyle"
+      >
+        <div
+          class="mb-2 flex cursor-move items-center justify-between gap-2 rounded-xl border border-white/[0.06] bg-white/[0.03] px-2.5 py-2"
+          @pointerdown="onLayerRailPointerDown"
+        >
+          <div>
+            <div class="text-[9px] font-semibold uppercase tracking-[0.15em] text-gray-500">Layers</div>
+            <div class="mt-1 text-[11px] text-gray-400">Drag rows to reorder. Drop nodes onto any row.</div>
+          </div>
+          <span class="select-none text-xs font-mono text-gray-600">move</span>
+        </div>
+
+        <div class="space-y-1.5">
+          <div
+            v-for="layer in layerRailLayers"
+            :key="`rail-${layer.id}`"
+            :data-layer-drop-target="layer.id"
+            :data-layer-reorder-item="layer.id"
+            draggable="true"
+            class="group flex cursor-grab items-center gap-2 rounded-xl border px-2.5 py-2 transition-all"
+            :class="{
+              'border-emerald-400/35 bg-emerald-500/12 shadow-[0_0_0_1px_rgba(74,222,128,0.15)]': store.dragTargetLayerId === layer.id || layerRailDropTargetId === layer.id,
+              'border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.05]': store.dragTargetLayerId !== layer.id && layerRailDropTargetId !== layer.id,
+              'opacity-50': draggingLayerId === layer.id,
+            }"
+            @dragstart="onLayerRailDragStart($event, layer.id)"
+            @dragover.prevent="onLayerRailDragOver(layer.id)"
+            @drop.prevent="onLayerRailDrop(layer.id)"
+            @dragend="onLayerRailDragEnd"
+          >
+            <span class="select-none text-sm leading-none text-gray-600 transition-colors group-hover:text-gray-400">⋮⋮</span>
+            <span class="text-sm" :style="{ color: layer.accent }">{{ layer.icon }}</span>
+            <div class="min-w-0 flex-1">
+              <div class="truncate text-xs font-medium text-white">{{ layer.label }}</div>
+              <div class="mt-0.5 text-[10px] font-mono uppercase tracking-wider" :class="layer.count > 0 ? 'text-gray-500' : 'text-amber-400/80'">
+                {{ layer.count > 0 ? `${layer.count} nodes` : 'empty drop target' }}
+              </div>
+            </div>
+            <button
+              v-if="store.customLayers.some(customLayer => customLayer.id === layer.id)"
+              class="flex h-6 w-6 items-center justify-center rounded-md border border-white/10 bg-white/5 text-[11px] text-gray-300 opacity-0 transition-all hover:bg-white/10 group-hover:opacity-100"
+              title="Edit custom layer"
+              @click.stop="openLayerEditor(layer.id)"
+            >
+              ✎
+            </button>
+            <button
+              v-if="layer.canDelete"
+              class="flex h-6 w-6 items-center justify-center rounded-md border border-red-400/20 bg-red-500/8 text-[11px] text-red-300 opacity-0 transition-all hover:bg-red-500/16 group-hover:opacity-100"
+              title="Delete empty custom layer"
+              @click.stop="deleteLayer(layer.id)"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <Transition name="fade">
+      <div
+        v-if="store.editMode && !store.presentationMode"
+        class="absolute left-1/2 top-4 z-40 -translate-x-1/2 rounded-2xl border border-white/[0.08] bg-[#0e0e18]/95 px-4 py-2 backdrop-blur-md shadow-xl"
+      >
+        <div class="flex items-center gap-3">
+          <span class="text-[9px] font-mono uppercase tracking-[0.18em] text-emerald-400">Editor</span>
+          <span class="rounded-full border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[10px] font-mono text-white">{{ store.editSubmode }}</span>
+          <span class="text-[10px] font-mono text-gray-500">{{ selectionStatus }}</span>
+          <span class="hidden md:inline text-[10px] font-mono text-gray-600">{{ modeHint }}</span>
+        </div>
+      </div>
+    </Transition>
+
+    <Transition name="fade">
+      <div
+        v-if="store.editMode && selectedEditorItem && !store.presentationMode"
+        class="absolute left-1/2 top-[4.75rem] z-40 -translate-x-1/2 rounded-2xl border border-white/[0.08] bg-[#10101a]/96 px-4 py-3 backdrop-blur-md shadow-[0_16px_40px_rgba(0,0,0,0.45)]"
+      >
+        <div class="flex flex-wrap items-center gap-3">
+          <div class="min-w-0">
+            <div class="text-[9px] font-mono uppercase tracking-[0.18em] text-gray-500">{{ selectedEditorItem.kind }}</div>
+            <div class="mt-1 max-w-[280px] truncate text-xs font-medium text-white">{{ selectedEditorItem.label }}</div>
+          </div>
+
+          <span class="h-5 w-px bg-white/[0.08]" />
+
+          <template v-if="store.selectedNode">
+            <template v-if="store.editSubmode === 'inspect'">
+              <button
+                v-if="selectedNodeHasComponent"
+                class="selection-action"
+                @click="store.isolateSelectedComponent()"
+              >Isolate Component</button>
+              <button class="selection-action" @click="store.isolateSelectedNeighborhood(1)">Focus 1-Hop</button>
+              <button class="selection-action" @click="store.setEditSubmode('structure')">Open Structure</button>
+              <button class="selection-action selection-action--accent" @click="activateConnectForSelectedNode">Open Connect</button>
+            </template>
+            <template v-else-if="store.editSubmode === 'structure'">
+              <button class="selection-action" @click="store.isolateSelectedLayer()">Isolate Layer</button>
+              <button
+                v-if="selectedNodeHasComponent"
+                class="selection-action"
+                @click="store.isolateSelectedComponent()"
+              >Isolate Component</button>
+              <button class="selection-action" @click="store.isolateSelectedNeighborhood(1)">Focus 1-Hop</button>
+              <button class="selection-action selection-action--danger" @click="store.hideNode(store.selectedNode.id)">Hide</button>
+              <button
+                v-if="store.selectedNode.tags?._user_created"
+                class="selection-action"
+                @click="store.duplicateUserNode(store.selectedNode.id)"
+              >Duplicate</button>
+              <button
+                v-if="store.selectedNode.tags?._user_created"
+                class="selection-action selection-action--danger"
+                @click="store.removeUserNode(store.selectedNode.id)"
+              >Delete</button>
+              <button
+                v-else
+                class="selection-action"
+                @click="store.resetNodeEdits(store.selectedNode.id)"
+              >Reset</button>
+              <button class="selection-action selection-action--accent" @click="activateConnectForSelectedNode">Connect</button>
+            </template>
+            <template v-else>
+              <button
+                class="selection-action selection-action--accent"
+                @click="activateConnectForSelectedNode"
+              >{{ store.connectingFromNodeId === store.selectedNode.id ? 'Connecting…' : 'Start Link' }}</button>
+              <button
+                v-if="store.connectingFromNodeId"
+                class="selection-action"
+                @click="store.cancelConnecting()"
+              >Cancel</button>
+            </template>
+          </template>
+
+          <template v-else-if="store.selectedEdge">
+            <template v-if="store.editSubmode !== 'connect'">
+              <button class="selection-action selection-action--accent" @click="store.setEditSubmode('connect')">Open Connect</button>
+            </template>
+            <button
+              v-if="selectedEdgeIsEditable"
+              class="selection-action selection-action--danger"
+              @click="store.removeUserEdge(store.selectedEdge.id)"
+            >Delete Link</button>
+          </template>
+
+          <button class="selection-action" @click="clearSelection">Clear</button>
+        </div>
+      </div>
+    </Transition>
+
+    <Transition name="fade">
+      <div
+        v-if="store.editMode && !store.hasSeenEditWalkthrough && !store.presentationMode"
+        class="absolute left-1/2 top-24 z-40 w-[420px] -translate-x-1/2 rounded-2xl border border-white/[0.08] bg-[#12121a]/96 p-4 backdrop-blur-xl shadow-[0_18px_48px_rgba(0,0,0,0.48)]"
+      >
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="text-[10px] font-mono uppercase tracking-[0.18em] text-emerald-400">Editor Tour</div>
+            <div class="mt-2 text-sm text-white">Inspect keeps the graph safe. Structure lets you move, hide, and layer resources. Connect is for manual links.</div>
+            <div class="mt-2 text-xs leading-relaxed text-gray-400">Select a node to edit it in the side panel, drag nodes only in Structure mode, and use the layer rail for empty-layer drops and reordering.</div>
+          </div>
+          <button
+            class="rounded-lg border border-white/10 px-2 py-1 text-[10px] font-mono text-gray-400 transition hover:bg-white/5 hover:text-white"
+            @click="store.dismissEditWalkthrough()"
+          >
+            Dismiss
+          </button>
+        </div>
+      </div>
+    </Transition>
+
+    <Transition name="fade">
+      <div
+        v-if="store.editMode && store.editSubmode === 'connect' && !store.presentationMode && showConnectHint"
+        class="absolute left-1/2 top-[7.75rem] z-40 w-[460px] max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-2xl border border-amber-400/18 bg-[#12121a]/96 p-4 backdrop-blur-xl shadow-[0_18px_48px_rgba(0,0,0,0.45)]"
+      >
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="text-[10px] font-mono uppercase tracking-[0.18em] text-amber-300">Connect Mode</div>
+            <div class="mt-2 text-sm text-white">
+              {{ store.connectingFromNodeId ? 'Click a destination resource to create the missing relationship.' : 'Select a source resource, then choose the destination on the graph.' }}
+            </div>
+            <div class="mt-2 text-xs leading-relaxed text-gray-400">
+              Manual links appear in the side panel after creation, where you can rename them, recolor them, and set whether they represent request flow, events, data access, auth, or a generic relationship.
+            </div>
+          </div>
+          <div class="flex items-start gap-2">
+            <button
+              class="rounded-lg border border-white/10 px-2 py-1 text-[10px] font-mono text-gray-400 transition hover:bg-white/5 hover:text-white"
+              @click="dismissConnectHint"
+            >
+              Hide hint
+            </button>
+            <button
+              class="rounded-lg border border-white/10 px-2 py-1 text-[10px] font-mono text-gray-400 transition hover:bg-white/5 hover:text-white"
+              @click="store.cancelConnecting()"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <span
+            v-for="hint in connectHints"
+            :key="hint.label"
+            class="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[10px] font-mono text-gray-400"
+          >
+            <span class="h-1.5 w-1.5 rounded-full" :style="{ backgroundColor: hint.color }" />
+            {{ hint.label }}
+          </span>
+        </div>
+      </div>
+    </Transition>
+
+    <Transition name="fade">
+      <div
+        v-if="showLayerEditor && editingLayer"
+        class="absolute left-1/2 top-1/2 z-[120] w-[360px] max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/10 bg-[#12121a]/98 p-5 shadow-[0_30px_80px_rgba(0,0,0,0.5)] backdrop-blur-xl"
+      >
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="text-[10px] font-mono uppercase tracking-[0.18em] text-emerald-400">Layer Editor</div>
+            <div class="mt-2 text-sm text-white">Adjust how this custom layer appears across the editor.</div>
+          </div>
+          <button
+            class="rounded-lg border border-white/10 px-2 py-1 text-[10px] font-mono text-gray-400 transition hover:bg-white/5 hover:text-white"
+            @click="closeLayerEditor"
+          >
+            Close
+          </button>
+        </div>
+
+        <div class="mt-4 space-y-3">
+          <label class="block">
+            <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Label</span>
+            <input
+              v-model="layerEditLabel"
+              class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white font-mono outline-none focus:border-emerald-400/40"
+              placeholder="Layer label"
+            />
+          </label>
+
+          <div class="grid grid-cols-[1fr_auto] gap-3">
+            <label class="block">
+              <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Icon</span>
+              <input
+                v-model="layerEditIcon"
+                maxlength="2"
+                class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white font-mono outline-none focus:border-emerald-400/40"
+                placeholder="✦"
+              />
+            </label>
+            <label class="block">
+              <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Accent</span>
+              <input
+                v-model="layerEditAccent"
+                type="color"
+                class="h-[42px] w-16 rounded-lg border border-white/10 bg-white/5 p-1"
+              />
+            </label>
+          </div>
+
+          <div class="rounded-xl border border-white/[0.08] bg-black/20 px-3 py-3">
+            <div class="mb-2 text-[10px] font-mono uppercase tracking-[0.15em] text-gray-500">Preview</div>
+            <div class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5" :style="{ borderColor: `${layerEditAccent}55`, backgroundColor: `${layerEditAccent}14` }">
+              <span class="text-sm" :style="{ color: layerEditAccent }">{{ layerEditIcon || '✦' }}</span>
+              <span class="text-xs font-mono text-white">{{ layerEditLabel || editingLayer.label }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 flex justify-end gap-2">
+          <button
+            class="rounded-lg border border-white/10 px-4 py-2 text-xs font-mono text-gray-400 transition hover:bg-white/5"
+            @click="closeLayerEditor"
+          >
+            Cancel
+          </button>
+          <button
+            class="rounded-lg border border-emerald-400/30 bg-emerald-500/15 px-4 py-2 text-xs font-mono text-emerald-300 transition hover:bg-emerald-500/25"
+            @click="saveLayerEditor"
+          >
+            Save Layer
+          </button>
+        </div>
+      </div>
+    </Transition>
+
+    <Transition name="fade">
+      <div
+        v-if="store.presentationMode"
+        class="absolute right-4 top-4 z-50 flex items-center gap-2 rounded-xl border border-white/[0.08] bg-[#0e0e18]/95 px-3 py-2 backdrop-blur-md shadow-xl"
+      >
+        <span class="text-[10px] font-mono uppercase tracking-[0.18em] text-emerald-400">Presentation</span>
+        <button
+          class="rounded-lg border border-white/10 px-2 py-1 text-[10px] font-mono text-gray-300 transition hover:bg-white/5 hover:text-white"
+          @click="store.setPresentationMode(false)"
+        >
+          Exit
+        </button>
+      </div>
+    </Transition>
 
     <Transition name="fade">
       <div
@@ -178,7 +502,7 @@
 
     <Transition name="fade">
       <div
-        v-if="store.activeBreadcrumb.length > 0"
+        v-if="store.activeBreadcrumb.length > 0 && !store.presentationMode"
         class="absolute left-1/2 top-16 z-40 -translate-x-1/2 flex items-center gap-2 rounded-xl border border-white/[0.08] bg-[#0e0e18]/95 px-4 py-2 backdrop-blur-md shadow-xl"
       >
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="1.5" stroke-linecap="round" opacity="0.6">
@@ -201,7 +525,7 @@
 
     <Transition name="fade">
       <div
-        v-if="diffSummaryMeta"
+        v-if="diffSummaryMeta && !store.presentationMode"
         class="absolute left-1/2 top-16 z-40 -translate-x-1/2 flex items-center gap-3 rounded-xl border border-white/[0.08] bg-[#0e0e18]/95 px-4 py-2 backdrop-blur-md shadow-xl"
       >
         <span class="text-[10px] font-mono text-gray-500 tracking-widest uppercase">Diff</span>
@@ -225,9 +549,9 @@
       </div>
     </Transition>
 
-    <Minimap :viewport="viewportRect" @pan-to-position="panToPosition" />
+    <Minimap v-if="!store.presentationMode" :viewport="viewportRect" @pan-to-position="panToPosition" />
 
-    <div class="absolute right-4 top-4 z-30">
+    <div v-if="!store.presentationMode" class="absolute right-4 top-4 z-30">
       <button
         class="flex h-7 w-7 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-xs text-gray-500 hover:text-gray-300 hover:bg-white/[0.06] transition-all backdrop-blur-sm"
         @click="showHelp = !showHelp"
@@ -239,37 +563,46 @@
       </button>
     </div>
 
-    <Transition name="fade">
+    <Transition name="help-panel">
       <div
-        v-if="showHelp"
-        class="absolute right-4 top-14 z-50 w-52 rounded-xl border border-white/[0.08] bg-[#1a1a2e]/95 backdrop-blur-xl p-3 shadow-2xl shadow-black/40"
+        v-if="showHelp && !store.presentationMode"
+        class="absolute right-4 top-14 z-50 w-52 rounded-xl border border-white/[0.08] bg-[#14141e]/95 backdrop-blur-xl p-3.5 shadow-[0_12px_40px_rgba(0,0,0,0.5)]"
       >
-        <h3 class="mb-2.5 text-[10px] uppercase tracking-widest text-gray-600 font-medium">Shortcuts</h3>
-        <div class="space-y-1.5 text-xs">
-          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.04] px-1.5 py-0.5 rounded text-[10px] font-mono">⌘K</kbd><span class="text-gray-500">Palette</span></div>
-          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.04] px-1.5 py-0.5 rounded text-[10px] font-mono">/</kbd><span class="text-gray-500">Search</span></div>
-          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.04] px-1.5 py-0.5 rounded text-[10px] font-mono">Esc</kbd><span class="text-gray-500">Close</span></div>
-          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.04] px-1.5 py-0.5 rounded text-[10px] font-mono">0</kbd><span class="text-gray-500">Fit to screen</span></div>
-          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.04] px-1.5 py-0.5 rounded text-[10px] font-mono">+/-</kbd><span class="text-gray-500">Zoom</span></div>
+        <h3 class="mb-3 text-[9px] font-semibold uppercase tracking-[0.15em] text-gray-500">Shortcuts</h3>
+        <div class="space-y-2 text-xs">
+          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.05] px-1.5 py-0.5 rounded-md text-[10px] font-mono border border-white/[0.06]">⌘K</kbd><span class="text-gray-500">Palette</span></div>
+          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.05] px-1.5 py-0.5 rounded-md text-[10px] font-mono border border-white/[0.06]">/</kbd><span class="text-gray-500">Search</span></div>
+          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.05] px-1.5 py-0.5 rounded-md text-[10px] font-mono border border-white/[0.06]">{{ undoShortcutLabel }}</kbd><span class="text-gray-500">Undo edit</span></div>
+          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.05] px-1.5 py-0.5 rounded-md text-[10px] font-mono border border-white/[0.06]">{{ redoShortcutLabel }}</kbd><span class="text-gray-500">Redo edit</span></div>
+          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.05] px-1.5 py-0.5 rounded-md text-[10px] font-mono border border-white/[0.06]">Esc</kbd><span class="text-gray-500">Close</span></div>
+          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.05] px-1.5 py-0.5 rounded-md text-[10px] font-mono border border-white/[0.06]">0</kbd><span class="text-gray-500">Fit to screen</span></div>
+          <div class="flex justify-between items-center"><kbd class="text-gray-400 bg-white/[0.05] px-1.5 py-0.5 rounded-md text-[10px] font-mono border border-white/[0.06]">+/−</kbd><span class="text-gray-500">Zoom</span></div>
         </div>
       </div>
     </Transition>
 
     <div
-      v-if="edgeTypesInGraph.length"
+      v-if="edgeTypesInGraph.length && !store.presentationMode"
       class="absolute bottom-9 left-3 z-30 rounded-lg border border-white/[0.06] bg-[#0e0e18]/80 px-2.5 py-1.5 backdrop-blur-md"
     >
       <div class="flex items-center gap-3">
         <div v-for="edgeType in edgeTypesInGraph" :key="`legend-${edgeType}`" class="flex items-center gap-1.5">
           <span class="h-0.5 w-4 rounded-full" :style="{ backgroundColor: edgeColor(edgeType), opacity: 0.8 }" />
-          <span class="text-[9px] text-gray-500 tracking-wide">{{ edgeType.replace('_', ' ') }}</span>
+          <span class="text-[9px] text-gray-500 tracking-wide">{{ edgeTypeLegendLabel(edgeType) }}</span>
+          <span
+            class="rounded-full border px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-wide"
+            :class="edgeTypeKindClass(edgeType)"
+          >
+            {{ edgeTypeKindLabel(edgeType) }}
+          </span>
         </div>
       </div>
     </div>
 
-    <div class="status-glow absolute bottom-7 left-0 right-0 h-px" />
+    <div v-if="!store.presentationMode" class="status-glow absolute bottom-7 left-0 right-0 h-px" />
 
     <div
+      v-if="!store.presentationMode"
       class="absolute bottom-0 left-0 right-0 flex h-7 items-center gap-3 border-t border-white/[0.04] bg-[#0e0e18]/95 backdrop-blur-sm px-4 font-mono text-[10px] text-gray-500"
     >
       <div class="flex items-center gap-1.5 text-gray-400">
@@ -305,7 +638,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import * as d3 from 'd3'
 import { useGraphStore, type NodePosition, type StackMapEdge, type StackMapNode } from '~/stores/graph'
 import { useLayout } from '~/composables/useLayout'
-import { EDGE_COLORS, buildLayerDefinitions, getNodeHeight } from '~/composables/useGraph'
+import { EDGE_COLORS, MANUAL_EDGE_TYPES, buildLayerDefinitions, getNodeHeight } from '~/composables/useGraph'
 
 const store = useGraphStore()
 const { computeLayout, sortByTier } = useLayout()
@@ -315,9 +648,12 @@ const zoomGroupRef = ref<SVGGElement>()
 const containerRef = ref<HTMLDivElement>()
 const searchBarRef = ref<{ focus: () => void }>()
 const showHelp = ref(false)
+const draggingLayerId = ref<string | null>(null)
+const layerRailDropTargetId = ref<string | null>(null)
 
 const viewportRect = ref<{ x: number; y: number; width: number; height: number } | null>(null)
 const zoomScale = ref(1)
+const isMacLike = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform)
 
 let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null
 let svgSelection: d3.Selection<SVGSVGElement, unknown, null, undefined> | null = null
@@ -331,6 +667,7 @@ const orderedVisibleNodes = computed(() => {
 const visibleNodeMap = computed(() => new Map(store.visibleNodes.map(n => [n.id, n])))
 const edgeEntryBaseDelay = computed(() => orderedVisibleNodes.value.length * 15 + 200)
 const edgeTypesInGraph = computed(() => [...new Set(store.visibleEdges.map(edge => edge.edge_type))])
+const visibleUserLinks = computed(() => store.visibleEdges.filter(edge => edge.edge_type === 'user_link' || edge.id.startsWith('user:')))
 const primaryResourceCount = computed(() => store.viewMode === 'components' ? store.architectureSourceNodes.length : store.visibleNodes.length)
 const primaryConnectionCount = computed(() => store.viewMode === 'components' ? store.architectureSourceEdges.length : store.visibleEdges.length)
 
@@ -352,6 +689,24 @@ const graphBounds = computed(() => {
 })
 
 const layerDefinitions = computed(() => buildLayerDefinitions(store.layoutLayers, store.customLayers))
+const visibleLayerIds = computed(() => {
+  const ids = new Set<string>()
+  for (const node of store.visibleNodes) {
+    ids.add(node.position_hint?.tier || 'compute')
+  }
+  return ids
+})
+const visibleLayerDefinitions = computed(() =>
+  layerDefinitions.value.filter(layer => visibleLayerIds.value.has(layer.id))
+)
+const layerRailLayers = computed(() =>
+  layerDefinitions.value.map(layer => ({
+    ...layer,
+    count: store.visibleNodes.filter(node => (node.position_hint?.tier || 'compute') === layer.id).length,
+    canDelete: store.customLayers.some(customLayer => customLayer.id === layer.id)
+      && [...store.nodes, ...store.userNodes].filter(node => (node.position_hint?.tier || 'compute') === layer.id).length === 0,
+  }))
+)
 
 const tierBands = computed(() => {
   if (store.viewMode === 'organization') return []
@@ -377,7 +732,7 @@ const tierBands = computed(() => {
     labelY: number
     icon: string
   }> = []
-  for (const layer of layerDefinitions.value) {
+  for (const layer of visibleLayerDefinitions.value) {
     const ys = tierNodes[layer.id]
     if (!ys || ys.length === 0) continue
     const minY = Math.min(...ys)
@@ -453,6 +808,47 @@ const dragTargetLayerLabel = computed(() => {
   if (!store.dragTargetLayerId) return null
   return layerDefinitions.value.find(layer => layer.id === store.dragTargetLayerId)?.label || store.dragTargetLayerId
 })
+const selectionStatus = computed(() => {
+  if (store.selectedNode) return `selected: ${store.selectedNode.name}`
+  if (store.selectedEdge) return `selected link: ${store.selectedEdge.label || store.selectedEdge.edge_type}`
+  return 'nothing selected'
+})
+const selectedEditorItem = computed(() => {
+  if (store.selectedNode) {
+    return {
+      kind: 'selected node',
+      label: store.selectedNode.name,
+    }
+  }
+  if (store.selectedEdge) {
+    return {
+      kind: 'selected link',
+      label: store.selectedEdge.label || store.selectedEdge.edge_type,
+    }
+  }
+  return null
+})
+const selectedEdgeIsEditable = computed(() => {
+  const edge = store.selectedEdge
+  if (!edge) return false
+  return edge.edge_type.startsWith('manual_') || edge.edge_type === 'user_link' || edge.id.startsWith('user:')
+})
+const selectedNodeHasComponent = computed(() => {
+  if (!store.selectedNodeId) return false
+  return store.componentSummaries.some(summary => summary.nodeIds.includes(store.selectedNodeId as string))
+})
+const modeHint = computed(() => {
+  switch (store.editSubmode) {
+    case 'inspect':
+      return 'safe mode: review and select items'
+    case 'structure':
+      return 'move nodes, manage layers, add components'
+    case 'connect':
+      return store.connectingFromNodeId ? 'choose a target node to create a link' : 'select a node and start a link'
+    default:
+      return ''
+  }
+})
 
 const viewModeLabel = computed(() => {
   if (store.viewMode === 'architecture') return 'architecture view'
@@ -469,6 +865,31 @@ const diffSummaryMeta = computed(() => {
   if (!summary || typeof summary !== 'object') return null
   return summary as { added: number; removed: number; modified: number; unchanged: number }
 })
+
+const undoShortcutLabel = computed(() => isMacLike ? '⌘Z' : 'Ctrl+Z')
+const redoShortcutLabel = computed(() => isMacLike ? '⇧⌘Z' : 'Ctrl+Y')
+const connectHints = computed(() =>
+  MANUAL_EDGE_TYPES.map(type => ({
+    label: type.label,
+    color: EDGE_COLORS[type.id] || '#94a3b8',
+  }))
+)
+const showConnectHint = ref(true)
+const layerRailPosition = ref({ x: 0, y: 152 })
+const layerRailDragOffset = ref({ x: 0, y: 0 })
+const draggingLayerRail = ref(false)
+const showLayerEditor = ref(false)
+const editingLayerId = ref<string | null>(null)
+const layerEditLabel = ref('')
+const layerEditIcon = ref('')
+const layerEditAccent = ref('#4ADE80')
+const editingLayer = computed(() =>
+  editingLayerId.value ? store.customLayers.find(layer => layer.id === editingLayerId.value) || null : null
+)
+const layerRailStyle = computed(() => ({
+  left: `${layerRailPosition.value.x}px`,
+  top: `${layerRailPosition.value.y}px`,
+}))
 
 function tierBandOpacity(bandName: string): number {
   if (store.dragTargetLayerId) return store.dragTargetLayerId === bandName ? 0.95 : 0.36
@@ -495,6 +916,30 @@ function tierChipOpacity(bandName: string): number {
 
 function edgeColor(edgeType: string): string {
   return EDGE_COLORS[edgeType] || '#64748b'
+}
+
+function edgeTypeLegendLabel(edgeType: string): string {
+  if (edgeType.startsWith('manual_')) {
+    return edgeType.replace('manual_', '').replace(/_/g, ' ')
+  }
+  if (edgeType === 'cross_account_reference') return 'cross-account'
+  return edgeType.replace(/_/g, ' ')
+}
+
+function edgeTypeKindLabel(edgeType: string): string {
+  if (edgeType.startsWith('manual_') || edgeType === 'user_link') return 'manual'
+  if (edgeType === 'cross_account_reference') return 'cross'
+  return 'inferred'
+}
+
+function edgeTypeKindClass(edgeType: string): string {
+  if (edgeType.startsWith('manual_') || edgeType === 'user_link') return 'legend-pill legend-pill--manual'
+  if (edgeType === 'cross_account_reference') return 'legend-pill legend-pill--cross'
+  return 'legend-pill legend-pill--inferred'
+}
+
+function sanitizeMarkerId(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]/g, '-')
 }
 
 function edgeSourcePos(edge: StackMapEdge) {
@@ -550,11 +995,13 @@ onMounted(async () => {
 
   window.addEventListener('keydown', onKeydown)
   window.addEventListener('stackmap-fit-view', onFitViewEvent)
+  initializeLayerRailPosition()
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('stackmap-fit-view', onFitViewEvent)
+  stopLayerRailDrag()
 })
 
 watch(
@@ -577,8 +1024,36 @@ watch(
   }
 )
 
+watch(
+  () => [store.editSubmode, store.connectingFromNodeId],
+  ([submode, connectingFromNodeId], [prevSubmode, prevConnectingFromNodeId]) => {
+    if (submode !== 'connect') {
+      showConnectHint.value = true
+      return
+    }
+    if (prevSubmode !== 'connect' || connectingFromNodeId !== prevConnectingFromNodeId) {
+      showConnectHint.value = true
+    }
+  }
+)
+
 function onFitViewEvent() {
   fitToViewport()
+}
+
+function dismissConnectHint() {
+  showConnectHint.value = false
+}
+
+function initializeLayerRailPosition() {
+  const container = containerRef.value
+  if (!container) return
+  const width = container.clientWidth || 1200
+  const maxX = Math.max(16, width - 240)
+  layerRailPosition.value = {
+    x: Math.min(maxX, Math.max(Math.floor(width * 0.72), width - 280)),
+    y: 152,
+  }
 }
 
 function onKeydown(e: KeyboardEvent) {
@@ -597,13 +1072,33 @@ function onKeydown(e: KeyboardEvent) {
     return
   }
 
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+    e.preventDefault()
+    if (e.shiftKey) {
+      store.redoEdits()
+    } else {
+      store.undoEdits()
+    }
+    return
+  }
+
+  if (!isMacLike && e.ctrlKey && e.key.toLowerCase() === 'y') {
+    e.preventDefault()
+    store.redoEdits()
+    return
+  }
+
   switch (e.key) {
     case '/':
       e.preventDefault()
       searchBarRef.value?.focus()
       break
     case 'Escape':
-      store.selectNode(null)
+      if (store.connectingFromNodeId) {
+        store.cancelConnecting()
+      } else {
+        clearSelection()
+      }
       showHelp.value = false
       break
     case '0':
@@ -622,6 +1117,10 @@ function onKeydown(e: KeyboardEvent) {
       break
     case '?':
       showHelp.value = !showHelp.value
+      break
+    case 'p':
+    case 'P':
+      store.setPresentationMode(!store.presentationMode)
       break
   }
 }
@@ -656,46 +1155,87 @@ function fitToViewport() {
   svgSelection.transition().duration(500).call(zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(scale))
 }
 
+function clearSelection() {
+  store.selectNode(null)
+  store.selectEdge(null)
+}
+
+function activateConnectForSelectedNode() {
+  if (!store.selectedNode) return
+  store.setEditSubmode('connect')
+  store.startConnecting(store.selectedNode.id)
+}
+
 function recomputeLayout() {
   const allNodes = store.visibleNodes
   const allEdges = store.visibleEdges
   const positions = store.diffMode
     ? computeDiffLayout()
-    : computeLayout(allNodes, allEdges, store.graphGroups, store.layoutLayers)
+    : computeLayout(allNodes, allEdges, store.graphGroups, visibleLayerDefinitions.value.map(layer => layer.id), { mode: store.relayoutMode })
   store.setPositions(positions)
 }
 
 function onNodeDragStart(payload: { nodeId: string; clientX: number; clientY: number }) {
-  if (!store.editMode || store.viewMode === 'organization') return
+  if (!store.editMode || store.editSubmode !== 'structure' || store.viewMode === 'organization') return
   store.startDraggingNode(payload.nodeId)
-  updateDragTargetFromPointer(payload.clientY)
+  updateDragTargetFromPointer(payload.clientX, payload.clientY)
 }
 
 function onNodeDragMove(payload: { nodeId: string; clientX: number; clientY: number }) {
   if (store.draggingNodeId !== payload.nodeId) return
-  updateDragTargetFromPointer(payload.clientY)
+  updateDragTargetFromPointer(payload.clientX, payload.clientY)
 }
 
 async function onNodeDragEnd(payload: { nodeId: string; clientX: number; clientY: number }) {
   if (store.draggingNodeId !== payload.nodeId) return
-  updateDragTargetFromPointer(payload.clientY)
+  updateDragTargetFromPointer(payload.clientX, payload.clientY)
   const targetLayerId = store.dragTargetLayerId
   store.finishDraggingNode(targetLayerId)
+  if (targetLayerId) {
+    reorderNodeWithinLayer(payload.nodeId, targetLayerId, payload.clientX, payload.clientY)
+  }
   await nextTick()
   fitToViewport()
 }
 
-function updateDragTargetFromPointer(clientY: number) {
+function reorderNodeWithinLayer(nodeId: string, layerId: string, clientX: number, clientY: number) {
+  const graphPoint = graphPointFromClient(clientX, clientY)
+  if (!graphPoint) return
+  const peerNodes = store.visibleNodes
+    .filter(node => node.id !== nodeId && (node.position_hint?.tier || 'compute') === layerId)
+    .sort((a, b) => (store.positions[a.id]?.x || 0) - (store.positions[b.id]?.x || 0))
+
+  const orderedIds = peerNodes.map(node => node.id)
+  const insertionIndex = peerNodes.findIndex(node => graphPoint.x < (store.positions[node.id]?.x || 0))
+  if (insertionIndex === -1) {
+    orderedIds.push(nodeId)
+  } else {
+    orderedIds.splice(insertionIndex, 0, nodeId)
+  }
+  store.reorderNodesWithinLayer(orderedIds, layerId)
+}
+
+function graphPointFromClient(clientX: number, clientY: number) {
   const svg = svgRef.value
-  if (!svg || !zoomGroupRef.value || !zoomBehavior) return
+  if (!svg || !zoomGroupRef.value || !zoomBehavior) return null
   const screenPoint = svg.createSVGPoint()
-  screenPoint.x = 0
+  screenPoint.x = clientX
   screenPoint.y = clientY
-
   const zoomMatrix = zoomGroupRef.value.getScreenCTM()
-  if (!zoomMatrix) return
+  if (!zoomMatrix) return null
+  return screenPoint.matrixTransform(zoomMatrix.inverse())
+}
 
-  const graphPoint = screenPoint.matrixTransform(zoomMatrix.inverse())
+function updateDragTargetFromPointer(clientX: number, clientY: number) {
+  const hoveredElement = document.elementFromPoint(clientX, clientY) as HTMLElement | null
+  const explicitLayerTarget = hoveredElement?.closest?.('[data-layer-drop-target]')?.getAttribute('data-layer-drop-target')
+  if (explicitLayerTarget) {
+    store.setDragTargetLayer(explicitLayerTarget)
+    return
+  }
+
+  const graphPoint = graphPointFromClient(clientX, clientY)
+  if (!graphPoint) return
   const targetBand = tierBands.value.find(band => graphPoint.y >= band.yStart && graphPoint.y <= band.yEnd)
   if (targetBand) {
     store.setDragTargetLayer(targetBand.id)
@@ -708,6 +1248,97 @@ function updateDragTargetFromPointer(clientY: number) {
     return Math.abs(aCenter - graphPoint.y) - Math.abs(bCenter - graphPoint.y)
   })[0]
   store.setDragTargetLayer(nearestBand?.id || null)
+}
+
+function onLayerRailPointerDown(event: PointerEvent) {
+  if (event.button !== 0) return
+  const container = containerRef.value
+  if (!container) return
+  const rect = container.getBoundingClientRect()
+  draggingLayerRail.value = true
+  layerRailDragOffset.value = {
+    x: event.clientX - rect.left - layerRailPosition.value.x,
+    y: event.clientY - rect.top - layerRailPosition.value.y,
+  }
+  window.addEventListener('pointermove', onLayerRailPointerMove)
+  window.addEventListener('pointerup', stopLayerRailDrag)
+  window.addEventListener('pointercancel', stopLayerRailDrag)
+}
+
+function onLayerRailPointerMove(event: PointerEvent) {
+  const container = containerRef.value
+  if (!container || !draggingLayerRail.value) return
+  const rect = container.getBoundingClientRect()
+  const nextX = event.clientX - rect.left - layerRailDragOffset.value.x
+  const nextY = event.clientY - rect.top - layerRailDragOffset.value.y
+  layerRailPosition.value = {
+    x: Math.min(Math.max(16, nextX), Math.max(16, rect.width - 240)),
+    y: Math.min(Math.max(16, nextY), Math.max(16, rect.height - 220)),
+  }
+}
+
+function stopLayerRailDrag() {
+  draggingLayerRail.value = false
+  window.removeEventListener('pointermove', onLayerRailPointerMove)
+  window.removeEventListener('pointerup', stopLayerRailDrag)
+  window.removeEventListener('pointercancel', stopLayerRailDrag)
+}
+
+function onLayerRailDragStart(event: DragEvent, layerId: string) {
+  event.dataTransfer?.setData('text/plain', layerId)
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+  }
+  draggingLayerId.value = layerId
+  layerRailDropTargetId.value = layerId
+}
+
+function onLayerRailDragOver(layerId: string) {
+  layerRailDropTargetId.value = layerId
+}
+
+function onLayerRailDrop(layerId: string) {
+  if (!draggingLayerId.value) return
+  store.reorderLayers(draggingLayerId.value, layerId)
+  relayoutAndFit()
+  draggingLayerId.value = null
+  layerRailDropTargetId.value = null
+}
+
+function onLayerRailDragEnd() {
+  draggingLayerId.value = null
+  layerRailDropTargetId.value = null
+}
+
+function deleteLayer(layerId: string) {
+  if (!store.removeCustomLayer(layerId)) return
+  relayoutAndFit()
+}
+
+function openLayerEditor(layerId: string) {
+  const layer = store.customLayers.find(candidate => candidate.id === layerId)
+  if (!layer) return
+  editingLayerId.value = layer.id
+  layerEditLabel.value = layer.label
+  layerEditIcon.value = layer.icon || ''
+  layerEditAccent.value = layer.accent || '#4ADE80'
+  showLayerEditor.value = true
+}
+
+function closeLayerEditor() {
+  showLayerEditor.value = false
+  editingLayerId.value = null
+}
+
+function saveLayerEditor() {
+  if (!editingLayer.value) return
+  store.updateCustomLayer(editingLayer.value.id, {
+    label: layerEditLabel.value,
+    icon: layerEditIcon.value.trim() || undefined,
+    accent: layerEditAccent.value,
+  })
+  relayoutAndFit()
+  closeLayerEditor()
 }
 
 function computeDiffLayout(): Record<string, NodePosition> {
@@ -728,8 +1359,8 @@ function computeDiffLayout(): Record<string, NodePosition> {
     edgeDiffStatus[edge.id] !== 'removed' && afterIds.has(edge.source) && afterIds.has(edge.target)
   )
 
-  const beforePositions = computeLayout(beforeNodes, beforeEdges, store.graphGroups, store.layoutLayers)
-  const afterPositions = computeLayout(afterNodes, afterEdges, store.graphGroups, store.layoutLayers)
+  const beforePositions = computeLayout(beforeNodes, beforeEdges, store.graphGroups, store.layoutLayers, { mode: store.relayoutMode })
+  const afterPositions = computeLayout(afterNodes, afterEdges, store.graphGroups, store.layoutLayers, { mode: store.relayoutMode })
   const beforeFallback = centroidForPositions(beforePositions)
   const afterFallback = centroidForPositions(afterPositions)
 
@@ -808,6 +1439,11 @@ function zoomBy(factor: number) {
   svgSelection.transition().duration(300).call(zoomBehavior.scaleBy, factor)
 }
 
+function relayoutAndFit() {
+  recomputeLayout()
+  nextTick(() => fitToViewport())
+}
+
 function panToNode(nodeId: string) {
   if (!svgSelection || !zoomBehavior) return
   const pos = store.positions[nodeId]
@@ -878,6 +1514,81 @@ defineExpose({ fitToViewport, panToNode })
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+.help-panel-enter-active {
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.help-panel-leave-active {
+  transition: all 0.12s ease;
+}
+.help-panel-enter-from {
+  opacity: 0;
+  transform: scale(0.95) translateY(-4px);
+}
+.help-panel-leave-to {
+  opacity: 0;
+  transform: scale(0.97);
+}
+
+.selection-action {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 6px 10px;
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  color: rgba(209, 213, 219, 0.9);
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.selection-action:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.98);
+}
+
+.selection-action--accent {
+  border-color: rgba(74, 222, 128, 0.24);
+  background: rgba(74, 222, 128, 0.12);
+  color: rgba(167, 243, 208, 0.98);
+}
+
+.selection-action--accent:hover {
+  background: rgba(74, 222, 128, 0.18);
+}
+
+.selection-action--danger {
+  border-color: rgba(248, 113, 113, 0.22);
+  background: rgba(239, 68, 68, 0.12);
+  color: rgba(252, 165, 165, 0.98);
+}
+
+.selection-action--danger:hover {
+  background: rgba(239, 68, 68, 0.18);
+}
+
+.legend-pill {
+  color: rgba(156, 163, 175, 0.9);
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.legend-pill--manual {
+  color: rgba(167, 243, 208, 0.96);
+  border-color: rgba(74, 222, 128, 0.18);
+  background: rgba(74, 222, 128, 0.08);
+}
+
+.legend-pill--cross {
+  color: rgba(221, 214, 254, 0.96);
+  border-color: rgba(192, 132, 252, 0.18);
+  background: rgba(192, 132, 252, 0.08);
+}
+
+.legend-pill--inferred {
+  color: rgba(191, 219, 254, 0.96);
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(148, 163, 184, 0.08);
 }
 
 .status-glow {

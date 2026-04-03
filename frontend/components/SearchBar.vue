@@ -46,7 +46,18 @@
             class="w-5 h-5 rounded flex-shrink-0 flex items-center justify-center text-[10px]"
             :style="{ backgroundColor: `${CATEGORY_COLORS[result.item.category] || '#9ca3af'}15`, color: CATEGORY_COLORS[result.item.category] || '#9ca3af' }"
           >
-            <svg width="11" height="11" viewBox="0 0 24 24"><g v-html="getNodeIconPath(result.item)" /></svg>
+            <svg width="11" height="11" viewBox="0 0 24 24">
+              <image
+                v-if="getNodeIconAsset(result.item)"
+                :href="getNodeIconAsset(result.item) || undefined"
+                x="0"
+                y="0"
+                width="24"
+                height="24"
+                preserveAspectRatio="xMidYMid meet"
+              />
+              <g v-else v-html="getNodeIconPath(result.item)" />
+            </svg>
           </span>
           <span class="text-gray-300 font-mono truncate">{{ result.item.name }}</span>
           <span class="text-gray-600 ml-auto flex-shrink-0 text-[10px]">{{ shortType(result.item.resource_type) }}</span>
@@ -60,7 +71,7 @@
 import { ref, computed, watch } from 'vue'
 import Fuse from 'fuse.js'
 import { useGraphStore, type StackMapNode } from '~/stores/graph'
-import { CATEGORY_COLORS, getNodeIconPath } from '~/composables/useGraph'
+import { CATEGORY_COLORS, getNodeIconAsset, getNodeIconPath } from '~/composables/useGraph'
 
 const store = useGraphStore()
 const query = ref('')
