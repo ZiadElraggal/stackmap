@@ -243,6 +243,72 @@
 
     <Transition name="fade">
       <div
+        v-if="store.editMode && selectedEditorItem && !store.presentationMode"
+        class="absolute left-1/2 top-[4.75rem] z-40 -translate-x-1/2 rounded-2xl border border-white/[0.08] bg-[#10101a]/96 px-4 py-3 backdrop-blur-md shadow-[0_16px_40px_rgba(0,0,0,0.45)]"
+      >
+        <div class="flex flex-wrap items-center gap-3">
+          <div class="min-w-0">
+            <div class="text-[9px] font-mono uppercase tracking-[0.18em] text-gray-500">{{ selectedEditorItem.kind }}</div>
+            <div class="mt-1 max-w-[280px] truncate text-xs font-medium text-white">{{ selectedEditorItem.label }}</div>
+          </div>
+
+          <span class="h-5 w-px bg-white/[0.08]" />
+
+          <template v-if="store.selectedNode">
+            <template v-if="store.editSubmode === 'inspect'">
+              <button class="selection-action" @click="store.setEditSubmode('structure')">Open Structure</button>
+              <button class="selection-action selection-action--accent" @click="activateConnectForSelectedNode">Open Connect</button>
+            </template>
+            <template v-else-if="store.editSubmode === 'structure'">
+              <button class="selection-action selection-action--danger" @click="store.hideNode(store.selectedNode.id)">Hide</button>
+              <button
+                v-if="store.selectedNode.tags?._user_created"
+                class="selection-action"
+                @click="store.duplicateUserNode(store.selectedNode.id)"
+              >Duplicate</button>
+              <button
+                v-if="store.selectedNode.tags?._user_created"
+                class="selection-action selection-action--danger"
+                @click="store.removeUserNode(store.selectedNode.id)"
+              >Delete</button>
+              <button
+                v-else
+                class="selection-action"
+                @click="store.resetNodeEdits(store.selectedNode.id)"
+              >Reset</button>
+              <button class="selection-action selection-action--accent" @click="activateConnectForSelectedNode">Connect</button>
+            </template>
+            <template v-else>
+              <button
+                class="selection-action selection-action--accent"
+                @click="activateConnectForSelectedNode"
+              >{{ store.connectingFromNodeId === store.selectedNode.id ? 'Connecting…' : 'Start Link' }}</button>
+              <button
+                v-if="store.connectingFromNodeId"
+                class="selection-action"
+                @click="store.cancelConnecting()"
+              >Cancel</button>
+            </template>
+          </template>
+
+          <template v-else-if="store.selectedEdge">
+            <template v-if="store.editSubmode !== 'connect'">
+              <button class="selection-action selection-action--accent" @click="store.setEditSubmode('connect')">Open Connect</button>
+            </template>
+            <button
+              v-if="selectedEdgeIsEditable"
+              class="selection-action selection-action--danger"
+              @click="store.removeUserEdge(store.selectedEdge.id)"
+            >Delete Link</button>
+          </template>
+
+          <button class="selection-action" @click="clearSelection">Clear</button>
+        </div>
+      </div>
+    </Transition>
+
+    <Transition name="fade">
+      <div
         v-if="store.editMode && !store.hasSeenEditWalkthrough && !store.presentationMode"
         class="absolute left-1/2 top-24 z-40 w-[420px] -translate-x-1/2 rounded-2xl border border-white/[0.08] bg-[#12121a]/96 p-4 backdrop-blur-xl shadow-[0_18px_48px_rgba(0,0,0,0.48)]"
       >
@@ -598,6 +664,26 @@ const selectionStatus = computed(() => {
   if (store.selectedEdge) return `selected link: ${store.selectedEdge.label || store.selectedEdge.edge_type}`
   return 'nothing selected'
 })
+const selectedEditorItem = computed(() => {
+  if (store.selectedNode) {
+    return {
+      kind: 'selected node',
+      label: store.selectedNode.name,
+    }
+  }
+  if (store.selectedEdge) {
+    return {
+      kind: 'selected link',
+      label: store.selectedEdge.label || store.selectedEdge.edge_type,
+    }
+  }
+  return null
+})
+const selectedEdgeIsEditable = computed(() => {
+  const edge = store.selectedEdge
+  if (!edge) return false
+  return edge.edge_type.startsWith('manual_') || edge.edge_type === 'user_link' || edge.id.startsWith('user:')
+})
 const modeHint = computed(() => {
   switch (store.editSubmode) {
     case 'inspect':
@@ -847,6 +933,12 @@ function fitToViewport() {
 function clearSelection() {
   store.selectNode(null)
   store.selectEdge(null)
+}
+
+function activateConnectForSelectedNode() {
+  if (!store.selectedNode) return
+  store.setEditSubmode('connect')
+  store.startConnecting(store.selectedNode.id)
 }
 
 function recomputeLayout() {
@@ -1129,6 +1221,42 @@ defineExpose({ fitToViewport, panToNode })
 .help-panel-leave-to {
   opacity: 0;
   transform: scale(0.97);
+}
+
+.selection-action {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 6px 10px;
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  color: rgba(209, 213, 219, 0.9);
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.selection-action:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.98);
+}
+
+.selection-action--accent {
+  border-color: rgba(74, 222, 128, 0.24);
+  background: rgba(74, 222, 128, 0.12);
+  color: rgba(167, 243, 208, 0.98);
+}
+
+.selection-action--accent:hover {
+  background: rgba(74, 222, 128, 0.18);
+}
+
+.selection-action--danger {
+  border-color: rgba(248, 113, 113, 0.22);
+  background: rgba(239, 68, 68, 0.12);
+  color: rgba(252, 165, 165, 0.98);
+}
+
+.selection-action--danger:hover {
+  background: rgba(239, 68, 68, 0.18);
 }
 
 .status-glow {
