@@ -1,4 +1,4 @@
-import type { StackMapNode } from '~/stores/graph'
+import type { CustomLayerConfig, StackMapNode } from '~/stores/graph'
 
 export interface GraphLayer {
   id: string
@@ -77,12 +77,25 @@ export const EDGE_COLORS: Record<string, string> = {
   reads_from: '#38BDF8',     // sky blue (landing page secondary)
   writes_to: '#4ADE80',      // StackMap green (landing page primary)
   user_link: '#4ADE80',
+  manual_generic: '#4ADE80',
+  manual_request: '#38BDF8',
+  manual_event: '#C084FC',
+  manual_data: '#FB923C',
+  manual_auth: '#F87171',
   routes_to: '#94a3b8',
   references: '#64748b',
   contains: '#475569',
   authenticates: '#ef4444',
   cross_account_reference: '#C084FC', // purple (landing page tertiary)
 }
+
+export const MANUAL_EDGE_TYPES = [
+  { id: 'manual_generic', label: 'Generic / Manual' },
+  { id: 'manual_request', label: 'Request Flow' },
+  { id: 'manual_event', label: 'Event / Message' },
+  { id: 'manual_data', label: 'Data Access' },
+  { id: 'manual_auth', label: 'Auth / Trust' },
+] as const
 
 export const CATEGORY_ICONS: Record<string, string> = {
   compute:
@@ -631,22 +644,23 @@ export function labelForLayerId(layerId: string): string {
 
 export function buildLayerDefinitions(
   layerIds: string[],
-  customLayers: Array<{ id: string; label: string }> = []
+  customLayers: CustomLayerConfig[] = []
 ): GraphLayer[] {
-  const customMap = new Map(customLayers.map(layer => [layer.id, layer.label]))
+  const customMap = new Map(customLayers.map(layer => [layer.id, layer]))
   const defaults = new Map(DEFAULT_GRAPH_LAYERS.map(layer => [layer.id, layer]))
   return layerIds.map((layerId, index) => {
     const defaultLayer = defaults.get(layerId)
     if (defaultLayer) return defaultLayer
+    const customLayer = customMap.get(layerId)
     const hue = (index * 57 + 180) % 360
     return {
       id: layerId,
-      label: customMap.get(layerId) || labelForLayerId(layerId),
-      short: (customMap.get(layerId) || labelForLayerId(layerId)).slice(0, 4).toUpperCase(),
+      label: customLayer?.label || labelForLayerId(layerId),
+      short: (customLayer?.label || labelForLayerId(layerId)).slice(0, 4).toUpperCase(),
       fill: `hsla(${hue}, 70%, 55%, 0.08)`,
-      stroke: `hsla(${hue}, 75%, 68%, 0.28)`,
-      accent: `hsl(${hue}, 80%, 72%)`,
-      icon: '◌',
+      stroke: customLayer?.accent ? `${customLayer.accent}55` : `hsla(${hue}, 75%, 68%, 0.28)`,
+      accent: customLayer?.accent || `hsl(${hue}, 80%, 72%)`,
+      icon: customLayer?.icon || '◌',
     }
   })
 }
@@ -694,6 +708,7 @@ export function useGraph() {
     EDGE_COLORS,
     CATEGORY_ICONS,
     DEFAULT_GRAPH_LAYERS,
+    MANUAL_EDGE_TYPES,
     truncate,
     formatResourceType,
     getNodeWidth,

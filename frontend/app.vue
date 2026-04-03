@@ -19,12 +19,12 @@
       </div>
     </Transition>
 
-    <FilterSidebar />
+    <FilterSidebar v-if="!store.presentationMode" />
     <Canvas ref="canvasRef" @toggle-command-palette="cmdRef?.toggle()" />
-    <TimeTravelSlider />
-    <DetailPanel />
-    <CommandPalette ref="cmdRef" @pan-to="onPanTo" @fit-to-screen="onFit" />
-    <EditToolbar />
+    <TimeTravelSlider v-if="!store.presentationMode" />
+    <DetailPanel v-if="!store.presentationMode" />
+    <CommandPalette v-if="!store.presentationMode" ref="cmdRef" @pan-to="onPanTo" @fit-to-screen="onFit" />
+    <EditToolbar v-if="!store.presentationMode" />
 
     <!-- Empty state overlay -->
     <Transition name="fade">

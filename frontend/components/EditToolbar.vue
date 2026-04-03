@@ -3,12 +3,39 @@
   <Transition name="slide-up">
     <div
       v-if="store.editMode"
-      class="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 flex items-center gap-2 rounded-2xl border border-emerald-400/20 bg-[#12121a]/95 px-4 py-2.5 shadow-[0_20px_60px_rgba(0,0,0,0.5)] backdrop-blur-md"
+      class="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 flex flex-col gap-2 rounded-2xl border border-emerald-400/20 bg-[#12121a]/95 px-4 py-3 shadow-[0_20px_60px_rgba(0,0,0,0.5)] backdrop-blur-md"
     >
-      <!-- Prism indicator -->
-      <div class="flex items-center gap-2 border-r border-white/10 pr-3">
-        <PixelMascot :size="24" state="scanning" :animate="true" />
-        <span class="text-[10px] font-mono uppercase tracking-widest text-emerald-400">Edit Mode</span>
+      <div class="flex items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <PixelMascot :size="24" state="scanning" :animate="true" />
+          <span class="text-[10px] font-mono uppercase tracking-widest text-emerald-400">Edit Mode</span>
+          <span class="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-mono text-gray-300">{{ selectionLabel }}</span>
+        </div>
+        <div class="flex items-center gap-2 text-[10px] font-mono">
+          <span class="text-gray-600">{{ store.lastEditAction || 'ready' }}</span>
+          <span class="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-gray-400">{{ persistenceLabel }}</span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <div class="flex items-center rounded-xl border border-white/[0.08] bg-white/[0.03] p-1">
+          <button
+            v-for="mode in editModes"
+            :key="mode.id"
+            class="rounded-lg px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.15em] transition-all"
+            :class="store.editSubmode === mode.id ? 'bg-emerald-500/15 text-emerald-300' : 'text-gray-500 hover:text-white'"
+            @click="store.setEditSubmode(mode.id)"
+          >
+            {{ mode.label }}
+          </button>
+        </div>
+        <div class="hidden md:flex items-center gap-1.5 text-[10px] font-mono text-gray-600">
+          <span class="rounded-full border border-white/[0.06] px-2 py-0.5">hidden {{ summary.hidden }}</span>
+          <span class="rounded-full border border-white/[0.06] px-2 py-0.5">nodes {{ summary.customNodes }}</span>
+          <span class="rounded-full border border-white/[0.06] px-2 py-0.5">links {{ summary.customLinks }}</span>
+          <span class="rounded-full border border-white/[0.06] px-2 py-0.5">moved {{ summary.moved }}</span>
+          <span class="rounded-full border border-white/[0.06] px-2 py-0.5">layers {{ summary.customLayers }}</span>
+        </div>
       </div>
 
       <!-- Connecting indicator -->
@@ -29,12 +56,13 @@
       <!-- Actions — grouped by domain -->
       <template v-if="!store.connectingFromNodeId">
         <div class="hidden md:flex items-center rounded-md border border-white/[0.06] bg-white/[0.03] px-2.5 py-1 text-[9px] font-mono uppercase tracking-[0.15em] text-gray-600">
-          Drag to reorder
+          {{ modeDescription }}
         </div>
 
         <!-- Node actions -->
         <span class="h-4 w-px bg-white/[0.08]" />
         <button
+          v-if="store.editSubmode === 'structure'"
           class="edit-btn"
           title="Add a custom component"
           @click="showAddDialog = true"
@@ -44,6 +72,7 @@
         </button>
 
         <button
+          v-if="store.editSubmode === 'structure'"
           class="edit-btn"
           title="Create a new architecture layer"
           @click="showAddLayerDialog = true"
@@ -58,6 +87,7 @@
         <!-- Layout actions -->
         <span class="h-4 w-px bg-white/[0.08]" />
         <button
+          v-if="store.editSubmode === 'structure'"
           class="edit-btn"
           title="Re-arrange the graph after edits"
           @click="relayoutGraph"
@@ -66,6 +96,18 @@
             <path d="M2 3.5h4M2 9.5h9M7 3.5l1.5-1.5M7 3.5L8.5 5M9 9.5l1.5-1.5M9 9.5l1.5 1.5"/>
           </svg>
           <span>Reflow</span>
+        </button>
+
+        <button
+          v-if="store.editSubmode === 'structure'"
+          class="edit-btn"
+          title="Repack the graph more aggressively"
+          @click="repackGraph"
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="2" width="3" height="3"/><rect x="8" y="2" width="3" height="3"/><rect x="2" y="8" width="3" height="3"/><rect x="8" y="8" width="3" height="3"/>
+          </svg>
+          <span>Repack</span>
         </button>
 
         <!-- Global actions -->
@@ -113,6 +155,38 @@
         </button>
 
         <button
+          class="edit-btn"
+          @click="togglePresentation"
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="2" width="10" height="7" rx="1.5"/><path d="M4 11h5"/></svg>
+          <span>Present</span>
+        </button>
+
+        <button
+          class="edit-btn"
+          @click="downloadEdits"
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6.5 2v6M4 6l2.5 2.5L9 6"/><path d="M2 10.5h9"/></svg>
+          <span>Export Edits</span>
+        </button>
+
+        <button
+          class="edit-btn"
+          @click="triggerImport"
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6.5 11V5M4 7.5L6.5 5 9 7.5"/><path d="M2 2.5h9"/></svg>
+          <span>Import</span>
+        </button>
+
+        <button
+          class="edit-btn"
+          @click="downloadGraph"
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2.5h9v8H2z"/><path d="M4.5 5h4M4.5 7h3M4.5 9h4"/></svg>
+          <span>Export Graph</span>
+        </button>
+
+        <button
           v-if="hasAnyEdits"
           class="edit-btn text-red-400/80 hover:!text-red-400 hover:!bg-red-500/10"
           @click="store.clearAllEdits()"
@@ -129,6 +203,7 @@
       >
         Done
       </button>
+      <input ref="importInputRef" type="file" accept="application/json" class="hidden" @change="onImportFile" />
     </div>
   </Transition>
 
@@ -267,12 +342,40 @@ const newNodeName = ref('')
 const newNodeTemplateId = ref('lambda')
 const newNodeLayerId = ref('serverless')
 const newLayerName = ref('')
+const importInputRef = ref<HTMLInputElement | null>(null)
 const userNodeTemplates = USER_NODE_TEMPLATES
+const editModes = [
+  { id: 'inspect', label: 'Inspect' },
+  { id: 'structure', label: 'Structure' },
+  { id: 'connect', label: 'Connect' },
+] as const
 
 const selectedTemplate = computed(() =>
   userNodeTemplates.find(template => template.id === newNodeTemplateId.value) || userNodeTemplates[0]
 )
 const layerDefinitions = computed(() => buildLayerDefinitions(store.layoutLayers, store.customLayers))
+const summary = computed(() => store.editChangeSummary)
+const persistenceLabel = computed(() => {
+  switch (store.editPersistenceStatus) {
+    case 'saved': return 'saved locally'
+    case 'restored': return 'restored'
+    case 'imported': return 'imported'
+    default: return 'idle'
+  }
+})
+const selectionLabel = computed(() => {
+  if (store.selectedNode) return store.selectedNode.name
+  if (store.selectedEdge) return store.selectedEdge.label || 'manual link'
+  return 'nothing selected'
+})
+const modeDescription = computed(() => {
+  switch (store.editSubmode) {
+    case 'inspect': return 'safe review mode'
+    case 'structure': return 'drag to move · use layer rail'
+    case 'connect': return store.connectingFromNodeId ? 'choose a target node' : 'select a node and connect it'
+    default: return ''
+  }
+})
 
 const hasAnyEdits = computed(() =>
   store.hiddenNodeIds.length > 0
@@ -313,6 +416,50 @@ function relayoutGraph() {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event('stackmap-fit-view'))
   }
+}
+
+function repackGraph() {
+  store.requestRelayout()
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('stackmap-fit-view'))
+  }
+}
+
+function togglePresentation() {
+  store.setPresentationMode(true)
+}
+
+function downloadBlob(filename: string, content: string) {
+  if (typeof window === 'undefined') return
+  const blob = new Blob([content], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
+
+function downloadEdits() {
+  downloadBlob('stackmap-edits.json', store.exportEditsPayload())
+}
+
+function downloadGraph() {
+  downloadBlob('stackmap-corrected-graph.json', store.exportCurrentGraphPayload(store.presentationMode ? 'presentation' : 'corrected'))
+}
+
+function triggerImport() {
+  importInputRef.value?.click()
+}
+
+async function onImportFile(event: Event) {
+  const target = event.target as HTMLInputElement | null
+  const file = target?.files?.[0]
+  if (!file) return
+  const text = await file.text()
+  store.importEditsPayload(text)
+  relayoutGraph()
+  if (target) target.value = ''
 }
 
 watch(selectedTemplate, template => {

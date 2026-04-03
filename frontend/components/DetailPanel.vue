@@ -1,13 +1,14 @@
 <template>
   <Transition name="slide">
     <div
-      v-if="node"
+      v-if="node || edge"
       class="fixed right-0 top-0 h-full w-96 overflow-y-auto overflow-x-hidden z-50 detail-shell"
       style="backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); background: rgba(18, 18, 26, 0.95)"
       :style="{ '--panel-color': categoryColor }"
     >
       <div class="panel-accent" />
 
+      <template v-if="node">
       <div class="p-4 border-b border-white/10">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-3 min-w-0">
@@ -97,6 +98,13 @@
             Connect to...
           </button>
           <button
+            v-if="!node.tags?._user_created"
+            class="rounded-md border border-amber-400/20 bg-amber-500/10 px-2.5 py-1 text-[10px] font-mono text-amber-300 transition hover:bg-amber-500/15"
+            @click="store.resetNodeEdits(node.id)"
+          >
+            Reset
+          </button>
+          <button
             v-if="node.tags?._user_created"
             class="rounded-md border border-red-400/30 bg-red-500/15 px-2.5 py-1 text-[10px] font-mono text-red-300 transition hover:bg-red-500/25"
             @click="store.removeUserNode(node.id)"
@@ -106,6 +114,45 @@
         </div>
 
         <div v-if="store.editMode && node" class="mb-3 space-y-2">
+          <label class="block">
+            <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Name</span>
+            <input
+              :value="node.name"
+              class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+              @change="onNameChange"
+            />
+          </label>
+          <label class="block">
+            <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Provider</span>
+            <input
+              :value="node.provider"
+              class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+              @change="onProviderChange"
+            />
+          </label>
+          <label v-if="node.tags?._user_created" class="block">
+            <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Service Type</span>
+            <select
+              :value="node.resource_type"
+              class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+              @change="onResourceTypeChange"
+            >
+              <option v-for="template in userNodeTemplates" :key="template.id" :value="template.resourceType">{{ template.label }}</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Prominence</span>
+            <select
+              :value="String(node.position_hint?.weight || 2)"
+              class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+              @change="onWeightChange"
+            >
+              <option value="2">Low</option>
+              <option value="3">Medium</option>
+              <option value="4">High</option>
+              <option value="5">Critical</option>
+            </select>
+          </label>
           <label class="block">
             <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Layer</span>
             <select
@@ -292,6 +339,70 @@
           </div>
         </Transition>
       </div>
+      </template>
+
+      <template v-else-if="edge">
+        <div class="p-4 border-b border-white/10">
+          <div class="flex items-center justify-between">
+            <div class="min-w-0">
+              <h2 class="text-sm font-semibold text-white font-mono leading-tight truncate">Manual Link</h2>
+              <p class="text-xs text-gray-500 font-mono truncate">{{ edge.source }} → {{ edge.target }}</p>
+            </div>
+            <button
+              class="text-gray-500 hover:text-gray-300 transition flex-shrink-0 w-6 h-6 flex items-center justify-center rounded hover:bg-white/5"
+              @click="store.selectEdge(null)"
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2l8 8M10 2l-8 8"/></svg>
+            </button>
+          </div>
+          <div class="mt-3 flex items-center gap-1.5 flex-wrap">
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium tracking-wide" :style="{ backgroundColor: `${edgeColor}20`, color: edgeColor }">{{ edge.edge_type }}</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] text-gray-500 bg-white/5">{{ edge.label }}</span>
+          </div>
+        </div>
+
+        <div class="p-4 border-b border-white/10 space-y-3">
+          <label class="block">
+            <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Label</span>
+            <input
+              :value="edge.label"
+              class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+              @change="onEdgeLabelChange"
+            />
+          </label>
+
+          <label class="block">
+            <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Type</span>
+            <select
+              :value="edge.edge_type"
+              class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+              @change="onEdgeTypeChange"
+            >
+              <option v-for="type in MANUAL_EDGE_TYPES" :key="type.id" :value="type.id">{{ type.label }}</option>
+            </select>
+          </label>
+
+          <div>
+            <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Color</span>
+            <div class="flex gap-2">
+              <button
+                v-for="color in userLinkColors"
+                :key="color"
+                class="h-7 w-7 rounded-full border"
+                :style="{ backgroundColor: color, borderColor: edge.color === color ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.12)' }"
+                @click="store.updateUserEdge(edge.id, { color })"
+              />
+            </div>
+          </div>
+
+          <button
+            class="rounded-md border border-red-400/30 bg-red-500/15 px-3 py-1.5 text-[10px] font-mono text-red-300 transition hover:bg-red-500/25"
+            @click="store.removeUserEdge(edge.id)"
+          >
+            Delete Link
+          </button>
+        </div>
+      </template>
     </div>
   </Transition>
 </template>
@@ -299,13 +410,15 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useGraphStore } from '~/stores/graph'
-import { CATEGORY_COLORS, buildLayerDefinitions, getNodeIconAsset, getNodeIconPath, getResourceIconAsset, getResourceIconPath } from '~/composables/useGraph'
+import { CATEGORY_COLORS, MANUAL_EDGE_TYPES, USER_NODE_TEMPLATES, buildLayerDefinitions, getNodeIconAsset, getNodeIconPath, getResourceIconAsset, getResourceIconPath } from '~/composables/useGraph'
 
 const store = useGraphStore()
 const showRaw = ref(false)
 const newLayerName = ref('')
+const userLinkColors = ['#4ADE80', '#38BDF8', '#C084FC', '#FB923C', '#F87171']
 
 const node = computed(() => store.selectedNode)
+const edge = computed(() => store.selectedEdge)
 const diffStatus = computed(() => node.value?.position_hint?.diff_status as string | undefined)
 const diffChanges = computed(() => node.value?.position_hint?.diff_changes as Record<string, unknown> | undefined)
 const diffStatusColor = computed(() => {
@@ -333,9 +446,11 @@ const diffBadgeLabel = computed(() => {
   }
 })
 const categoryColor = computed(() => CATEGORY_COLORS[node.value?.category || ''] || '#9ca3af')
+const edgeColor = computed(() => edge.value?.color || CATEGORY_COLORS.integration)
 const iconAsset = computed(() => node.value ? getNodeIconAsset(node.value) : getResourceIconAsset('user_defined'))
 const iconPath = computed(() => node.value ? getNodeIconPath(node.value) : getResourceIconPath('user_defined', 'other'))
 const layerDefinitions = computed(() => buildLayerDefinitions(store.layoutLayers, store.customLayers))
+const userNodeTemplates = USER_NODE_TEMPLATES
 
 const edges = computed(() => (node.value ? store.nodeEdges(node.value.id) : []))
 const outgoing = computed(() => edges.value.filter(e => e.source === node.value?.id))
@@ -427,6 +542,54 @@ function nodeIconAssetById(id: string): string | null {
 function onLayerChange(layerId: string) {
   if (!node.value) return
   store.moveNodeToLayer(node.value.id, layerId)
+}
+
+function onNameChange(event: Event) {
+  if (!node.value) return
+  const target = event.target as HTMLInputElement | null
+  if (!target) return
+  store.renameNode(node.value.id, target.value)
+}
+
+function onProviderChange(event: Event) {
+  if (!node.value) return
+  const target = event.target as HTMLInputElement | null
+  if (!target) return
+  store.updateNodeDetails(node.value.id, { provider: target.value })
+}
+
+function onResourceTypeChange(event: Event) {
+  if (!node.value) return
+  const target = event.target as HTMLSelectElement | null
+  if (!target) return
+  const template = userNodeTemplates.find(candidate => candidate.resourceType === target.value)
+  store.updateNodeDetails(node.value.id, {
+    resource_type: target.value,
+    category: template?.category ?? node.value.category,
+    provider: template?.provider ?? node.value.provider,
+  })
+}
+
+function onWeightChange(event: Event) {
+  if (!node.value) return
+  const target = event.target as HTMLSelectElement | null
+  if (!target) return
+  store.updateNodeDetails(node.value.id, { weight: Number(target.value) })
+}
+
+function onEdgeLabelChange(event: Event) {
+  if (!edge.value) return
+  const target = event.target as HTMLInputElement | null
+  if (!target) return
+  store.updateUserEdge(edge.value.id, { label: target.value.trim() || 'Manual link' })
+}
+
+function onEdgeTypeChange(event: Event) {
+  if (!edge.value) return
+  const target = event.target as HTMLSelectElement | null
+  if (!target) return
+  const manualType = MANUAL_EDGE_TYPES.find(type => type.id === target.value)
+  store.updateUserEdge(edge.value.id, { edge_type: target.value, label: edge.value.label || manualType?.label || 'Manual link' })
 }
 
 function onLayerSelectChange(event: Event) {
