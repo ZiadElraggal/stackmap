@@ -133,6 +133,44 @@
         </div>
       </section>
 
+      <section v-if="edgeTypes.length > 0" class="sidebar-section">
+        <div class="section-heading">
+          <span>Relationships</span>
+          <span class="section-heading__meta">{{ edgeTypes.length }}</span>
+        </div>
+        <div class="mb-3 flex flex-wrap gap-2">
+          <button
+            v-for="preset in relationshipPresets"
+            :key="preset.id"
+            class="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[10px] font-mono text-gray-400 transition hover:bg-white/[0.06] hover:text-white"
+            @click="store.setEdgeTypePreset(preset.id)"
+          >
+            {{ preset.label }}
+          </button>
+        </div>
+        <div class="space-y-1">
+          <button
+            v-for="edgeType in edgeTypes"
+            :key="edgeType.id"
+            class="filter-row"
+            @click="store.toggleEdgeType(edgeType.id)"
+          >
+            <span
+              class="inline-flex h-3 w-5 rounded-full"
+              :style="{ backgroundColor: EDGE_COLORS[edgeType.id] || '#64748b', opacity: 0.9 }"
+            />
+            <div class="min-w-0 flex-1 text-left">
+              <div class="truncate text-xs text-gray-300">{{ edgeTypeLabel(edgeType.id) }}</div>
+              <div class="text-[10px] font-mono uppercase tracking-wider text-gray-600">{{ edgeKindLabel(edgeType.kind) }}</div>
+            </div>
+            <span class="text-gray-600">{{ edgeType.count }}</span>
+            <span class="toggle" :class="{ on: store.edgeTypeFilters[edgeType.id] !== false }" :style="{ '--toggle-color': EDGE_COLORS[edgeType.id] || '#64748b' }">
+              <span class="knob" />
+            </span>
+          </button>
+        </div>
+      </section>
+
       <section class="sidebar-section">
         <div class="section-heading">
           <span>Min importance</span>
@@ -322,7 +360,7 @@
 <script setup lang="ts">
 import { computed, ref, onUnmounted } from 'vue'
 import { useGraphStore } from '~/stores/graph'
-import { CATEGORY_COLORS, CATEGORY_ICONS } from '~/composables/useGraph'
+import { CATEGORY_COLORS, CATEGORY_ICONS, EDGE_COLORS } from '~/composables/useGraph'
 
 const store = useGraphStore()
 const collapsed = ref(false)
@@ -349,6 +387,7 @@ const orgTree = computed(() => store.organizationTree)
 const accountCount = computed(() => orgTree.value.filter(i => i.group_type === 'account').length)
 const visibleResourceCount = computed(() => store.visibleNodes.length)
 const visibleEdgeCount = computed(() => store.visibleEdges.length)
+const edgeTypes = computed(() => store.availableEdgeTypes)
 const activeViewLabel = computed(() => {
   if (store.viewMode === 'architecture') return 'Arch'
   if (store.viewMode === 'components') return 'Comp'
@@ -359,6 +398,12 @@ const sourceLabel = computed(() => {
   const sourceType = String(store.metadata?.source_type || '').replace(/_/g, ' ')
   return sourceType || 'workspace'
 })
+const relationshipPresets = [
+  { id: 'all', label: 'All' },
+  { id: 'manual', label: 'Manual Only' },
+  { id: 'inferred', label: 'Inferred Only' },
+  { id: 'presentation', label: 'Presentation' },
+] as const
 
 const ORG_ICONS: Record<string, string> = {
   account:
@@ -405,6 +450,19 @@ const sliderFill = computed(() => Math.max(0, sliderX.value - 8))
 
 function iconPath(category: string): string {
   return CATEGORY_ICONS[category] || CATEGORY_ICONS.other
+}
+
+function edgeTypeLabel(edgeType: string): string {
+  return edgeType
+    .replace(/^manual_/, '')
+    .replace(/cross_account_reference/g, 'cross-account')
+    .replace(/_/g, ' ')
+}
+
+function edgeKindLabel(kind: 'manual' | 'cross-account' | 'inferred'): string {
+  if (kind === 'manual') return 'manual'
+  if (kind === 'cross-account') return 'cross-account'
+  return 'inferred'
 }
 
 function setWeightFromClientX(clientX: number) {

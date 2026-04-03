@@ -215,6 +215,14 @@
               </div>
             </div>
             <button
+              v-if="store.customLayers.some(customLayer => customLayer.id === layer.id)"
+              class="flex h-6 w-6 items-center justify-center rounded-md border border-white/10 bg-white/5 text-[11px] text-gray-300 opacity-0 transition-all hover:bg-white/10 group-hover:opacity-100"
+              title="Edit custom layer"
+              @click.stop="openLayerEditor(layer.id)"
+            >
+              ✎
+            </button>
+            <button
               v-if="layer.canDelete"
               class="flex h-6 w-6 items-center justify-center rounded-md border border-red-400/20 bg-red-500/8 text-[11px] text-red-300 opacity-0 transition-all hover:bg-red-500/16 group-hover:opacity-100"
               title="Delete empty custom layer"
@@ -256,10 +264,23 @@
 
           <template v-if="store.selectedNode">
             <template v-if="store.editSubmode === 'inspect'">
+              <button
+                v-if="selectedNodeHasComponent"
+                class="selection-action"
+                @click="store.isolateSelectedComponent()"
+              >Isolate Component</button>
+              <button class="selection-action" @click="store.isolateSelectedNeighborhood(1)">Focus 1-Hop</button>
               <button class="selection-action" @click="store.setEditSubmode('structure')">Open Structure</button>
               <button class="selection-action selection-action--accent" @click="activateConnectForSelectedNode">Open Connect</button>
             </template>
             <template v-else-if="store.editSubmode === 'structure'">
+              <button class="selection-action" @click="store.isolateSelectedLayer()">Isolate Layer</button>
+              <button
+                v-if="selectedNodeHasComponent"
+                class="selection-action"
+                @click="store.isolateSelectedComponent()"
+              >Isolate Component</button>
+              <button class="selection-action" @click="store.isolateSelectedNeighborhood(1)">Focus 1-Hop</button>
               <button class="selection-action selection-action--danger" @click="store.hideNode(store.selectedNode.id)">Hide</button>
               <button
                 v-if="store.selectedNode.tags?._user_created"
@@ -323,6 +344,115 @@
             @click="store.dismissEditWalkthrough()"
           >
             Dismiss
+          </button>
+        </div>
+      </div>
+    </Transition>
+
+    <Transition name="fade">
+      <div
+        v-if="store.editMode && store.editSubmode === 'connect' && !store.presentationMode"
+        class="absolute left-1/2 top-[7.75rem] z-40 w-[460px] max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-2xl border border-amber-400/18 bg-[#12121a]/96 p-4 backdrop-blur-xl shadow-[0_18px_48px_rgba(0,0,0,0.45)]"
+      >
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="text-[10px] font-mono uppercase tracking-[0.18em] text-amber-300">Connect Mode</div>
+            <div class="mt-2 text-sm text-white">
+              {{ store.connectingFromNodeId ? 'Click a destination resource to create the missing relationship.' : 'Select a source resource, then choose the destination on the graph.' }}
+            </div>
+            <div class="mt-2 text-xs leading-relaxed text-gray-400">
+              Manual links appear in the side panel after creation, where you can rename them, recolor them, and set whether they represent request flow, events, data access, auth, or a generic relationship.
+            </div>
+          </div>
+          <button
+            class="rounded-lg border border-white/10 px-2 py-1 text-[10px] font-mono text-gray-400 transition hover:bg-white/5 hover:text-white"
+            @click="store.cancelConnecting()"
+          >
+            Cancel
+          </button>
+        </div>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <span
+            v-for="hint in connectHints"
+            :key="hint.label"
+            class="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[10px] font-mono text-gray-400"
+          >
+            <span class="h-1.5 w-1.5 rounded-full" :style="{ backgroundColor: hint.color }" />
+            {{ hint.label }}
+          </span>
+        </div>
+      </div>
+    </Transition>
+
+    <Transition name="fade">
+      <div
+        v-if="showLayerEditor && editingLayer"
+        class="absolute left-1/2 top-1/2 z-[120] w-[360px] max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/10 bg-[#12121a]/98 p-5 shadow-[0_30px_80px_rgba(0,0,0,0.5)] backdrop-blur-xl"
+      >
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="text-[10px] font-mono uppercase tracking-[0.18em] text-emerald-400">Layer Editor</div>
+            <div class="mt-2 text-sm text-white">Adjust how this custom layer appears across the editor.</div>
+          </div>
+          <button
+            class="rounded-lg border border-white/10 px-2 py-1 text-[10px] font-mono text-gray-400 transition hover:bg-white/5 hover:text-white"
+            @click="closeLayerEditor"
+          >
+            Close
+          </button>
+        </div>
+
+        <div class="mt-4 space-y-3">
+          <label class="block">
+            <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Label</span>
+            <input
+              v-model="layerEditLabel"
+              class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white font-mono outline-none focus:border-emerald-400/40"
+              placeholder="Layer label"
+            />
+          </label>
+
+          <div class="grid grid-cols-[1fr_auto] gap-3">
+            <label class="block">
+              <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Icon</span>
+              <input
+                v-model="layerEditIcon"
+                maxlength="2"
+                class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white font-mono outline-none focus:border-emerald-400/40"
+                placeholder="✦"
+              />
+            </label>
+            <label class="block">
+              <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Accent</span>
+              <input
+                v-model="layerEditAccent"
+                type="color"
+                class="h-[42px] w-16 rounded-lg border border-white/10 bg-white/5 p-1"
+              />
+            </label>
+          </div>
+
+          <div class="rounded-xl border border-white/[0.08] bg-black/20 px-3 py-3">
+            <div class="mb-2 text-[10px] font-mono uppercase tracking-[0.15em] text-gray-500">Preview</div>
+            <div class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5" :style="{ borderColor: `${layerEditAccent}55`, backgroundColor: `${layerEditAccent}14` }">
+              <span class="text-sm" :style="{ color: layerEditAccent }">{{ layerEditIcon || '✦' }}</span>
+              <span class="text-xs font-mono text-white">{{ layerEditLabel || editingLayer.label }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 flex justify-end gap-2">
+          <button
+            class="rounded-lg border border-white/10 px-4 py-2 text-xs font-mono text-gray-400 transition hover:bg-white/5"
+            @click="closeLayerEditor"
+          >
+            Cancel
+          </button>
+          <button
+            class="rounded-lg border border-emerald-400/30 bg-emerald-500/15 px-4 py-2 text-xs font-mono text-emerald-300 transition hover:bg-emerald-500/25"
+            @click="saveLayerEditor"
+          >
+            Save Layer
           </button>
         </div>
       </div>
@@ -445,7 +575,13 @@
       <div class="flex items-center gap-3">
         <div v-for="edgeType in edgeTypesInGraph" :key="`legend-${edgeType}`" class="flex items-center gap-1.5">
           <span class="h-0.5 w-4 rounded-full" :style="{ backgroundColor: edgeColor(edgeType), opacity: 0.8 }" />
-          <span class="text-[9px] text-gray-500 tracking-wide">{{ edgeType.replace('_', ' ') }}</span>
+          <span class="text-[9px] text-gray-500 tracking-wide">{{ edgeTypeLegendLabel(edgeType) }}</span>
+          <span
+            class="rounded-full border px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-wide"
+            :class="edgeTypeKindClass(edgeType)"
+          >
+            {{ edgeTypeKindLabel(edgeType) }}
+          </span>
         </div>
       </div>
     </div>
@@ -489,7 +625,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import * as d3 from 'd3'
 import { useGraphStore, type NodePosition, type StackMapEdge, type StackMapNode } from '~/stores/graph'
 import { useLayout } from '~/composables/useLayout'
-import { EDGE_COLORS, buildLayerDefinitions, getNodeHeight } from '~/composables/useGraph'
+import { EDGE_COLORS, MANUAL_EDGE_TYPES, buildLayerDefinitions, getNodeHeight } from '~/composables/useGraph'
 
 const store = useGraphStore()
 const { computeLayout, sortByTier } = useLayout()
@@ -684,6 +820,10 @@ const selectedEdgeIsEditable = computed(() => {
   if (!edge) return false
   return edge.edge_type.startsWith('manual_') || edge.edge_type === 'user_link' || edge.id.startsWith('user:')
 })
+const selectedNodeHasComponent = computed(() => {
+  if (!store.selectedNodeId) return false
+  return store.componentSummaries.some(summary => summary.nodeIds.includes(store.selectedNodeId as string))
+})
 const modeHint = computed(() => {
   switch (store.editSubmode) {
     case 'inspect':
@@ -715,6 +855,20 @@ const diffSummaryMeta = computed(() => {
 
 const undoShortcutLabel = computed(() => isMacLike ? '⌘Z' : 'Ctrl+Z')
 const redoShortcutLabel = computed(() => isMacLike ? '⇧⌘Z' : 'Ctrl+Y')
+const connectHints = computed(() =>
+  MANUAL_EDGE_TYPES.map(type => ({
+    label: type.label,
+    color: EDGE_COLORS[type.id] || '#94a3b8',
+  }))
+)
+const showLayerEditor = ref(false)
+const editingLayerId = ref<string | null>(null)
+const layerEditLabel = ref('')
+const layerEditIcon = ref('')
+const layerEditAccent = ref('#4ADE80')
+const editingLayer = computed(() =>
+  editingLayerId.value ? store.customLayers.find(layer => layer.id === editingLayerId.value) || null : null
+)
 
 function tierBandOpacity(bandName: string): number {
   if (store.dragTargetLayerId) return store.dragTargetLayerId === bandName ? 0.95 : 0.36
@@ -741,6 +895,26 @@ function tierChipOpacity(bandName: string): number {
 
 function edgeColor(edgeType: string): string {
   return EDGE_COLORS[edgeType] || '#64748b'
+}
+
+function edgeTypeLegendLabel(edgeType: string): string {
+  if (edgeType.startsWith('manual_')) {
+    return edgeType.replace('manual_', '').replace(/_/g, ' ')
+  }
+  if (edgeType === 'cross_account_reference') return 'cross-account'
+  return edgeType.replace(/_/g, ' ')
+}
+
+function edgeTypeKindLabel(edgeType: string): string {
+  if (edgeType.startsWith('manual_') || edgeType === 'user_link') return 'manual'
+  if (edgeType === 'cross_account_reference') return 'cross'
+  return 'inferred'
+}
+
+function edgeTypeKindClass(edgeType: string): string {
+  if (edgeType.startsWith('manual_') || edgeType === 'user_link') return 'legend-pill legend-pill--manual'
+  if (edgeType === 'cross_account_reference') return 'legend-pill legend-pill--cross'
+  return 'legend-pill legend-pill--inferred'
 }
 
 function sanitizeMarkerId(value: string): string {
@@ -946,7 +1120,7 @@ function recomputeLayout() {
   const allEdges = store.visibleEdges
   const positions = store.diffMode
     ? computeDiffLayout()
-    : computeLayout(allNodes, allEdges, store.graphGroups, visibleLayerDefinitions.value.map(layer => layer.id))
+    : computeLayout(allNodes, allEdges, store.graphGroups, visibleLayerDefinitions.value.map(layer => layer.id), { mode: store.relayoutMode })
   store.setPositions(positions)
 }
 
@@ -1033,6 +1207,32 @@ function deleteLayer(layerId: string) {
   relayoutAndFit()
 }
 
+function openLayerEditor(layerId: string) {
+  const layer = store.customLayers.find(candidate => candidate.id === layerId)
+  if (!layer) return
+  editingLayerId.value = layer.id
+  layerEditLabel.value = layer.label
+  layerEditIcon.value = layer.icon || ''
+  layerEditAccent.value = layer.accent || '#4ADE80'
+  showLayerEditor.value = true
+}
+
+function closeLayerEditor() {
+  showLayerEditor.value = false
+  editingLayerId.value = null
+}
+
+function saveLayerEditor() {
+  if (!editingLayer.value) return
+  store.updateCustomLayer(editingLayer.value.id, {
+    label: layerEditLabel.value,
+    icon: layerEditIcon.value.trim() || undefined,
+    accent: layerEditAccent.value,
+  })
+  relayoutAndFit()
+  closeLayerEditor()
+}
+
 function computeDiffLayout(): Record<string, NodePosition> {
   const allNodes = [...store.graphNodes, ...store.userNodes]
   const allEdges = [...store.graphEdges, ...store.userEdges]
@@ -1051,8 +1251,8 @@ function computeDiffLayout(): Record<string, NodePosition> {
     edgeDiffStatus[edge.id] !== 'removed' && afterIds.has(edge.source) && afterIds.has(edge.target)
   )
 
-  const beforePositions = computeLayout(beforeNodes, beforeEdges, store.graphGroups, store.layoutLayers)
-  const afterPositions = computeLayout(afterNodes, afterEdges, store.graphGroups, store.layoutLayers)
+  const beforePositions = computeLayout(beforeNodes, beforeEdges, store.graphGroups, store.layoutLayers, { mode: store.relayoutMode })
+  const afterPositions = computeLayout(afterNodes, afterEdges, store.graphGroups, store.layoutLayers, { mode: store.relayoutMode })
   const beforeFallback = centroidForPositions(beforePositions)
   const afterFallback = centroidForPositions(afterPositions)
 
@@ -1257,6 +1457,30 @@ defineExpose({ fitToViewport, panToNode })
 
 .selection-action--danger:hover {
   background: rgba(239, 68, 68, 0.18);
+}
+
+.legend-pill {
+  color: rgba(156, 163, 175, 0.9);
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.legend-pill--manual {
+  color: rgba(167, 243, 208, 0.96);
+  border-color: rgba(74, 222, 128, 0.18);
+  background: rgba(74, 222, 128, 0.08);
+}
+
+.legend-pill--cross {
+  color: rgba(221, 214, 254, 0.96);
+  border-color: rgba(192, 132, 252, 0.18);
+  background: rgba(192, 132, 252, 0.08);
+}
+
+.legend-pill--inferred {
+  color: rgba(191, 219, 254, 0.96);
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(148, 163, 184, 0.08);
 }
 
 .status-glow {

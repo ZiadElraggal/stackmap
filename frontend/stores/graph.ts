@@ -912,6 +912,7 @@ export const useGraphStore = defineStore('graph', {
     selectedNodeId: null as string | null,
     hoveredNodeId: null as string | null,
     categoryFilters: {} as Record<string, boolean>,
+    edgeTypeFilters: {} as Record<string, boolean>,
     minWeight: 1,
     hopLimit: 0,
     searchQuery: '',
@@ -938,6 +939,7 @@ export const useGraphStore = defineStore('graph', {
     userNodes: [] as StackMapNode[],
     connectingFromNodeId: null as string | null,
     layoutVersion: 0 as number,
+    relayoutMode: 'flow' as 'flow' | 'pack',
     layoutLayers: [...DEFAULT_LAYOUT_LAYERS] as string[],
     customLayers: [] as CustomLayerConfig[],
     nodeTierOverrides: {} as Record<string, string>,
@@ -1349,7 +1351,29 @@ export const useGraphStore = defineStore('graph', {
       const visibleIds = new Set(this.visibleNodes.map((node: StackMapNode) => node.id))
       const baseEdges = this.graphEdges.filter((edge: StackMapEdge) => visibleIds.has(edge.source) && visibleIds.has(edge.target))
       const userEdgesVisible = this.userEdges.filter((edge: StackMapEdge) => visibleIds.has(edge.source) && visibleIds.has(edge.target))
-      return [...baseEdges, ...userEdgesVisible]
+      return [...baseEdges, ...userEdgesVisible].filter(edge => this.edgeTypeFilters[edge.edge_type] !== false)
+    },
+
+    availableEdgeTypes(state): Array<{ id: string; count: number; kind: 'manual' | 'cross-account' | 'inferred' }> {
+      const visibleIds = new Set(this.visibleNodes.map((node: StackMapNode) => node.id))
+      const allVisible = [...this.graphEdges, ...state.userEdges].filter(
+        edge => visibleIds.has(edge.source) && visibleIds.has(edge.target)
+      )
+      const counts = new Map<string, number>()
+      for (const edge of allVisible) {
+        counts.set(edge.edge_type, (counts.get(edge.edge_type) || 0) + 1)
+      }
+      return [...counts.entries()]
+        .map(([id, count]) => ({
+          id,
+          count,
+          kind: id.startsWith('manual_') || id === 'user_link'
+            ? 'manual'
+            : id === 'cross_account_reference'
+              ? 'cross-account'
+              : 'inferred' as const,
+        }))
+        .sort((a, b) => b.count - a.count || a.id.localeCompare(b.id))
     },
 
     nodeEdges(): (nodeId: string) => StackMapEdge[] {
@@ -1516,6 +1540,8 @@ export const useGraphStore = defineStore('graph', {
       }
 
       this.loadPersistedEdits()
+      const edgeTypes = new Set([...this.graphEdges, ...this.userEdges].map(edge => edge.edge_type))
+      this.edgeTypeFilters = Object.fromEntries([...edgeTypes].map(edgeType => [edgeType, true]))
       this.editHistoryPast = []
       this.editHistoryFuture = []
       this.loaded = true
@@ -1560,6 +1586,29 @@ export const useGraphStore = defineStore('graph', {
 
     toggleCategory(category: string) {
       this.categoryFilters[category] = !this.categoryFilters[category]
+    },
+
+    toggleEdgeType(edgeType: string) {
+      this.edgeTypeFilters[edgeType] = this.edgeTypeFilters[edgeType] === false
+    },
+
+    setEdgeTypePreset(preset: 'all' | 'manual' | 'inferred' | 'presentation') {
+      const edgeTypes = new Set([...this.graphEdges, ...this.userEdges].map(edge => edge.edge_type))
+      const shouldEnable = (edgeType: string) => {
+        if (preset === 'all') return true
+        if (preset === 'manual') return edgeType.startsWith('manual_') || edgeType === 'user_link'
+        if (preset === 'inferred') return !edgeType.startsWith('manual_') && edgeType !== 'user_link'
+        return edgeType.startsWith('manual_')
+          || edgeType === 'user_link'
+          || edgeType === 'triggers'
+          || edgeType === 'writes_to'
+          || edgeType === 'reads_from'
+          || edgeType === 'routes_to'
+      }
+
+      for (const edgeType of edgeTypes) {
+        this.edgeTypeFilters[edgeType] = shouldEnable(edgeType)
+      }
     },
 
     setMinWeight(weight: number) {
@@ -1662,6 +1711,9 @@ export const useGraphStore = defineStore('graph', {
       this.showWeaklyLinkedComponents = false
       this.collapseNetworkScaffolding = true
       this.showCrossAccountEdges = true
+      for (const edgeType of Object.keys(this.edgeTypeFilters)) {
+        this.edgeTypeFilters[edgeType] = true
+      }
     },
 
     // ── Edit mode actions ─────────────────────────────────────────
@@ -1744,6 +1796,45 @@ export const useGraphStore = defineStore('graph', {
       this._persistEdits()
     },
 
+    isolateNodeSet(nodeIds: string[], label: string) {
+      const keep = new Set(nodeIds)
+      if (keep.size === 0) return
+      const visibleIds = this.visibleNodes.map(node => node.id)
+      const nextHidden = new Set(this.hiddenNodeIds)
+      for (const nodeId of visibleIds) {
+        if (!keep.has(nodeId)) nextHidden.add(nodeId)
+      }
+      if (nextHidden.size === this.hiddenNodeIds.length) return
+      this._recordHistory()
+      this.hiddenNodeIds = [...nextHidden]
+      this._setLastEditAction(label)
+      this.requestRelayout()
+      this._persistEdits()
+    },
+
+    isolateSelectedNeighborhood(hops: number = 1) {
+      if (!this.selectedNodeId) return
+      const nodeSet = this.nodesWithinHops(this.selectedNodeId, hops)
+      nodeSet.add(this.selectedNodeId)
+      this.isolateNodeSet([...nodeSet], `isolated ${hops}-hop neighborhood`)
+    },
+
+    isolateSelectedLayer() {
+      if (!this.selectedNode) return
+      const tier = this.selectedNode.position_hint?.tier || 'compute'
+      const tierNodeIds = this.visibleNodes
+        .filter(node => (node.position_hint?.tier || 'compute') === tier)
+        .map(node => node.id)
+      this.isolateNodeSet(tierNodeIds, `isolated layer: ${tier}`)
+    },
+
+    isolateSelectedComponent() {
+      if (!this.selectedNodeId) return
+      const component = this.componentSummaries.find(summary => summary.nodeIds.includes(this.selectedNodeId as string))
+      if (!component) return
+      this.isolateNodeSet(component.nodeIds, `isolated component: ${component.name}`)
+    },
+
     startConnecting(nodeId: string) {
       this.editSubmode = 'connect'
       this.connectingFromNodeId = nodeId
@@ -1775,6 +1866,7 @@ export const useGraphStore = defineStore('graph', {
         label: 'Manual link',
         color: '#4ADE80',
       })
+      this.edgeTypeFilters.manual_generic = true
       this.connectingFromNodeId = null
       this.selectedEdgeId = edgeId
       this._setLastEditAction('created manual link')
@@ -1811,13 +1903,17 @@ export const useGraphStore = defineStore('graph', {
       if (next.label === edge.label && next.edge_type === edge.edge_type && next.color === edge.color) return
       this._recordHistory()
       edge.label = next.label
+      if (edge.edge_type !== next.edge_type) {
+        this.edgeTypeFilters[next.edge_type] = true
+      }
       edge.edge_type = next.edge_type
       edge.color = next.color
       this._setLastEditAction('updated manual link')
       this._persistEdits()
     },
 
-    requestRelayout() {
+    requestRelayout(mode: 'flow' | 'pack' = 'flow') {
+      this.relayoutMode = mode
       this.layoutVersion += 1
     },
 

@@ -148,6 +148,18 @@
               <path d="M8 3l3 3-3 3"/><path d="M11 6H5.5a3.5 3.5 0 1 0 0 7H7"/>
             </svg>
           </button>
+
+          <button
+            v-if="canResetSelected"
+            class="edit-btn"
+            title="Reset or remove the current selection"
+            @click="resetSelectedItem"
+          >
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2 6.5a4.5 4.5 0 1 0 1.2-3.1"/><path d="M2 2.5v3h3"/>
+            </svg>
+            <span>{{ resetSelectedLabel }}</span>
+          </button>
         </div>
 
         <Transition name="fade">
@@ -174,11 +186,46 @@
             </button>
 
             <button
+              v-if="store.selectedNode"
+              class="edit-btn"
+              @click="store.isolateSelectedNeighborhood(1)"
+            >
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6.5" cy="6.5" r="1.8"/><circle cx="2.5" cy="6.5" r="1.3"/><circle cx="10.5" cy="6.5" r="1.3"/><path d="M3.8 6.5h1.2M8 6.5h1.2"/></svg>
+              <span>Focus 1-Hop</span>
+            </button>
+
+            <button
+              v-if="store.selectedNode"
+              class="edit-btn"
+              @click="store.isolateSelectedLayer()"
+            >
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h9M2 6.5h9M2 9h9"/></svg>
+              <span>Isolate Layer</span>
+            </button>
+
+            <button
+              v-if="selectedNodeHasComponent"
+              class="edit-btn"
+              @click="store.isolateSelectedComponent()"
+            >
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="3" height="3"/><rect x="8" y="2" width="3" height="3"/><rect x="2" y="8" width="3" height="3"/><path d="M5 3.5h3M3.5 5v3"/></svg>
+              <span>Isolate Component</span>
+            </button>
+
+            <button
               class="edit-btn"
               @click="togglePresentation"
             >
               <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="2" width="10" height="7" rx="1.5"/><path d="M4 11h5"/></svg>
               <span>Present</span>
+            </button>
+
+            <button
+              class="edit-btn"
+              @click="showExportDialog = true"
+            >
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6.5 2v6M4 6l2.5 2.5L9 6"/><path d="M2 10.5h9"/></svg>
+              <span>Export</span>
             </button>
 
             <button
@@ -195,14 +242,6 @@
             >
               <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6.5 11V5M4 7.5L6.5 5 9 7.5"/><path d="M2 2.5h9"/></svg>
               <span>Import</span>
-            </button>
-
-            <button
-              class="edit-btn"
-              @click="downloadGraph"
-            >
-              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2.5h9v8H2z"/><path d="M4.5 5h4M4.5 7h3M4.5 9h4"/></svg>
-              <span>Export Graph</span>
             </button>
 
             <button
@@ -348,6 +387,94 @@
       </div>
     </div>
   </Transition>
+
+  <Transition name="fade">
+    <div
+      v-if="showExportDialog"
+      class="fixed inset-0 z-[110] flex items-center justify-center bg-black/65 backdrop-blur-sm"
+      @click.self="showExportDialog = false"
+    >
+      <div class="w-[440px] rounded-2xl border border-white/10 bg-[#12121a] p-6 shadow-[0_30px_80px_rgba(0,0,0,0.5)]">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="text-[10px] font-mono uppercase tracking-[0.18em] text-emerald-400">Export Review</div>
+            <h3 class="mt-2 text-sm font-semibold text-white">Prepare this architecture for output</h3>
+            <p class="mt-2 text-xs leading-relaxed text-gray-400">
+              Choose the export variant and quickly sanity-check hidden noise, empty layers, and manual edits before downloading.
+            </p>
+          </div>
+          <button
+            class="rounded-lg border border-white/10 px-2 py-1 text-[10px] font-mono text-gray-400 transition hover:bg-white/5 hover:text-white"
+            @click="showExportDialog = false"
+          >
+            Close
+          </button>
+        </div>
+
+        <div class="mt-5 rounded-xl border border-white/[0.08] bg-white/[0.02] p-3">
+          <div class="mb-2 text-[10px] font-mono uppercase tracking-[0.15em] text-gray-500">Variant</div>
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="variant in exportVariants"
+              :key="variant.id"
+              class="rounded-lg border px-3 py-2 text-xs font-mono transition-all"
+              :class="selectedExportMode === variant.id ? 'border-emerald-400/30 bg-emerald-500/12 text-emerald-300' : 'border-white/[0.08] bg-white/[0.03] text-gray-400 hover:bg-white/[0.06] hover:text-white'"
+              @click="selectedExportMode = variant.id"
+            >
+              {{ variant.label }}
+            </button>
+          </div>
+          <div class="mt-2 text-xs text-gray-500">{{ selectedExportVariantDescription }}</div>
+        </div>
+
+        <div class="mt-4 rounded-xl border border-white/[0.08] bg-white/[0.02] p-3">
+          <div class="mb-2 text-[10px] font-mono uppercase tracking-[0.15em] text-gray-500">Cleanup Checklist</div>
+          <div class="space-y-2">
+            <div
+              v-for="item in exportChecklist"
+              :key="item.id"
+              class="flex items-start gap-3 rounded-lg border px-3 py-2"
+              :class="item.ok ? 'border-emerald-400/15 bg-emerald-500/6' : 'border-amber-400/15 bg-amber-500/6'"
+            >
+              <span
+                class="mt-0.5 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full text-[10px] font-mono"
+                :class="item.ok ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'"
+              >
+                {{ item.ok ? 'OK' : '!' }}
+              </span>
+              <div class="min-w-0">
+                <div class="text-xs text-white">{{ item.label }}</div>
+                <div class="mt-1 text-[11px] leading-relaxed text-gray-500">{{ item.detail }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 flex justify-between gap-3">
+          <button
+            class="rounded-lg border border-white/10 px-4 py-2 text-xs font-mono text-gray-400 transition hover:bg-white/5 hover:text-white"
+            @click="selectedExportMode = 'presentation'; togglePresentation()"
+          >
+            Open Presentation Mode
+          </button>
+          <div class="flex gap-2">
+            <button
+              class="rounded-lg border border-white/10 px-4 py-2 text-xs font-mono text-gray-400 transition hover:bg-white/5"
+              @click="showExportDialog = false"
+            >
+              Cancel
+            </button>
+            <button
+              class="rounded-lg border border-emerald-400/30 bg-emerald-500/15 px-4 py-2 text-xs font-mono text-emerald-300 transition hover:bg-emerald-500/25"
+              @click="downloadGraph"
+            >
+              Download JSON
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Transition>
 </template>
 
 <script setup lang="ts">
@@ -361,10 +488,12 @@ const showAddDialog = ref(false)
 const showAddLayerDialog = ref(false)
 const showSummary = ref(false)
 const showMore = ref(false)
+const showExportDialog = ref(false)
 const newNodeName = ref('')
 const newNodeTemplateId = ref('lambda')
 const newNodeLayerId = ref('serverless')
 const newLayerName = ref('')
+const selectedExportMode = ref<'raw' | 'corrected' | 'presentation'>('corrected')
 const importInputRef = ref<HTMLInputElement | null>(null)
 const userNodeTemplates = USER_NODE_TEMPLATES
 const editModes = [
@@ -391,6 +520,10 @@ const selectionLabel = computed(() => {
   if (store.selectedEdge) return store.selectedEdge.label || 'manual link'
   return 'nothing selected'
 })
+const selectedNodeHasComponent = computed(() => {
+  if (!store.selectedNode) return false
+  return store.componentSummaries.some(summary => summary.nodeIds.includes(store.selectedNode!.id))
+})
 const modeDescription = computed(() => {
   switch (store.editSubmode) {
     case 'inspect': return 'safe review mode'
@@ -399,6 +532,70 @@ const modeDescription = computed(() => {
     default: return ''
   }
 })
+const canResetSelected = computed(() => {
+  if (store.selectedEdge) return store.selectedEdge.edge_type.startsWith('manual_') || store.selectedEdge.id.startsWith('user:')
+  if (!store.selectedNode) return false
+  return true
+})
+const resetSelectedLabel = computed(() => {
+  if (store.selectedEdge) return 'Remove Selected'
+  if (store.selectedNode?.tags?._user_created) return 'Delete Selected'
+  return 'Reset Selected'
+})
+const exportVariants = [
+  { id: 'raw', label: 'Raw detected', description: 'Exports the discovered graph without hiding or correction overlays.' },
+  { id: 'corrected', label: 'Corrected architecture', description: 'Exports the graph with your hides, manual nodes, links, and layer changes applied.' },
+  { id: 'presentation', label: 'Presentation-ready', description: 'Exports the cleaned visible graph meant for polished walkthroughs and sharing.' },
+] as const
+const selectedExportVariantDescription = computed(() =>
+  exportVariants.find(variant => variant.id === selectedExportMode.value)?.description || ''
+)
+const unnamedCustomNodes = computed(() =>
+  store.userNodes.filter(node => !node.name.trim() || /^custom node$/i.test(node.name.trim())).length
+)
+const unlabeledManualLinks = computed(() =>
+  store.userEdges.filter(edge => !edge.label?.trim() || edge.label === 'Manual link').length
+)
+const emptyCustomLayers = computed(() => {
+  const occupied = new Set(store.visibleNodes.map(node => node.position_hint?.tier || 'compute'))
+  return store.customLayers.filter(layer => !occupied.has(layer.id)).length
+})
+const exportChecklist = computed(() => [
+  {
+    id: 'hidden',
+    ok: store.hiddenNodeIds.length > 0 || selectedExportMode.value === 'raw',
+    label: 'Noise reduction reviewed',
+    detail: selectedExportMode.value === 'raw'
+      ? 'Raw export keeps everything discovered, including currently hidden items.'
+      : store.hiddenNodeIds.length > 0
+        ? `${store.hiddenNodeIds.length} resources are hidden from the cleaned architecture.`
+        : 'No resources are hidden. Consider whether presentation output still has unnecessary detail.',
+  },
+  {
+    id: 'layers',
+    ok: emptyCustomLayers.value === 0,
+    label: 'No empty custom layers are lingering',
+    detail: emptyCustomLayers.value === 0
+      ? 'All custom layers currently hold resources or were removed.'
+      : `${emptyCustomLayers.value} custom layer(s) are empty and may not add value to the final diagram.`,
+  },
+  {
+    id: 'nodes',
+    ok: unnamedCustomNodes.value === 0,
+    label: 'Custom components are named',
+    detail: unnamedCustomNodes.value === 0
+      ? 'Every manual component has a meaningful label.'
+      : `${unnamedCustomNodes.value} custom node(s) still look unnamed or generic.`,
+  },
+  {
+    id: 'links',
+    ok: unlabeledManualLinks.value === 0,
+    label: 'Manual links are labeled',
+    detail: unlabeledManualLinks.value === 0
+      ? 'All manual links have descriptive labels.'
+      : `${unlabeledManualLinks.value} manual link(s) still use a placeholder label.`,
+  },
+])
 
 const hasAnyEdits = computed(() =>
   store.hiddenNodeIds.length > 0
@@ -435,14 +632,14 @@ function addNode() {
 }
 
 function relayoutGraph() {
-  store.requestRelayout()
+  store.requestRelayout('flow')
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event('stackmap-fit-view'))
   }
 }
 
 function repackGraph() {
-  store.requestRelayout()
+  store.requestRelayout('pack')
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('stackmap-fit-view'))
   }
@@ -468,7 +665,9 @@ function downloadEdits() {
 }
 
 function downloadGraph() {
-  downloadBlob('stackmap-corrected-graph.json', store.exportCurrentGraphPayload(store.presentationMode ? 'presentation' : 'corrected'))
+  const filename = `stackmap-${selectedExportMode.value}-graph.json`
+  downloadBlob(filename, store.exportCurrentGraphPayload(selectedExportMode.value))
+  showExportDialog.value = false
 }
 
 function triggerImport() {
@@ -485,11 +684,30 @@ async function onImportFile(event: Event) {
   if (target) target.value = ''
 }
 
+function resetSelectedItem() {
+  if (store.selectedEdge) {
+    store.removeUserEdge(store.selectedEdge.id)
+    return
+  }
+  if (!store.selectedNode) return
+  if (store.selectedNode.tags?._user_created) {
+    store.removeUserNode(store.selectedNode.id)
+    return
+  }
+  store.resetNodeEdits(store.selectedNode.id)
+}
+
 watch(selectedTemplate, template => {
   if (template && store.layoutLayers.includes(template.tier)) {
     newNodeLayerId.value = template.tier
   }
 }, { immediate: true })
+
+watch(() => store.presentationMode, enabled => {
+  if (enabled) {
+    selectedExportMode.value = 'presentation'
+  }
+})
 </script>
 
 <style scoped>
