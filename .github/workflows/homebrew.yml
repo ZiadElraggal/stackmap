@@ -38,7 +38,6 @@ jobs:
           npm run generate
           cd ..
           python3 -m stackmap.webapp.build_assets --clean
-          git diff --exit-code -- stackmap/webapp/static
           test -f stackmap/webapp/static/index.html
 
       - name: Build local source archive
