@@ -29,14 +29,32 @@
             {{ mode.label }}
           </button>
         </div>
-        <div class="hidden md:flex items-center gap-1.5 text-[10px] font-mono text-gray-600">
+        <button
+          class="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.15em] text-gray-400 transition hover:bg-white/[0.06] hover:text-white"
+          @click="showSummary = !showSummary"
+        >
+          {{ showSummary ? 'Hide Summary' : 'Summary' }}
+        </button>
+        <button
+          class="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.15em] text-gray-400 transition hover:bg-white/[0.06] hover:text-white"
+          @click="showMore = !showMore"
+        >
+          {{ showMore ? 'Hide More' : 'More' }}
+        </button>
+      </div>
+
+      <Transition name="fade">
+        <div
+          v-if="showSummary"
+          class="flex flex-wrap items-center gap-1.5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-[10px] font-mono text-gray-600"
+        >
           <span class="rounded-full border border-white/[0.06] px-2 py-0.5">hidden {{ summary.hidden }}</span>
           <span class="rounded-full border border-white/[0.06] px-2 py-0.5">nodes {{ summary.customNodes }}</span>
           <span class="rounded-full border border-white/[0.06] px-2 py-0.5">links {{ summary.customLinks }}</span>
           <span class="rounded-full border border-white/[0.06] px-2 py-0.5">moved {{ summary.moved }}</span>
           <span class="rounded-full border border-white/[0.06] px-2 py-0.5">layers {{ summary.customLayers }}</span>
         </div>
-      </div>
+      </Transition>
 
       <!-- Connecting indicator -->
       <div
@@ -59,141 +77,144 @@
           {{ modeDescription }}
         </div>
 
-        <!-- Node actions -->
-        <span class="h-4 w-px bg-white/[0.08]" />
-        <button
-          v-if="store.editSubmode === 'structure'"
-          class="edit-btn"
-          title="Add a custom component"
-          @click="showAddDialog = true"
-        >
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="6.5" y1="2" x2="6.5" y2="11"/><line x1="2" y1="6.5" x2="11" y2="6.5"/></svg>
-          <span>Add Node</span>
-        </button>
+        <div class="flex flex-wrap items-center gap-2">
+          <button
+            v-if="store.editSubmode === 'structure'"
+            class="edit-btn"
+            title="Add a custom component"
+            @click="showAddDialog = true"
+          >
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="6.5" y1="2" x2="6.5" y2="11"/><line x1="2" y1="6.5" x2="11" y2="6.5"/></svg>
+            <span>Add Node</span>
+          </button>
 
-        <button
-          v-if="store.editSubmode === 'structure'"
-          class="edit-btn"
-          title="Create a new architecture layer"
-          @click="showAddLayerDialog = true"
-        >
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M2 4h9M2 6.5h9M2 9h9"/>
-            <path d="M10 2.5v3M8.5 4h3"/>
-          </svg>
-          <span>Add Layer</span>
-        </button>
+          <button
+            v-if="store.editSubmode === 'structure'"
+            class="edit-btn"
+            title="Create a new architecture layer"
+            @click="showAddLayerDialog = true"
+          >
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2 4h9M2 6.5h9M2 9h9"/>
+              <path d="M10 2.5v3M8.5 4h3"/>
+            </svg>
+            <span>Add Layer</span>
+          </button>
 
-        <!-- Layout actions -->
-        <span class="h-4 w-px bg-white/[0.08]" />
-        <button
-          v-if="store.editSubmode === 'structure'"
-          class="edit-btn"
-          title="Re-arrange the graph after edits"
-          @click="relayoutGraph"
-        >
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M2 3.5h4M2 9.5h9M7 3.5l1.5-1.5M7 3.5L8.5 5M9 9.5l1.5-1.5M9 9.5l1.5 1.5"/>
-          </svg>
-          <span>Reflow</span>
-        </button>
+          <button
+            v-if="store.editSubmode === 'structure'"
+            class="edit-btn"
+            title="Re-arrange the graph after edits"
+            @click="relayoutGraph"
+          >
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2 3.5h4M2 9.5h9M7 3.5l1.5-1.5M7 3.5L8.5 5M9 9.5l1.5-1.5M9 9.5l1.5 1.5"/>
+            </svg>
+            <span>Reflow</span>
+          </button>
 
-        <button
-          v-if="store.editSubmode === 'structure'"
-          class="edit-btn"
-          title="Repack the graph more aggressively"
-          @click="repackGraph"
-        >
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="2" y="2" width="3" height="3"/><rect x="8" y="2" width="3" height="3"/><rect x="2" y="8" width="3" height="3"/><rect x="8" y="8" width="3" height="3"/>
-          </svg>
-          <span>Repack</span>
-        </button>
+          <button
+            v-if="store.editSubmode === 'structure'"
+            class="edit-btn"
+            title="Repack the graph more aggressively"
+            @click="repackGraph"
+          >
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="2" width="3" height="3"/><rect x="8" y="2" width="3" height="3"/><rect x="2" y="8" width="3" height="3"/><rect x="8" y="8" width="3" height="3"/>
+            </svg>
+            <span>Repack</span>
+          </button>
 
-        <!-- Global actions -->
-        <span class="h-4 w-px bg-white/[0.08]" />
-        <button
-          class="edit-btn"
-          :class="{ 'opacity-40 pointer-events-none': !store.canUndo }"
-          title="Undo"
-          @click="store.undoEdits()"
-        >
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M5 3L2 6l3 3"/><path d="M2 6h5.5a3.5 3.5 0 1 1 0 7H6"/>
-          </svg>
-          <span>Undo</span>
-        </button>
+          <span class="h-4 w-px bg-white/[0.08]" />
 
-        <button
-          class="edit-btn"
-          :class="{ 'opacity-40 pointer-events-none': !store.canRedo }"
-          title="Redo"
-          @click="store.redoEdits()"
-        >
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M8 3l3 3-3 3"/><path d="M11 6H5.5a3.5 3.5 0 1 0 0 7H7"/>
-          </svg>
-          <span>Redo</span>
-        </button>
+          <button
+            class="icon-btn"
+            :class="{ 'opacity-40 pointer-events-none': !store.canUndo }"
+            title="Undo"
+            @click="store.undoEdits()"
+          >
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 3L2 6l3 3"/><path d="M2 6h5.5a3.5 3.5 0 1 1 0 7H6"/>
+            </svg>
+          </button>
 
-        <button
-          v-if="store.hiddenNodeIds.length > 0"
-          class="edit-btn"
-          @click="store.showAllNodes()"
-        >
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 6.5s2.5-4 5.5-4 5.5 4 5.5 4-2.5 4-5.5 4-5.5-4-5.5-4z"/><circle cx="6.5" cy="6.5" r="1.5"/></svg>
-          <span>Show All ({{ store.hiddenNodeIds.length }})</span>
-        </button>
+          <button
+            class="icon-btn"
+            :class="{ 'opacity-40 pointer-events-none': !store.canRedo }"
+            title="Redo"
+            @click="store.redoEdits()"
+          >
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 3l3 3-3 3"/><path d="M11 6H5.5a3.5 3.5 0 1 0 0 7H7"/>
+            </svg>
+          </button>
+        </div>
 
-        <button
-          v-if="store.hiddenNodeIdsBackup?.length"
-          class="edit-btn"
-          @click="store.rehideShownNodes()"
-        >
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 6.5s2.5-4 5.5-4 5.5 4 5.5 4-2.5 4-5.5 4-5.5-4-5.5-4z"/><path d="M2 11L11 2"/></svg>
-          <span>Rehide ({{ store.hiddenNodeIdsBackup.length }})</span>
-        </button>
+        <Transition name="fade">
+          <div
+            v-if="showMore"
+            class="flex flex-wrap items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2"
+          >
+            <button
+              v-if="store.hiddenNodeIds.length > 0"
+              class="edit-btn"
+              @click="store.showAllNodes()"
+            >
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 6.5s2.5-4 5.5-4 5.5 4 5.5 4-2.5 4-5.5 4-5.5-4-5.5-4z"/><circle cx="6.5" cy="6.5" r="1.5"/></svg>
+              <span>Show All ({{ store.hiddenNodeIds.length }})</span>
+            </button>
 
-        <button
-          class="edit-btn"
-          @click="togglePresentation"
-        >
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="2" width="10" height="7" rx="1.5"/><path d="M4 11h5"/></svg>
-          <span>Present</span>
-        </button>
+            <button
+              v-if="store.hiddenNodeIdsBackup?.length"
+              class="edit-btn"
+              @click="store.rehideShownNodes()"
+            >
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 6.5s2.5-4 5.5-4 5.5 4 5.5 4-2.5 4-5.5 4-5.5-4-5.5-4z"/><path d="M2 11L11 2"/></svg>
+              <span>Rehide ({{ store.hiddenNodeIdsBackup.length }})</span>
+            </button>
 
-        <button
-          class="edit-btn"
-          @click="downloadEdits"
-        >
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6.5 2v6M4 6l2.5 2.5L9 6"/><path d="M2 10.5h9"/></svg>
-          <span>Export Edits</span>
-        </button>
+            <button
+              class="edit-btn"
+              @click="togglePresentation"
+            >
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="2" width="10" height="7" rx="1.5"/><path d="M4 11h5"/></svg>
+              <span>Present</span>
+            </button>
 
-        <button
-          class="edit-btn"
-          @click="triggerImport"
-        >
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6.5 11V5M4 7.5L6.5 5 9 7.5"/><path d="M2 2.5h9"/></svg>
-          <span>Import</span>
-        </button>
+            <button
+              class="edit-btn"
+              @click="downloadEdits"
+            >
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6.5 2v6M4 6l2.5 2.5L9 6"/><path d="M2 10.5h9"/></svg>
+              <span>Export Edits</span>
+            </button>
 
-        <button
-          class="edit-btn"
-          @click="downloadGraph"
-        >
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2.5h9v8H2z"/><path d="M4.5 5h4M4.5 7h3M4.5 9h4"/></svg>
-          <span>Export Graph</span>
-        </button>
+            <button
+              class="edit-btn"
+              @click="triggerImport"
+            >
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6.5 11V5M4 7.5L6.5 5 9 7.5"/><path d="M2 2.5h9"/></svg>
+              <span>Import</span>
+            </button>
 
-        <button
-          v-if="hasAnyEdits"
-          class="edit-btn text-red-400/80 hover:!text-red-400 hover:!bg-red-500/10"
-          @click="store.clearAllEdits()"
-        >
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h9M4.5 4V3a1 1 0 011-1h2a1 1 0 011 1v1M5.5 6v4M7.5 6v4"/><path d="M3 4l.5 7a1 1 0 001 1h4a1 1 0 001-1L10 4"/></svg>
-          <span>Clear Edits</span>
-        </button>
+            <button
+              class="edit-btn"
+              @click="downloadGraph"
+            >
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2.5h9v8H2z"/><path d="M4.5 5h4M4.5 7h3M4.5 9h4"/></svg>
+              <span>Export Graph</span>
+            </button>
+
+            <button
+              v-if="hasAnyEdits"
+              class="edit-btn text-red-400/80 hover:!text-red-400 hover:!bg-red-500/10"
+              @click="store.clearAllEdits()"
+            >
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h9M4.5 4V3a1 1 0 011-1h2a1 1 0 011 1v1M5.5 6v4M7.5 6v4"/><path d="M3 4l.5 7a1 1 0 001 1h4a1 1 0 001-1L10 4"/></svg>
+              <span>Clear Edits</span>
+            </button>
+          </div>
+        </Transition>
       </template>
 
       <!-- Exit -->
@@ -338,6 +359,8 @@ const store = useGraphStore()
 
 const showAddDialog = ref(false)
 const showAddLayerDialog = ref(false)
+const showSummary = ref(false)
+const showMore = ref(false)
 const newNodeName = ref('')
 const newNodeTemplateId = ref('lambda')
 const newNodeLayerId = ref('serverless')
@@ -475,12 +498,18 @@ watch(selectedTemplate, template => {
   @apply hover:bg-white/[0.06] hover:text-white active:scale-[0.97];
 }
 
+.icon-btn {
+  @apply flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-gray-400 transition-all duration-150;
+  @apply hover:bg-white/[0.06] hover:text-white active:scale-[0.97];
+}
+
 .edit-btn svg {
   opacity: 0.7;
   transition: opacity 150ms ease;
 }
 
-.edit-btn:hover svg {
+.edit-btn:hover svg,
+.icon-btn:hover svg {
   opacity: 1;
 }
 
