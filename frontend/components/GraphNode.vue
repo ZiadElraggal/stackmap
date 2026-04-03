@@ -173,7 +173,7 @@
     @click.stop="onClick"
     @mouseenter="onHover"
     @mouseleave="onLeave"
-    @pointerdown.prevent.stop="onPointerDown"
+    @pointerdown="onPointerDown"
   >
     <rect
       v-if="diffStatus && diffStatus !== 'unchanged'"
@@ -283,8 +283,9 @@
       font-weight="500"
       font-family="'JetBrains Mono', 'SF Mono', monospace"
       dominant-baseline="central"
-      class="node-name"
-      @dblclick.stop="onDoubleClickLabel"
+      :class="['node-name', { 'node-name--editable': store.editMode && !!node.tags?._user_created }]"
+      @click.stop="onLabelClick"
+      @pointerdown.stop
     >{{ displayName }}</text>
 
     <text
@@ -321,7 +322,21 @@
     </g>
 
     <!-- Edit mode action buttons -->
-    <g v-if="store.editMode && !isAccountSummary" class="edit-actions" :opacity="isHovered || showDeleteConfirm ? 1 : 0">
+    <g
+      v-if="store.editMode && !isAccountSummary"
+      class="edit-actions"
+      :opacity="isHovered || isActionHovering || showDeleteConfirm ? 1 : 0"
+      @mouseenter="onActionHoverEnter"
+      @mouseleave="onActionHoverLeave"
+    >
+      <rect
+        :x="-nodeWidth / 2 - 24"
+        :y="-nodeHeight / 2 - 28"
+        :width="nodeWidth + 48"
+        height="30"
+        fill="rgba(0,0,0,0.001)"
+        class="edit-actions-bridge"
+      />
       <!-- Hide button -->
       <g
         class="edit-action-btn"
@@ -349,6 +364,16 @@
       >
         <rect x="-10" y="-8" width="20" height="16" rx="4" fill="rgba(56,189,248,0.2)" stroke="rgba(56,189,248,0.4)" stroke-width="1"/>
         <text x="0" y="1" text-anchor="middle" dominant-baseline="central" fill="#38BDF8" font-size="9" font-family="'JetBrains Mono', monospace">D</text>
+      </g>
+      <!-- Rename button (user nodes only) -->
+      <g
+        v-if="node.tags?._user_created"
+        class="edit-action-btn"
+        :transform="`translate(${nodeWidth / 2 - 80}, ${-nodeHeight / 2 - 14})`"
+        @click.stop="onLabelClick"
+      >
+        <rect x="-10" y="-8" width="20" height="16" rx="4" fill="rgba(250,204,21,0.2)" stroke="rgba(250,204,21,0.4)" stroke-width="1"/>
+        <text x="0" y="1" text-anchor="middle" dominant-baseline="central" fill="#facc15" font-size="8" font-family="'JetBrains Mono', monospace">R</text>
       </g>
       <!-- Delete button (user nodes only) — with inline confirmation -->
       <g
@@ -468,6 +493,8 @@ const pointerStart = ref<{ x: number; y: number } | null>(null)
 const dragStarted = ref(false)
 const suppressClickOnce = ref(false)
 const pointerOwner = ref<Element | null>(null)
+const isActionHovering = ref(false)
+let hoverLeaveTimer: ReturnType<typeof setTimeout> | null = null
 
 // Inline label editing state
 const isEditingLabel = ref(false)
@@ -610,14 +637,45 @@ function onConnectClick() {
 }
 
 function onHover() {
+  if (hoverLeaveTimer) {
+    clearTimeout(hoverLeaveTimer)
+    hoverLeaveTimer = null
+  }
   store.hoverNode(props.node.id)
 }
 function onLeave() {
-  store.hoverNode(null)
+  if (isActionHovering.value) return
+  if (hoverLeaveTimer) clearTimeout(hoverLeaveTimer)
+  hoverLeaveTimer = setTimeout(() => {
+    if (!isActionHovering.value) {
+      store.hoverNode(null)
+    }
+    hoverLeaveTimer = null
+  }, 90)
+}
+
+function onActionHoverEnter() {
+  if (hoverLeaveTimer) {
+    clearTimeout(hoverLeaveTimer)
+    hoverLeaveTimer = null
+  }
+  isActionHovering.value = true
+  store.hoverNode(props.node.id)
+}
+
+function onActionHoverLeave() {
+  isActionHovering.value = false
+  if (hoverLeaveTimer) clearTimeout(hoverLeaveTimer)
+  hoverLeaveTimer = setTimeout(() => {
+    if (!isActionHovering.value) {
+      store.hoverNode(null)
+    }
+    hoverLeaveTimer = null
+  }, 90)
 }
 
 // ── Label editing ─────────────────────────────────────────────────
-function onDoubleClickLabel() {
+function onLabelClick() {
   if (!store.editMode || !props.node.tags?._user_created) return
   isEditingLabel.value = true
   editLabelValue.value = props.node.name
@@ -664,6 +722,13 @@ function cancelDelete() {
 function onPointerDown(event: PointerEvent) {
   if (!store.editMode || isAccountSummary.value || store.connectingFromNodeId) return
   if (event.button !== 0) return
+  const target = event.target as HTMLElement | null
+  if (target?.closest('.edit-action-btn, .delete-confirm, .inline-label-input, .node-name--editable')) {
+    return
+  }
+  if (isEditingLabel.value) return
+  event.preventDefault()
+  event.stopPropagation()
   activePointerId.value = event.pointerId
   pointerStart.value = { x: event.clientX, y: event.clientY }
   dragStarted.value = false
@@ -735,6 +800,7 @@ onMounted(() => {
 onUnmounted(() => {
   cleanupPointerListeners()
   if (deleteConfirmTimer) clearTimeout(deleteConfirmTimer)
+  if (hoverLeaveTimer) clearTimeout(hoverLeaveTimer)
 })
 </script>
 
@@ -798,10 +864,14 @@ onUnmounted(() => {
   filter: drop-shadow(0 0 12px color-mix(in srgb, var(--diff-color) 35%, transparent));
 }
 
-.graph-node .node-name,
 .graph-node .icon,
 .graph-node .selection-ring {
   pointer-events: none;
+}
+
+.node-name--editable {
+  pointer-events: auto;
+  cursor: text;
 }
 
 .edit-actions {
@@ -809,13 +879,17 @@ onUnmounted(() => {
   pointer-events: auto;
 }
 
+.edit-actions-bridge {
+  pointer-events: auto;
+}
+
 .edit-action-btn {
   cursor: pointer;
-  transition: transform 120ms ease;
+  transition: opacity 120ms ease, filter 120ms ease;
 }
 
 .edit-action-btn:hover {
-  transform: scale(1.15);
+  filter: brightness(1.15) drop-shadow(0 0 6px rgba(255, 255, 255, 0.12));
 }
 
 @keyframes connecting-dash {
