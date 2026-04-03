@@ -2,7 +2,8 @@
   <Transition name="slide">
     <div
       v-if="node"
-      class="fixed right-0 top-0 h-full w-96 bg-[#12121a] overflow-y-auto overflow-x-hidden z-50 detail-shell"
+      class="fixed right-0 top-0 h-full w-96 overflow-y-auto overflow-x-hidden z-50 detail-shell"
+      style="backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); background: rgba(18, 18, 26, 0.95)"
       :style="{ '--panel-color': categoryColor }"
     >
       <div class="panel-accent" />
@@ -72,6 +73,74 @@
       </div>
 
       <div class="p-4 border-b border-white/10">
+        <!-- Edit mode actions for selected node -->
+        <div v-if="store.editMode && node" class="mb-3 flex flex-wrap gap-1.5">
+          <button
+            class="rounded-md border border-red-400/20 bg-red-500/10 px-2.5 py-1 text-[10px] font-mono text-red-300 transition hover:bg-red-500/15"
+            @click="store.hideNode(node.id)"
+          >
+            Hide
+          </button>
+          <button
+            class="rounded-md border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-mono text-emerald-300 transition hover:bg-emerald-500/15"
+            @click="store.startConnecting(node.id)"
+          >
+            Connect to...
+          </button>
+          <button
+            v-if="node.tags?._user_created"
+            class="rounded-md border border-red-400/30 bg-red-500/15 px-2.5 py-1 text-[10px] font-mono text-red-300 transition hover:bg-red-500/25"
+            @click="store.removeUserNode(node.id)"
+          >
+            Delete
+          </button>
+        </div>
+
+        <div v-if="store.editMode && node" class="mb-3 space-y-2">
+          <label class="block">
+            <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Layer</span>
+            <select
+              :value="node.position_hint?.tier || 'compute'"
+              class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+              @change="onLayerSelectChange"
+            >
+              <option
+                v-for="layer in layerDefinitions"
+                :key="layer.id"
+                :value="layer.id"
+              >
+                {{ layer.label }}
+              </option>
+            </select>
+          </label>
+          <div class="flex gap-2">
+            <input
+              v-model="newLayerName"
+              class="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono placeholder-gray-600 outline-none focus:border-emerald-400/40"
+              placeholder="Add new layer"
+              @keydown.enter.prevent="addLayerAndMove"
+            />
+            <button
+              class="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-[10px] font-mono text-emerald-300 transition hover:bg-emerald-500/15"
+              @click="addLayerAndMove"
+            >
+              Add
+            </button>
+          </div>
+        </div>
+
+        <div v-if="componentLabel" class="mb-3 flex items-center justify-between rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2">
+          <div>
+            <div class="text-[10px] uppercase tracking-widest text-gray-600">Component</div>
+            <div class="mt-1 text-xs font-mono text-gray-300">{{ componentLabel }}</div>
+          </div>
+          <button
+            class="rounded-md border border-cyan-400/20 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-mono text-cyan-300 transition hover:bg-cyan-500/15"
+            @click="store.focusSelectedNodeComponent()"
+          >
+            Focus component
+          </button>
+        </div>
         <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">Properties</h3>
         <dl>
           <div
@@ -199,10 +268,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useGraphStore } from '~/stores/graph'
-import { CATEGORY_COLORS, CATEGORY_ICONS } from '~/composables/useGraph'
+import { CATEGORY_COLORS, buildLayerDefinitions, getNodeIconPath, getResourceIconPath } from '~/composables/useGraph'
 
 const store = useGraphStore()
 const showRaw = ref(false)
+const newLayerName = ref('')
 
 const node = computed(() => store.selectedNode)
 const diffStatus = computed(() => node.value?.position_hint?.diff_status as string | undefined)
@@ -232,7 +302,8 @@ const diffBadgeLabel = computed(() => {
   }
 })
 const categoryColor = computed(() => CATEGORY_COLORS[node.value?.category || ''] || '#9ca3af')
-const iconPath = computed(() => CATEGORY_ICONS[node.value?.category || 'other'] || CATEGORY_ICONS.other)
+const iconPath = computed(() => node.value ? getNodeIconPath(node.value) : getResourceIconPath('user_defined', 'other'))
+const layerDefinitions = computed(() => buildLayerDefinitions(store.layoutLayers, store.customLayers))
 
 const edges = computed(() => (node.value ? store.nodeEdges(node.value.id) : []))
 const outgoing = computed(() => edges.value.filter(e => e.source === node.value?.id))
@@ -242,6 +313,11 @@ const rawJsonText = computed(() => {
   const pretty = JSON.stringify(normalizeEmbeddedJson(node.value.properties), null, 2)
   // Keep raw viewer human-readable even when upstream stores escaped newline text.
   return pretty.replace(/\\n/g, '\n')
+})
+const componentLabel = computed(() => {
+  if (!node.value) return null
+  const component = store.componentSummaries.find(summary => summary.nodeIds.includes(node.value!.id))
+  return component ? component.name.replace(/-/g, ' ') : null
 })
 
 const SKIP_KEYS = new Set([
@@ -298,17 +374,37 @@ function normalizeEmbeddedJson(value: any): any {
 }
 
 function nodeNameById(id: string): string {
-  return store.nodes.find(n => n.id === id)?.name || id
+  return store.nodes.find(n => n.id === id)?.name || store.userNodes.find(n => n.id === id)?.name || id
 }
 
 function nodeColorById(id: string): string {
-  const category = store.nodes.find(n => n.id === id)?.category || 'other'
+  const category = store.nodes.find(n => n.id === id)?.category || store.userNodes.find(n => n.id === id)?.category || 'other'
   return CATEGORY_COLORS[category] || '#9ca3af'
 }
 
 function nodeIconById(id: string): string {
-  const category = store.nodes.find(n => n.id === id)?.category || 'other'
-  return CATEGORY_ICONS[category] || CATEGORY_ICONS.other
+  const targetNode = store.nodes.find(n => n.id === id) || store.userNodes.find(n => n.id === id)
+  return targetNode ? getNodeIconPath(targetNode) : getResourceIconPath('user_defined', 'other')
+}
+
+function onLayerChange(layerId: string) {
+  if (!node.value) return
+  store.moveNodeToLayer(node.value.id, layerId)
+}
+
+function onLayerSelectChange(event: Event) {
+  const target = event.target as HTMLSelectElement | null
+  if (!target) return
+  onLayerChange(target.value)
+}
+
+function addLayerAndMove() {
+  if (!node.value || !newLayerName.value.trim()) return
+  const layerId = store.addCustomLayer(newLayerName.value)
+  if (layerId) {
+    store.moveNodeToLayer(node.value.id, layerId)
+    newLayerName.value = ''
+  }
 }
 </script>
 

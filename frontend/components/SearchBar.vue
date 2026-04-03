@@ -46,7 +46,7 @@
             class="w-5 h-5 rounded flex-shrink-0 flex items-center justify-center text-[10px]"
             :style="{ backgroundColor: `${CATEGORY_COLORS[result.item.category] || '#9ca3af'}15`, color: CATEGORY_COLORS[result.item.category] || '#9ca3af' }"
           >
-            <svg width="11" height="11" viewBox="0 0 24 24"><g v-html="CATEGORY_ICONS[result.item.category] || CATEGORY_ICONS.other" /></svg>
+            <svg width="11" height="11" viewBox="0 0 24 24"><g v-html="getNodeIconPath(result.item)" /></svg>
           </span>
           <span class="text-gray-300 font-mono truncate">{{ result.item.name }}</span>
           <span class="text-gray-600 ml-auto flex-shrink-0 text-[10px]">{{ shortType(result.item.resource_type) }}</span>
@@ -60,7 +60,7 @@
 import { ref, computed, watch } from 'vue'
 import Fuse from 'fuse.js'
 import { useGraphStore, type StackMapNode } from '~/stores/graph'
-import { CATEGORY_COLORS, CATEGORY_ICONS } from '~/composables/useGraph'
+import { CATEGORY_COLORS, getNodeIconPath } from '~/composables/useGraph'
 
 const store = useGraphStore()
 const query = ref('')

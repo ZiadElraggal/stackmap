@@ -168,9 +168,12 @@
       '--diff-color': diffBorderColor,
     }"
     :opacity="nodeOpacity"
+    :data-node-id="node.id"
+    :data-drag-enabled="store.editMode && !isAccountSummary && !store.connectingFromNodeId ? 'true' : 'false'"
     @click.stop="onClick"
     @mouseenter="onHover"
     @mouseleave="onLeave"
+    @pointerdown.prevent.stop="onPointerDown"
   >
     <rect
       v-if="diffStatus && diffStatus !== 'unchanged'"
@@ -206,7 +209,7 @@
       :y="-(nodeHeight - 8) / 2"
       :rx="10"
       :ry="10"
-      fill="#13131f"
+      fill="#0d0d14"
       class="inner-shell"
     />
 
@@ -292,18 +295,81 @@
       >{{ diffBadge }}</text>
     </g>
 
+    <!-- Edit mode action buttons -->
+    <g v-if="store.editMode && !isAccountSummary" class="edit-actions" :opacity="isHovered ? 1 : 0">
+      <!-- Hide button -->
+      <g
+        class="edit-action-btn"
+        :transform="`translate(${nodeWidth / 2 - 8}, ${-nodeHeight / 2 - 14})`"
+        @click.stop="store.hideNode(node.id)"
+      >
+        <rect x="-10" y="-8" width="20" height="16" rx="4" fill="rgba(239,68,68,0.2)" stroke="rgba(239,68,68,0.4)" stroke-width="1"/>
+        <text x="0" y="1" text-anchor="middle" dominant-baseline="central" fill="#ef4444" font-size="9" font-family="'JetBrains Mono', monospace">H</text>
+      </g>
+      <!-- Connect button -->
+      <g
+        class="edit-action-btn"
+        :transform="`translate(${nodeWidth / 2 - 32}, ${-nodeHeight / 2 - 14})`"
+        @click.stop="onConnectClick"
+      >
+        <rect x="-10" y="-8" width="20" height="16" rx="4" fill="rgba(74,222,128,0.2)" stroke="rgba(74,222,128,0.4)" stroke-width="1"/>
+        <text x="0" y="1" text-anchor="middle" dominant-baseline="central" fill="#4ADE80" font-size="9" font-family="'JetBrains Mono', monospace">C</text>
+      </g>
+      <!-- Delete button (user nodes only) -->
+      <g
+        v-if="node.tags?._user_created"
+        class="edit-action-btn"
+        :transform="`translate(${nodeWidth / 2 + 16}, ${-nodeHeight / 2 - 14})`"
+        @click.stop="store.removeUserNode(node.id)"
+      >
+        <rect x="-10" y="-8" width="20" height="16" rx="4" fill="rgba(239,68,68,0.3)" stroke="rgba(239,68,68,0.5)" stroke-width="1"/>
+        <text x="0" y="1" text-anchor="middle" dominant-baseline="central" fill="#ef4444" font-size="10" font-weight="bold" font-family="'JetBrains Mono', monospace">x</text>
+      </g>
+    </g>
+
+    <!-- Connecting-from indicator ring -->
+    <rect
+      v-if="store.connectingFromNodeId === node.id"
+      :width="nodeWidth + 12"
+      :height="nodeHeight + 12"
+      :x="-(nodeWidth + 12) / 2"
+      :y="-(nodeHeight + 12) / 2"
+      rx="16" ry="16"
+      fill="none"
+      stroke="#4ADE80"
+      stroke-width="2"
+      stroke-dasharray="4 3"
+      opacity="0.7"
+      class="connecting-ring"
+    />
+
+    <!-- Connect-target pulse (when another node is connecting) -->
+    <rect
+      v-if="store.connectingFromNodeId && store.connectingFromNodeId !== node.id"
+      :width="nodeWidth + 6"
+      :height="nodeHeight + 6"
+      :x="-(nodeWidth + 6) / 2"
+      :y="-(nodeHeight + 6) / 2"
+      rx="14" ry="14"
+      fill="none"
+      stroke="#4ADE80"
+      stroke-width="1"
+      opacity="0.25"
+      class="connect-target-ring"
+    />
+
     <title>{{ node.name }} ({{ node.resource_type }})</title>
   </g>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useGraphStore, type StackMapNode } from '~/stores/graph'
 import {
   CATEGORY_COLORS,
-  CATEGORY_ICONS,
   formatResourceType,
   getNodeHeight,
+  getNodeIconPath,
   getNodeProminence,
   getNodeWidth,
   truncate,
@@ -323,11 +389,22 @@ const props = withDefaults(
   }
 )
 
+const emit = defineEmits<{
+  dragNodeStart: [payload: { nodeId: string; clientX: number; clientY: number }]
+  dragNodeMove: [payload: { nodeId: string; clientX: number; clientY: number }]
+  dragNodeEnd: [payload: { nodeId: string; clientX: number; clientY: number }]
+}>()
+
 const store = useGraphStore()
 const entered = ref(false)
+const activePointerId = ref<number | null>(null)
+const pointerStart = ref<{ x: number; y: number } | null>(null)
+const dragStarted = ref(false)
+const suppressClickOnce = ref(false)
+const pointerOwner = ref<Element | null>(null)
 
 const categoryColor = computed(() => CATEGORY_COLORS[props.node.category] || '#9ca3af')
-const iconPath = computed(() => CATEGORY_ICONS[props.node.category] || CATEGORY_ICONS.other)
+const iconPath = computed(() => getNodeIconPath(props.node))
 const displayName = computed(() => truncate(props.node.name, 28))
 const shortType = computed(() => formatResourceType(props.node.resource_type))
 
@@ -432,7 +509,19 @@ const nodeOpacity = computed(() => {
   return isDimmed.value ? 0.12 : 1
 })
 
+const isHovered = computed(() => store.hoveredNodeId === props.node.id)
+
 function onClick() {
+  if (suppressClickOnce.value) {
+    suppressClickOnce.value = false
+    return
+  }
+  // Edit mode: handle connecting
+  if (store.editMode && store.connectingFromNodeId) {
+    store.completeConnection(props.node.id)
+    return
+  }
+
   const accountId = props.node.metadata?.account_id || props.node.position_hint?.account_id
   if (store.viewMode === 'organization' && props.node.position_hint?.view_kind === 'account_summary' && accountId) {
     store.enterAccountArchitecture(accountId)
@@ -440,6 +529,11 @@ function onClick() {
   }
   store.selectNode(isSelected.value ? null : props.node.id)
 }
+
+function onConnectClick() {
+  store.startConnecting(props.node.id)
+}
+
 function onHover() {
   store.hoverNode(props.node.id)
 }
@@ -447,10 +541,79 @@ function onLeave() {
   store.hoverNode(null)
 }
 
+function onPointerDown(event: PointerEvent) {
+  if (!store.editMode || isAccountSummary.value || store.connectingFromNodeId) return
+  if (event.button !== 0) return
+  activePointerId.value = event.pointerId
+  pointerStart.value = { x: event.clientX, y: event.clientY }
+  dragStarted.value = false
+  pointerOwner.value = event.currentTarget as Element | null
+  pointerOwner.value?.setPointerCapture?.(event.pointerId)
+  window.addEventListener('pointermove', onPointerMove)
+  window.addEventListener('pointerup', onPointerUp)
+  window.addEventListener('pointercancel', onPointerCancel)
+}
+
+function onPointerMove(event: PointerEvent) {
+  if (activePointerId.value !== event.pointerId) return
+  const start = pointerStart.value
+  if (!start) return
+  const dx = event.clientX - start.x
+  const dy = event.clientY - start.y
+  if (!dragStarted.value && Math.hypot(dx, dy) < 6) return
+  if (!dragStarted.value) {
+    dragStarted.value = true
+    emit('dragNodeStart', {
+      nodeId: props.node.id,
+      clientX: start.x,
+      clientY: start.y,
+    })
+  }
+  emit('dragNodeMove', {
+    nodeId: props.node.id,
+    clientX: event.clientX,
+    clientY: event.clientY,
+  })
+}
+
+function onPointerUp(event: PointerEvent) {
+  if (activePointerId.value !== event.pointerId) return
+  if (dragStarted.value) {
+    suppressClickOnce.value = true
+    emit('dragNodeEnd', {
+      nodeId: props.node.id,
+      clientX: event.clientX,
+      clientY: event.clientY,
+    })
+  }
+  cleanupPointerListeners()
+}
+
+function onPointerCancel() {
+  cleanupPointerListeners()
+}
+
+function cleanupPointerListeners() {
+  if (pointerOwner.value && activePointerId.value !== null) {
+    pointerOwner.value.releasePointerCapture?.(activePointerId.value)
+  }
+  pointerOwner.value = null
+  activePointerId.value = null
+  pointerStart.value = null
+  dragStarted.value = false
+  window.removeEventListener('pointermove', onPointerMove)
+  window.removeEventListener('pointerup', onPointerUp)
+  window.removeEventListener('pointercancel', onPointerCancel)
+}
+
 onMounted(() => {
   requestAnimationFrame(() => {
     entered.value = true
   })
+})
+
+onUnmounted(() => {
+  cleanupPointerListeners()
 })
 </script>
 
@@ -458,6 +621,10 @@ onMounted(() => {
 .graph-node {
   cursor: pointer;
   transition: opacity 200ms ease-out;
+}
+
+.graph-node[data-drag-enabled='true'] {
+  touch-action: none;
 }
 
 .graph-node.entering {
@@ -506,5 +673,36 @@ onMounted(() => {
 .graph-node .icon,
 .graph-node .selection-ring {
   pointer-events: none;
+}
+
+.edit-actions {
+  transition: opacity 150ms ease;
+  pointer-events: auto;
+}
+
+.edit-action-btn {
+  cursor: pointer;
+  transition: transform 120ms ease;
+}
+
+.edit-action-btn:hover {
+  transform: scale(1.15);
+}
+
+@keyframes connecting-dash {
+  to { stroke-dashoffset: -14; }
+}
+
+.connecting-ring {
+  animation: connecting-dash 0.6s linear infinite;
+}
+
+@keyframes connect-pulse {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 0.4; }
+}
+
+.connect-target-ring {
+  animation: connect-pulse 1.2s ease-in-out infinite;
 }
 </style>
