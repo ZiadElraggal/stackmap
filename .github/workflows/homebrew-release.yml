@@ -12,6 +12,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Verify packaged web assets are synced
+        run: |
+          set -euo pipefail
+          cd frontend
+          npm ci
+          rm -rf .nuxt .output
+          npm run generate
+          cd ..
+          python3 -m stackmap.webapp.build_assets --clean
+          git diff --exit-code -- stackmap/webapp/static
+          test -f stackmap/webapp/static/index.html
+
       - name: Compute archive SHA256
         id: release
         env:
