@@ -1,7 +1,21 @@
 <template>
+  <Transition name="fade">
+    <button
+      v-if="store.editorPanelCollapsed && (store.editMode || node || edge)"
+      class="fixed right-3 top-1/2 z-50 flex -translate-y-1/2 items-center gap-2 rounded-l-2xl rounded-r-lg border border-white/10 bg-[#12121a]/92 px-3 py-3 text-left shadow-[0_18px_48px_rgba(0,0,0,0.45)] backdrop-blur-xl"
+      @click="store.setEditorPanelCollapsed(false)"
+    >
+      <span class="text-sm text-emerald-400">◂</span>
+      <div>
+        <div class="text-[9px] font-mono uppercase tracking-[0.18em] text-gray-500">Editor</div>
+        <div class="text-[11px] text-white">{{ collapsedPanelLabel }}</div>
+      </div>
+    </button>
+  </Transition>
+
   <Transition name="slide">
     <div
-      v-if="node || edge"
+      v-if="(node || edge || store.editMode) && !store.editorPanelCollapsed"
       class="fixed right-0 top-0 h-full w-96 overflow-y-auto overflow-x-hidden z-50 detail-shell"
       style="backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); background: rgba(18, 18, 26, 0.95)"
       :style="{ '--panel-color': categoryColor }"
@@ -34,12 +48,21 @@
               <p class="text-xs text-gray-500 font-mono truncate">{{ node.resource_type }}</p>
             </div>
           </div>
-          <button
-            class="text-gray-500 hover:text-gray-300 transition flex-shrink-0 w-6 h-6 flex items-center justify-center rounded hover:bg-white/5"
-            @click="store.selectNode(null)"
-          >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2l8 8M10 2l-8 8"/></svg>
-          </button>
+          <div class="flex items-center gap-1.5">
+            <button
+              class="panel-header-btn"
+              title="Collapse panel"
+              @click="store.setEditorPanelCollapsed(true)"
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2L4 6l4 4"/></svg>
+            </button>
+            <button
+              class="panel-header-btn"
+              @click="store.selectNode(null)"
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2l8 8M10 2l-8 8"/></svg>
+            </button>
+          </div>
         </div>
 
         <div class="flex items-center gap-1.5 mt-3 flex-wrap">
@@ -379,12 +402,21 @@
               <h2 class="text-sm font-semibold text-white font-mono leading-tight truncate">Manual Link</h2>
               <p class="text-xs text-gray-500 font-mono truncate">{{ edge.source }} → {{ edge.target }}</p>
             </div>
-            <button
-              class="text-gray-500 hover:text-gray-300 transition flex-shrink-0 w-6 h-6 flex items-center justify-center rounded hover:bg-white/5"
-              @click="store.selectEdge(null)"
-            >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2l8 8M10 2l-8 8"/></svg>
-            </button>
+            <div class="flex items-center gap-1.5">
+              <button
+                class="panel-header-btn"
+                title="Collapse panel"
+                @click="store.setEditorPanelCollapsed(true)"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2L4 6l4 4"/></svg>
+              </button>
+              <button
+                class="panel-header-btn"
+                @click="store.selectEdge(null)"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 2l8 8M10 2l-8 8"/></svg>
+              </button>
+            </div>
           </div>
           <div class="mt-3 flex items-center gap-1.5 flex-wrap">
             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium tracking-wide" :style="{ backgroundColor: `${edgeColor}20`, color: edgeColor }">{{ edge.edge_type }}</span>
@@ -444,6 +476,117 @@
           </div>
         </div>
       </template>
+
+      <template v-else>
+        <div class="p-5 border-b border-white/10">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <div class="text-[10px] font-mono uppercase tracking-[0.18em] text-emerald-400">Editor Panel</div>
+              <h2 class="mt-2 text-sm font-semibold text-white">{{ emptyStateTitle }}</h2>
+              <p class="mt-2 text-xs leading-relaxed text-gray-400">{{ emptyStateBody }}</p>
+            </div>
+            <div class="flex items-start gap-2">
+              <button
+                v-if="store.connectingFromNodeId"
+                class="rounded-lg border border-amber-400/20 bg-amber-500/10 px-3 py-1.5 text-[10px] font-mono text-amber-300 transition hover:bg-amber-500/15"
+                @click="store.cancelConnecting()"
+              >
+                Cancel link
+              </button>
+              <button
+                class="panel-header-btn mt-0.5"
+                title="Collapse panel"
+                @click="store.setEditorPanelCollapsed(true)"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2L4 6l4 4"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="p-5 space-y-3">
+          <div class="rounded-xl border border-white/[0.08] bg-white/[0.02]">
+            <button class="section-toggle" @click="toggleSection('emptyGuidance')">
+              <span>Next Steps</span>
+              <span class="section-toggle__meta">{{ sectionOpen.emptyGuidance ? 'Hide' : 'Show' }}</span>
+            </button>
+            <Transition name="expand">
+              <div v-if="sectionOpen.emptyGuidance" class="section-body">
+                <div class="space-y-2">
+                  <div
+                    v-for="tip in emptyStateTips"
+                    :key="tip"
+                    class="rounded-lg border border-white/[0.05] bg-black/20 px-3 py-2 text-xs leading-relaxed text-gray-400"
+                  >
+                    {{ tip }}
+                  </div>
+                </div>
+              </div>
+            </Transition>
+          </div>
+
+          <div class="rounded-xl border border-white/[0.08] bg-white/[0.02]">
+            <button class="section-toggle" @click="toggleSection('emptyChanges')">
+              <span>What Changed</span>
+              <span class="section-toggle__meta">{{ sectionOpen.emptyChanges ? 'Hide' : 'Show' }}</span>
+            </button>
+            <Transition name="expand">
+              <div v-if="sectionOpen.emptyChanges" class="section-body">
+                <div class="grid grid-cols-2 gap-2">
+                  <div class="rounded-lg border border-white/[0.05] bg-black/20 px-3 py-2">
+                    <div class="text-[10px] font-mono uppercase tracking-wider text-gray-600">Hidden</div>
+                    <div class="mt-1 text-sm text-white">{{ store.editChangeSummary.hidden }}</div>
+                  </div>
+                  <div class="rounded-lg border border-white/[0.05] bg-black/20 px-3 py-2">
+                    <div class="text-[10px] font-mono uppercase tracking-wider text-gray-600">Custom Nodes</div>
+                    <div class="mt-1 text-sm text-white">{{ store.editChangeSummary.customNodes }}</div>
+                  </div>
+                  <div class="rounded-lg border border-white/[0.05] bg-black/20 px-3 py-2">
+                    <div class="text-[10px] font-mono uppercase tracking-wider text-gray-600">Manual Links</div>
+                    <div class="mt-1 text-sm text-white">{{ store.editChangeSummary.customLinks }}</div>
+                  </div>
+                  <div class="rounded-lg border border-white/[0.05] bg-black/20 px-3 py-2">
+                    <div class="text-[10px] font-mono uppercase tracking-wider text-gray-600">Moved</div>
+                    <div class="mt-1 text-sm text-white">{{ store.editChangeSummary.moved }}</div>
+                  </div>
+                </div>
+                <div class="mt-2 rounded-lg border border-white/[0.05] bg-black/20 px-3 py-2">
+                  <div class="text-[10px] font-mono uppercase tracking-wider text-gray-600">Custom Layers</div>
+                  <div class="mt-1 text-sm text-white">{{ store.editChangeSummary.customLayers }}</div>
+                </div>
+              </div>
+            </Transition>
+          </div>
+
+          <div class="rounded-xl border border-white/[0.08] bg-white/[0.02]">
+            <button class="section-toggle" @click="toggleSection('emptyStatus')">
+              <span>Status</span>
+              <span class="section-toggle__meta">{{ sectionOpen.emptyStatus ? 'Hide' : 'Show' }}</span>
+            </button>
+            <Transition name="expand">
+              <div v-if="sectionOpen.emptyStatus" class="section-body space-y-2">
+                <div class="rounded-lg border border-white/[0.05] bg-black/20 px-3 py-2 text-xs text-gray-400">
+                  Edit mode: <span class="text-white">{{ store.editSubmode }}</span>
+                </div>
+                <div class="rounded-lg border border-white/[0.05] bg-black/20 px-3 py-2 text-xs text-gray-400">
+                  Persistence: <span class="text-white">{{ store.editPersistenceStatus || 'ready' }}</span>
+                </div>
+                <div class="rounded-lg border border-white/[0.05] bg-black/20 px-3 py-2 text-xs text-gray-400">
+                  Hidden resources:
+                  <span class="text-white">{{ store.hiddenNodeIds.length }}</span>
+                  <button
+                    v-if="store.hiddenNodeIds.length > 0"
+                    class="ml-2 rounded-md border border-white/10 px-2 py-0.5 text-[10px] font-mono text-gray-300 transition hover:bg-white/5 hover:text-white"
+                    @click="store.showAllNodes()"
+                  >
+                    Show all
+                  </button>
+                </div>
+              </div>
+            </Transition>
+          </div>
+        </div>
+      </template>
     </div>
   </Transition>
 </template>
@@ -464,6 +607,9 @@ const sectionOpen = ref<Record<string, boolean>>({
   connections: true,
   neighborhood: false,
   edgeEditor: true,
+  emptyGuidance: true,
+  emptyChanges: true,
+  emptyStatus: false,
 })
 
 const node = computed(() => store.selectedNode)
@@ -514,6 +660,59 @@ const componentLabel = computed(() => {
   if (!node.value) return null
   const component = store.componentSummaries.find(summary => summary.nodeIds.includes(node.value!.id))
   return component ? component.name.replace(/-/g, ' ') : null
+})
+const emptyStateTitle = computed(() => {
+  if (store.editSubmode === 'inspect') return 'Select a resource or link'
+  if (store.editSubmode === 'structure') return 'Choose something to shape'
+  if (store.editSubmode === 'connect') {
+    return store.connectingFromNodeId ? 'Choose a target node' : 'Pick a source node to connect'
+  }
+  return 'Editor ready'
+})
+const emptyStateBody = computed(() => {
+  if (store.editSubmode === 'inspect') {
+    return 'Inspect is the safe mode. Click any resource or manual link to review details without accidentally moving or wiring the graph.'
+  }
+  if (store.editSubmode === 'structure') {
+    return 'Structure mode is where you move resources between layers, hide noise, add custom components, and clean up the map for presentation.'
+  }
+  if (store.connectingFromNodeId) {
+    return 'A source node is already selected. Click a destination on the graph to create a manual connection, or cancel to leave connect mode cleanly.'
+  }
+  return 'Connect mode is for manual relationships. Select a source resource, then click a target resource to add the missing link.'
+})
+const emptyStateTips = computed(() => {
+  if (store.editSubmode === 'inspect') {
+    return [
+      'Click any node to open its details and overrides.',
+      'Click a manual link to edit its label, type, color, or delete it.',
+      'Switch to Structure when you want to move or hide resources.',
+    ]
+  }
+  if (store.editSubmode === 'structure') {
+    return [
+      'Drag a node onto a layer band or the layer rail to move it.',
+      'Use Add Node or Add Layer in the toolbar for missing architecture pieces.',
+      'Empty custom layers stay available in the left rail as drop targets.',
+    ]
+  }
+  if (store.connectingFromNodeId) {
+    return [
+      'Click a destination node to create a manual link from the selected source.',
+      'Press Escape or use Cancel link to back out of the connection safely.',
+      'Select a manual link afterward to rename it, recolor it, or change its type.',
+    ]
+  }
+  return [
+    'Select a source node to begin a manual connection.',
+    'Manual links can represent request flow, events, data access, auth, or generic relationships.',
+    'Use the side panel after creation to refine the link metadata.',
+  ]
+})
+const collapsedPanelLabel = computed(() => {
+  if (node.value) return node.value.name
+  if (edge.value) return edge.value.label || 'Manual link'
+  return store.editSubmode === 'connect' ? 'Connect mode' : 'Editor'
 })
 
 const SKIP_KEYS = new Set([
@@ -713,6 +912,22 @@ function toggleSection(section: string) {
 
 .section-body {
   padding: 0 14px 14px;
+}
+
+.panel-header-btn {
+  display: inline-flex;
+  height: 24px;
+  width: 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: rgba(107, 114, 128, 0.95);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.panel-header-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(229, 231, 235, 0.95);
 }
 
 .slide-enter-active {

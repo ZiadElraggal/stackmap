@@ -950,6 +950,7 @@ export const useGraphStore = defineStore('graph', {
     lastEditAction: '' as string,
     editPersistenceStatus: 'idle' as 'idle' | 'saved' | 'restored' | 'imported',
     presentationMode: false as boolean,
+    editorPanelCollapsed: false as boolean,
     hasSeenEditWalkthrough: false as boolean,
     originalNodeSnapshots: {} as Record<string, OriginalNodeSnapshot>,
   }),
@@ -1494,6 +1495,7 @@ export const useGraphStore = defineStore('graph', {
       )
       if (typeof window !== 'undefined') {
         this.hasSeenEditWalkthrough = localStorage.getItem('stackmap-edit-walkthrough-seen') === 'true'
+        this.editorPanelCollapsed = localStorage.getItem('stackmap-editor-panel-collapsed') === 'true'
       }
 
       const cats = new Set(this.graphNodes.map(node => node.category))
@@ -1538,12 +1540,14 @@ export const useGraphStore = defineStore('graph', {
     selectNode(nodeId: string | null) {
       this.selectedNodeId = nodeId
       if (nodeId) this.selectedEdgeId = null
+      if (nodeId) this.editorPanelCollapsed = false
       if (!nodeId) this.hopLimit = 0
     },
 
     selectEdge(edgeId: string | null) {
       this.selectedEdgeId = edgeId
       if (edgeId) this.selectedNodeId = null
+      if (edgeId) this.editorPanelCollapsed = false
     },
 
     hoverNode(nodeId: string | null) {
@@ -1681,6 +1685,13 @@ export const useGraphStore = defineStore('graph', {
 
     setPresentationMode(enabled: boolean) {
       this.presentationMode = enabled
+    },
+
+    setEditorPanelCollapsed(collapsed: boolean) {
+      this.editorPanelCollapsed = collapsed
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('stackmap-editor-panel-collapsed', String(collapsed))
+      }
     },
 
     dismissEditWalkthrough() {
