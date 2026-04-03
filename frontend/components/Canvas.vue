@@ -178,6 +178,57 @@
 
     <Transition name="fade">
       <div
+        v-if="store.editMode && store.viewMode !== 'organization'"
+        class="absolute left-[272px] top-4 z-40 w-56 rounded-2xl border border-white/[0.08] bg-[#12121a]/92 p-3 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,0,0,0.45)]"
+      >
+        <div class="mb-2 flex items-center justify-between gap-2">
+          <div>
+            <div class="text-[9px] font-semibold uppercase tracking-[0.15em] text-gray-500">Layers</div>
+            <div class="mt-1 text-[11px] text-gray-400">Drag rows to reorder. Drop nodes onto any row.</div>
+          </div>
+        </div>
+
+        <div class="space-y-1.5">
+          <div
+            v-for="layer in layerRailLayers"
+            :key="`rail-${layer.id}`"
+            :data-layer-drop-target="layer.id"
+            :data-layer-reorder-item="layer.id"
+            draggable="true"
+            class="group flex cursor-grab items-center gap-2 rounded-xl border px-2.5 py-2 transition-all"
+            :class="{
+              'border-emerald-400/35 bg-emerald-500/12 shadow-[0_0_0_1px_rgba(74,222,128,0.15)]': store.dragTargetLayerId === layer.id || layerRailDropTargetId === layer.id,
+              'border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.05]': store.dragTargetLayerId !== layer.id && layerRailDropTargetId !== layer.id,
+              'opacity-50': draggingLayerId === layer.id,
+            }"
+            @dragstart="onLayerRailDragStart($event, layer.id)"
+            @dragover.prevent="onLayerRailDragOver(layer.id)"
+            @drop.prevent="onLayerRailDrop(layer.id)"
+            @dragend="onLayerRailDragEnd"
+          >
+            <span class="select-none text-sm leading-none text-gray-600 transition-colors group-hover:text-gray-400">⋮⋮</span>
+            <span class="text-sm" :style="{ color: layer.accent }">{{ layer.icon }}</span>
+            <div class="min-w-0 flex-1">
+              <div class="truncate text-xs font-medium text-white">{{ layer.label }}</div>
+              <div class="mt-0.5 text-[10px] font-mono uppercase tracking-wider" :class="layer.count > 0 ? 'text-gray-500' : 'text-amber-400/80'">
+                {{ layer.count > 0 ? `${layer.count} nodes` : 'empty drop target' }}
+              </div>
+            </div>
+            <button
+              v-if="layer.canDelete"
+              class="flex h-6 w-6 items-center justify-center rounded-md border border-red-400/20 bg-red-500/8 text-[11px] text-red-300 opacity-0 transition-all hover:bg-red-500/16 group-hover:opacity-100"
+              title="Delete empty custom layer"
+              @click.stop="deleteLayer(layer.id)"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <Transition name="fade">
+      <div
         v-if="draggingNodeName"
         class="pointer-events-none absolute left-1/2 top-20 z-50 -translate-x-1/2 rounded-xl border border-emerald-400/25 bg-[#0e0e18]/95 px-4 py-2 backdrop-blur-md shadow-xl"
       >
@@ -331,6 +382,8 @@ const zoomGroupRef = ref<SVGGElement>()
 const containerRef = ref<HTMLDivElement>()
 const searchBarRef = ref<{ focus: () => void }>()
 const showHelp = ref(false)
+const draggingLayerId = ref<string | null>(null)
+const layerRailDropTargetId = ref<string | null>(null)
 
 const viewportRect = ref<{ x: number; y: number; width: number; height: number } | null>(null)
 const zoomScale = ref(1)
@@ -370,6 +423,24 @@ const graphBounds = computed(() => {
 })
 
 const layerDefinitions = computed(() => buildLayerDefinitions(store.layoutLayers, store.customLayers))
+const visibleLayerIds = computed(() => {
+  const ids = new Set<string>()
+  for (const node of store.visibleNodes) {
+    ids.add(node.position_hint?.tier || 'compute')
+  }
+  return ids
+})
+const visibleLayerDefinitions = computed(() =>
+  layerDefinitions.value.filter(layer => visibleLayerIds.value.has(layer.id))
+)
+const layerRailLayers = computed(() =>
+  layerDefinitions.value.map(layer => ({
+    ...layer,
+    count: store.visibleNodes.filter(node => (node.position_hint?.tier || 'compute') === layer.id).length,
+    canDelete: store.customLayers.some(customLayer => customLayer.id === layer.id)
+      && [...store.nodes, ...store.userNodes].filter(node => (node.position_hint?.tier || 'compute') === layer.id).length === 0,
+  }))
+)
 
 const tierBands = computed(() => {
   if (store.viewMode === 'organization') return []
@@ -395,7 +466,7 @@ const tierBands = computed(() => {
     labelY: number
     icon: string
   }> = []
-  for (const layer of layerDefinitions.value) {
+  for (const layer of visibleLayerDefinitions.value) {
     const ys = tierNodes[layer.id]
     if (!ys || ys.length === 0) continue
     const minY = Math.min(...ys)
@@ -702,31 +773,38 @@ function recomputeLayout() {
   const allEdges = store.visibleEdges
   const positions = store.diffMode
     ? computeDiffLayout()
-    : computeLayout(allNodes, allEdges, store.graphGroups, store.layoutLayers)
+    : computeLayout(allNodes, allEdges, store.graphGroups, visibleLayerDefinitions.value.map(layer => layer.id))
   store.setPositions(positions)
 }
 
 function onNodeDragStart(payload: { nodeId: string; clientX: number; clientY: number }) {
   if (!store.editMode || store.viewMode === 'organization') return
   store.startDraggingNode(payload.nodeId)
-  updateDragTargetFromPointer(payload.clientY)
+  updateDragTargetFromPointer(payload.clientX, payload.clientY)
 }
 
 function onNodeDragMove(payload: { nodeId: string; clientX: number; clientY: number }) {
   if (store.draggingNodeId !== payload.nodeId) return
-  updateDragTargetFromPointer(payload.clientY)
+  updateDragTargetFromPointer(payload.clientX, payload.clientY)
 }
 
 async function onNodeDragEnd(payload: { nodeId: string; clientX: number; clientY: number }) {
   if (store.draggingNodeId !== payload.nodeId) return
-  updateDragTargetFromPointer(payload.clientY)
+  updateDragTargetFromPointer(payload.clientX, payload.clientY)
   const targetLayerId = store.dragTargetLayerId
   store.finishDraggingNode(targetLayerId)
   await nextTick()
   fitToViewport()
 }
 
-function updateDragTargetFromPointer(clientY: number) {
+function updateDragTargetFromPointer(clientX: number, clientY: number) {
+  const hoveredElement = document.elementFromPoint(clientX, clientY) as HTMLElement | null
+  const explicitLayerTarget = hoveredElement?.closest?.('[data-layer-drop-target]')?.getAttribute('data-layer-drop-target')
+  if (explicitLayerTarget) {
+    store.setDragTargetLayer(explicitLayerTarget)
+    return
+  }
+
   const svg = svgRef.value
   if (!svg || !zoomGroupRef.value || !zoomBehavior) return
   const screenPoint = svg.createSVGPoint()
@@ -749,6 +827,37 @@ function updateDragTargetFromPointer(clientY: number) {
     return Math.abs(aCenter - graphPoint.y) - Math.abs(bCenter - graphPoint.y)
   })[0]
   store.setDragTargetLayer(nearestBand?.id || null)
+}
+
+function onLayerRailDragStart(event: DragEvent, layerId: string) {
+  event.dataTransfer?.setData('text/plain', layerId)
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+  }
+  draggingLayerId.value = layerId
+  layerRailDropTargetId.value = layerId
+}
+
+function onLayerRailDragOver(layerId: string) {
+  layerRailDropTargetId.value = layerId
+}
+
+function onLayerRailDrop(layerId: string) {
+  if (!draggingLayerId.value) return
+  store.reorderLayers(draggingLayerId.value, layerId)
+  relayoutAndFit()
+  draggingLayerId.value = null
+  layerRailDropTargetId.value = null
+}
+
+function onLayerRailDragEnd() {
+  draggingLayerId.value = null
+  layerRailDropTargetId.value = null
+}
+
+function deleteLayer(layerId: string) {
+  if (!store.removeCustomLayer(layerId)) return
+  relayoutAndFit()
 }
 
 function computeDiffLayout(): Record<string, NodePosition> {
@@ -847,6 +956,11 @@ function lerp(from: number, to: number, t: number): number {
 function zoomBy(factor: number) {
   if (!svgSelection || !zoomBehavior) return
   svgSelection.transition().duration(300).call(zoomBehavior.scaleBy, factor)
+}
+
+function relayoutAndFit() {
+  recomputeLayout()
+  nextTick(() => fitToViewport())
 }
 
 function panToNode(nodeId: string) {

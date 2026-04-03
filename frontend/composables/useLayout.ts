@@ -5,7 +5,9 @@ import type { StackMapNode, StackMapEdge, StackMapGroup, NodePosition } from '~/
 const LAYOUT_EDGE_TYPES = new Set(['triggers', 'writes_to', 'reads_from', 'routes_to'])
 
 function resolveLayerOrder(nodes: StackMapNode[], layerOrder?: string[]): string[] {
+  const presentTiers = new Set(nodes.map(node => node.position_hint?.tier || 'compute'))
   const base = (layerOrder && layerOrder.length ? [...layerOrder] : ['frontend', 'api', 'serverless', 'compute', 'security', 'data'])
+    .filter(layerId => presentTiers.has(layerId))
   for (const node of nodes) {
     const tier = node.position_hint?.tier || 'compute'
     if (!base.includes(tier)) base.push(tier)

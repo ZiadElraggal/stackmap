@@ -1712,6 +1712,26 @@ export const useGraphStore = defineStore('graph', {
       return id
     },
 
+    removeCustomLayer(layerId: string) {
+      if (DEFAULT_LAYOUT_LAYERS.includes(layerId)) return false
+      if (!this.customLayers.some(layer => layer.id === layerId)) return false
+
+      const hasAssignedNodes = [...this.nodes, ...this.userNodes].some(
+        node => (node.position_hint?.tier || 'compute') === layerId
+      )
+      if (hasAssignedNodes) return false
+
+      this._recordHistory()
+      this.customLayers = this.customLayers.filter(layer => layer.id !== layerId)
+      this.layoutLayers = this.layoutLayers.filter(id => id !== layerId)
+      if (this.dragTargetLayerId === layerId) {
+        this.dragTargetLayerId = null
+      }
+      this.requestRelayout()
+      this._persistEdits()
+      return true
+    },
+
     reorderLayers(draggedLayerId: string, targetLayerId: string) {
       if (draggedLayerId === targetLayerId) return
       const fromIndex = this.layoutLayers.indexOf(draggedLayerId)
