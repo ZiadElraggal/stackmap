@@ -82,156 +82,181 @@
         </dl>
       </div>
 
-      <div class="p-4 border-b border-white/10">
-        <!-- Edit mode actions for selected node -->
-        <div v-if="store.editMode && node" class="mb-3 flex flex-wrap gap-1.5">
-          <button
-            class="rounded-md border border-red-400/20 bg-red-500/10 px-2.5 py-1 text-[10px] font-mono text-red-300 transition hover:bg-red-500/15"
-            @click="store.hideNode(node.id)"
-          >
-            Hide
+      <div class="p-4 border-b border-white/10 space-y-3">
+        <div v-if="store.editMode && node" class="rounded-xl border border-white/[0.08] bg-white/[0.02]">
+          <button class="section-toggle" @click="toggleSection('nodeEditor')">
+            <span>Node Editor</span>
+            <span class="section-toggle__meta">{{ sectionOpen.nodeEditor ? 'Hide' : 'Show' }}</span>
           </button>
-          <button
-            class="rounded-md border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-mono text-emerald-300 transition hover:bg-emerald-500/15"
-            @click="store.startConnecting(node.id)"
-          >
-            Connect to...
-          </button>
-          <button
-            v-if="!node.tags?._user_created"
-            class="rounded-md border border-amber-400/20 bg-amber-500/10 px-2.5 py-1 text-[10px] font-mono text-amber-300 transition hover:bg-amber-500/15"
-            @click="store.resetNodeEdits(node.id)"
-          >
-            Reset
-          </button>
-          <button
-            v-if="node.tags?._user_created"
-            class="rounded-md border border-red-400/30 bg-red-500/15 px-2.5 py-1 text-[10px] font-mono text-red-300 transition hover:bg-red-500/25"
-            @click="store.removeUserNode(node.id)"
-          >
-            Delete
-          </button>
+          <Transition name="expand">
+            <div v-if="sectionOpen.nodeEditor" class="section-body">
+              <div class="mb-3 flex flex-wrap gap-1.5">
+                <button
+                  class="rounded-md border border-red-400/20 bg-red-500/10 px-2.5 py-1 text-[10px] font-mono text-red-300 transition hover:bg-red-500/15"
+                  @click="store.hideNode(node.id)"
+                >
+                  Hide
+                </button>
+                <button
+                  class="rounded-md border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-mono text-emerald-300 transition hover:bg-emerald-500/15"
+                  @click="store.startConnecting(node.id)"
+                >
+                  Connect to...
+                </button>
+                <button
+                  v-if="!node.tags?._user_created"
+                  class="rounded-md border border-amber-400/20 bg-amber-500/10 px-2.5 py-1 text-[10px] font-mono text-amber-300 transition hover:bg-amber-500/15"
+                  @click="store.resetNodeEdits(node.id)"
+                >
+                  Reset
+                </button>
+                <button
+                  v-if="node.tags?._user_created"
+                  class="rounded-md border border-red-400/30 bg-red-500/15 px-2.5 py-1 text-[10px] font-mono text-red-300 transition hover:bg-red-500/25"
+                  @click="store.removeUserNode(node.id)"
+                >
+                  Delete
+                </button>
+              </div>
+
+              <div class="space-y-2">
+                <label class="block">
+                  <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Name</span>
+                  <input
+                    :value="node.name"
+                    class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+                    @change="onNameChange"
+                  />
+                </label>
+                <label class="block">
+                  <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Provider</span>
+                  <input
+                    :value="node.provider"
+                    class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+                    @change="onProviderChange"
+                  />
+                </label>
+                <label v-if="node.tags?._user_created" class="block">
+                  <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Service Type</span>
+                  <select
+                    :value="node.resource_type"
+                    class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+                    @change="onResourceTypeChange"
+                  >
+                    <option v-for="template in userNodeTemplates" :key="template.id" :value="template.resourceType">{{ template.label }}</option>
+                  </select>
+                </label>
+                <label class="block">
+                  <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Prominence</span>
+                  <select
+                    :value="String(node.position_hint?.weight || 2)"
+                    class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+                    @change="onWeightChange"
+                  >
+                    <option value="2">Low</option>
+                    <option value="3">Medium</option>
+                    <option value="4">High</option>
+                    <option value="5">Critical</option>
+                  </select>
+                </label>
+                <label class="block">
+                  <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Layer</span>
+                  <select
+                    :value="node.position_hint?.tier || 'compute'"
+                    class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+                    @change="onLayerSelectChange"
+                  >
+                    <option
+                      v-for="layer in layerDefinitions"
+                      :key="layer.id"
+                      :value="layer.id"
+                    >
+                      {{ layer.label }}
+                    </option>
+                  </select>
+                </label>
+                <div class="flex gap-2">
+                  <input
+                    v-model="newLayerName"
+                    class="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono placeholder-gray-600 outline-none focus:border-emerald-400/40"
+                    placeholder="Add new layer"
+                    @keydown.enter.prevent="addLayerAndMove"
+                  />
+                  <button
+                    class="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-[10px] font-mono text-emerald-300 transition hover:bg-emerald-500/15"
+                    @click="addLayerAndMove"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+            </div>
+          </Transition>
         </div>
 
-        <div v-if="store.editMode && node" class="mb-3 space-y-2">
-          <label class="block">
-            <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Name</span>
-            <input
-              :value="node.name"
-              class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
-              @change="onNameChange"
-            />
-          </label>
-          <label class="block">
-            <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Provider</span>
-            <input
-              :value="node.provider"
-              class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
-              @change="onProviderChange"
-            />
-          </label>
-          <label v-if="node.tags?._user_created" class="block">
-            <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Service Type</span>
-            <select
-              :value="node.resource_type"
-              class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
-              @change="onResourceTypeChange"
-            >
-              <option v-for="template in userNodeTemplates" :key="template.id" :value="template.resourceType">{{ template.label }}</option>
-            </select>
-          </label>
-          <label class="block">
-            <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Prominence</span>
-            <select
-              :value="String(node.position_hint?.weight || 2)"
-              class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
-              @change="onWeightChange"
-            >
-              <option value="2">Low</option>
-              <option value="3">Medium</option>
-              <option value="4">High</option>
-              <option value="5">Critical</option>
-            </select>
-          </label>
-          <label class="block">
-            <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Layer</span>
-            <select
-              :value="node.position_hint?.tier || 'compute'"
-              class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
-              @change="onLayerSelectChange"
-            >
-              <option
-                v-for="layer in layerDefinitions"
-                :key="layer.id"
-                :value="layer.id"
-              >
-                {{ layer.label }}
-              </option>
-            </select>
-          </label>
-          <div class="flex gap-2">
-            <input
-              v-model="newLayerName"
-              class="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono placeholder-gray-600 outline-none focus:border-emerald-400/40"
-              placeholder="Add new layer"
-              @keydown.enter.prevent="addLayerAndMove"
-            />
-            <button
-              class="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-[10px] font-mono text-emerald-300 transition hover:bg-emerald-500/15"
-              @click="addLayerAndMove"
-            >
-              Add
-            </button>
-          </div>
-        </div>
-
-        <div v-if="componentLabel" class="mb-3 flex items-center justify-between rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2">
-          <div>
-            <div class="text-[10px] uppercase tracking-widest text-gray-600">Component</div>
-            <div class="mt-1 text-xs font-mono text-gray-300">{{ componentLabel }}</div>
-          </div>
-          <button
-            class="rounded-md border border-cyan-400/20 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-mono text-cyan-300 transition hover:bg-cyan-500/15"
-            @click="store.focusSelectedNodeComponent()"
-          >
-            Focus component
+        <div class="rounded-xl border border-white/[0.08] bg-white/[0.02]">
+          <button class="section-toggle" @click="toggleSection('properties')">
+            <span>Properties</span>
+            <span class="section-toggle__meta">{{ sectionOpen.properties ? 'Hide' : 'Show' }}</span>
           </button>
+          <Transition name="expand">
+            <div v-if="sectionOpen.properties" class="section-body">
+              <div v-if="componentLabel" class="mb-3 flex items-center justify-between rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2">
+                <div>
+                  <div class="text-[10px] uppercase tracking-widest text-gray-600">Component</div>
+                  <div class="mt-1 text-xs font-mono text-gray-300">{{ componentLabel }}</div>
+                </div>
+                <button
+                  class="rounded-md border border-cyan-400/20 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-mono text-cyan-300 transition hover:bg-cyan-500/15"
+                  @click="store.focusSelectedNodeComponent()"
+                >
+                  Focus component
+                </button>
+              </div>
+              <dl>
+                <div
+                  v-for="([key, val], idx) in topProperties"
+                  :key="key"
+                  class="flex justify-between text-xs px-2 py-1"
+                  :class="idx % 2 === 0 ? 'bg-transparent' : 'bg-white/[0.02]'"
+                >
+                  <dt class="text-gray-500 font-mono mr-3">{{ key }}</dt>
+                  <dd class="text-gray-300 font-mono truncate max-w-[200px]">
+                    {{ formatValue(val) }}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </Transition>
         </div>
-        <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">Properties</h3>
-        <dl>
-          <div
-            v-for="([key, val], idx) in topProperties"
-            :key="key"
-            class="flex justify-between text-xs px-2 py-1"
-            :class="idx % 2 === 0 ? 'bg-transparent' : 'bg-white/[0.02]'"
-          >
-            <dt class="text-gray-500 font-mono mr-3">{{ key }}</dt>
-            <dd class="text-gray-300 font-mono truncate max-w-[200px]">
-              {{ formatValue(val) }}
-            </dd>
-          </div>
-        </dl>
-      </div>
 
-      <div v-if="Object.keys(node.tags || {}).length > 0" class="p-4 border-b border-white/10">
-        <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">Tags</h3>
-        <div class="flex flex-wrap gap-1">
-          <span
-            v-for="[key, val] in Object.entries(node.tags)"
-            :key="key"
-            class="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-white/5 text-gray-400"
-          >
-            {{ key }}={{ val }}
-          </span>
+        <div v-if="Object.keys(node.tags || {}).length > 0" class="rounded-xl border border-white/[0.08] bg-white/[0.02]">
+          <button class="section-toggle" @click="toggleSection('tags')">
+            <span>Tags</span>
+            <span class="section-toggle__meta">{{ sectionOpen.tags ? 'Hide' : 'Show' }}</span>
+          </button>
+          <Transition name="expand">
+            <div v-if="sectionOpen.tags" class="section-body">
+              <div class="flex flex-wrap gap-1">
+                <span
+                  v-for="[key, val] in Object.entries(node.tags)"
+                  :key="key"
+                  class="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-white/5 text-gray-400"
+                >
+                  {{ key }}={{ val }}
+                </span>
+              </div>
+            </div>
+          </Transition>
         </div>
-      </div>
 
-      <div class="p-4 border-b border-white/10">
-        <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">
-          Connections
-          <span class="text-gray-600 ml-1 normal-case tracking-normal">({{ edges.length }})</span>
-        </h3>
-
+        <div class="rounded-xl border border-white/[0.08] bg-white/[0.02]">
+          <button class="section-toggle" @click="toggleSection('connections')">
+            <span>Connections</span>
+            <span class="section-toggle__meta">{{ edges.length }} · {{ sectionOpen.connections ? 'Hide' : 'Show' }}</span>
+          </button>
+          <Transition name="expand">
+            <div v-if="sectionOpen.connections" class="section-body">
         <div v-if="outgoing.length > 0" class="mb-3">
           <p class="text-[10px] text-gray-600 mb-1.5 uppercase tracking-wider flex items-center gap-1">
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 5h6M6 3l2 2-2 2"/></svg>
@@ -299,10 +324,17 @@
         </div>
 
         <div v-if="edges.length === 0" class="text-xs text-gray-600 italic py-2">No connections</div>
-      </div>
+            </div>
+          </Transition>
+        </div>
 
-      <div class="p-4 border-b border-white/10">
-        <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2">Neighborhood</h3>
+        <div class="rounded-xl border border-white/[0.08] bg-white/[0.02]">
+          <button class="section-toggle" @click="toggleSection('neighborhood')">
+            <span>Neighborhood</span>
+            <span class="section-toggle__meta">{{ sectionOpen.neighborhood ? 'Hide' : 'Show' }}</span>
+          </button>
+          <Transition name="expand">
+            <div v-if="sectionOpen.neighborhood" class="section-body">
         <div class="flex gap-1.5">
           <button
             v-for="h in [0, 1, 2, 3]"
@@ -318,26 +350,25 @@
             {{ h === 0 ? 'All' : h + ' hop' + (h > 1 ? 's' : '') }}
           </button>
         </div>
+            </div>
+          </Transition>
+        </div>
       </div>
 
       <div class="p-4">
-        <button
-          class="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 transition group"
-          @click="showRaw = !showRaw"
-        >
-          <svg
-            width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5"
-            class="transition-transform" :class="showRaw ? 'rotate-90' : ''"
-          ><path d="M3 2l4 3-4 3"/></svg>
-          <span>{{ showRaw ? 'Hide' : 'View' }} raw properties</span>
-        </button>
-        <Transition name="expand">
-          <div v-if="showRaw" class="mt-2 max-w-full overflow-hidden">
-            <pre
-              class="p-3 bg-black/30 rounded-lg text-[11px] text-gray-400 font-mono max-h-80 overflow-y-auto whitespace-pre-wrap break-words leading-relaxed"
-            >{{ rawJsonText }}</pre>
-          </div>
-        </Transition>
+        <div class="rounded-xl border border-white/[0.08] bg-white/[0.02]">
+          <button class="section-toggle" @click="showRaw = !showRaw">
+            <span>Raw Properties</span>
+            <span class="section-toggle__meta">{{ showRaw ? 'Hide' : 'Show' }}</span>
+          </button>
+          <Transition name="expand">
+            <div v-if="showRaw" class="section-body max-w-full overflow-hidden">
+              <pre
+                class="rounded-lg bg-black/30 p-3 text-[11px] font-mono leading-relaxed text-gray-400 whitespace-pre-wrap break-words max-h-80 overflow-y-auto"
+              >{{ rawJsonText }}</pre>
+            </div>
+          </Transition>
+        </div>
       </div>
       </template>
 
@@ -361,7 +392,14 @@
           </div>
         </div>
 
-        <div class="p-4 border-b border-white/10 space-y-3">
+        <div class="p-4 border-b border-white/10">
+          <div class="rounded-xl border border-white/[0.08] bg-white/[0.02]">
+            <button class="section-toggle" @click="toggleSection('edgeEditor')">
+              <span>Link Editor</span>
+              <span class="section-toggle__meta">{{ sectionOpen.edgeEditor ? 'Hide' : 'Show' }}</span>
+            </button>
+            <Transition name="expand">
+              <div v-if="sectionOpen.edgeEditor" class="section-body space-y-3">
           <label class="block">
             <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Label</span>
             <input
@@ -401,6 +439,9 @@
           >
             Delete Link
           </button>
+              </div>
+            </Transition>
+          </div>
         </div>
       </template>
     </div>
@@ -416,6 +457,14 @@ const store = useGraphStore()
 const showRaw = ref(false)
 const newLayerName = ref('')
 const userLinkColors = ['#4ADE80', '#38BDF8', '#C084FC', '#FB923C', '#F87171']
+const sectionOpen = ref<Record<string, boolean>>({
+  nodeEditor: true,
+  properties: true,
+  tags: false,
+  connections: true,
+  neighborhood: false,
+  edgeEditor: true,
+})
 
 const node = computed(() => store.selectedNode)
 const edge = computed(() => store.selectedEdge)
@@ -606,6 +655,10 @@ function addLayerAndMove() {
     newLayerName.value = ''
   }
 }
+
+function toggleSection(section: string) {
+  sectionOpen.value[section] = !sectionOpen.value[section]
+}
 </script>
 
 <style scoped>
@@ -630,6 +683,36 @@ function addLayerAndMove() {
 .active-hop {
   background: color-mix(in srgb, var(--panel-color) 18%, transparent);
   color: var(--panel-color);
+}
+
+.section-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(156, 163, 175, 0.95);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.section-toggle:hover {
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(229, 231, 235, 0.95);
+}
+
+.section-toggle__meta {
+  letter-spacing: normal;
+  text-transform: none;
+  color: rgba(107, 114, 128, 0.95);
+}
+
+.section-body {
+  padding: 0 14px 14px;
 }
 
 .slide-enter-active {
