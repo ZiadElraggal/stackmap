@@ -1,6 +1,6 @@
 <template>
   <g
-    :class="['graph-edge', { dimmed: isDimmed, 'user-link-hover': isUserLink && (isHovered || isControlHovering) && store.editMode }]"
+    :class="['graph-edge', { dimmed: isDimmed, selected: isSelected, 'user-link-hover': isUserLink && (isHovered || isControlHovering || isSelected) && store.editMode }]"
     :style="{
       '--edge-color': edgeColor,
       '--edge-delay': `${entryDelay}ms`,
@@ -9,6 +9,7 @@
     }"
     @mouseenter="onEdgeEnter"
     @mouseleave="onEdgeLeave"
+    @click.stop="onEdgeClick"
   >
     <!-- Invisible wider hit area for hover detection on edges -->
     <path
@@ -58,7 +59,7 @@
         fill="#6b7280"
         font-size="8"
         font-family="'JetBrains Mono', 'SF Mono', monospace"
-      >{{ edge.edge_type }}</text>
+      >{{ edgeLabelText }}</text>
     </g>
 
     <g
@@ -100,7 +101,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useGraphStore, type StackMapEdge } from '~/stores/graph'
-import { EDGE_COLORS } from '~/composables/useGraph'
+import { EDGE_COLORS, MANUAL_EDGE_TYPES } from '~/composables/useGraph'
 
 const props = withDefaults(
   defineProps<{
@@ -122,6 +123,7 @@ const store = useGraphStore()
 
 const isUserLink = computed(() =>
   props.edge.edge_type === 'user_link'
+  || props.edge.edge_type.startsWith('manual_')
   || props.edge.label === 'user link'
   || props.edge.id.startsWith('user:')
 )
@@ -140,6 +142,7 @@ const markerId = computed(() => {
   if (!isUserLink.value) return `arrow-${props.edge.edge_type}`
   return `arrow-user-${props.edge.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`
 })
+const isSelected = computed(() => store.selectedEdgeId === props.edge.id)
 
 const isConnectedToHovered = computed(() => {
   const hovered = store.hoveredNodeId
@@ -252,10 +255,14 @@ const labelPosition = computed(() => {
   return { x: midX, y: midY - 10 }
 })
 
-const labelWidth = computed(() => Math.max(36, props.edge.edge_type.length * 5.4 + 8))
+const edgeLabelText = computed(() => {
+  if (isUserLink.value && props.edge.label) return props.edge.label
+  return MANUAL_EDGE_TYPES.find(type => type.id === props.edge.edge_type)?.label || props.edge.edge_type
+})
+const labelWidth = computed(() => Math.max(36, edgeLabelText.value.length * 5.4 + 8))
 const showLabel = computed(() => {
   if (props.zoomScale <= 0.6) return false
-  return ['triggers', 'reads_from', 'writes_to', 'cross_account_reference', 'user_link'].includes(props.edge.edge_type)
+  return ['triggers', 'reads_from', 'writes_to', 'cross_account_reference', 'user_link', 'manual_generic', 'manual_request', 'manual_event', 'manual_data', 'manual_auth'].includes(props.edge.edge_type)
 })
 
 const midpoint = computed(() => {
@@ -320,6 +327,11 @@ function onDeleteEdge() {
 function onSetEdgeColor(color: string) {
   store.setUserEdgeColor(props.edge.id, color)
 }
+
+function onEdgeClick() {
+  if (!store.editMode || !isUserLink.value) return
+  store.selectEdge(isSelected.value ? null : props.edge.id)
+}
 </script>
 
 <style scoped>
@@ -351,6 +363,11 @@ function onSetEdgeColor(color: string) {
 .user-link-hover .edge-path {
   filter: drop-shadow(0 0 6px color-mix(in srgb, var(--edge-color) 60%, transparent));
   stroke-width: 2.4;
+}
+
+.graph-edge.selected .edge-path {
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--edge-color) 80%, transparent));
+  stroke-width: 2.6;
 }
 
 .flow-dot {
