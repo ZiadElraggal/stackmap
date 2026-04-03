@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "stackmap"
 version = "0.2.2"
-description = "Architecture diagrams that generate themselves from your infrastructure code."
+description = "Architecture diagrams that generate themselves from your infrastructure code. Customizable, interactive, and always up-to-date."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
