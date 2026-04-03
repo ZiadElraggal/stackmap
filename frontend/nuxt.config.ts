@@ -20,7 +20,11 @@ export default defineNuxtConfig({
       title: 'StackMap',
       meta: [
         { name: 'description', content: 'Architecture diagrams that generate themselves' }
-      ]
+      ],
+      link: [
+        { rel: 'icon', type: 'image/svg+xml', href: '/prism-head.svg' },
+        { rel: 'apple-touch-icon', href: '/prism-head.svg' },
+      ],
     }
   }
 })

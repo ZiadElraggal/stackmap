@@ -1,0 +1,43 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "StackMapReadOnly",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:Describe*",
+        "lambda:List*",
+        "lambda:GetFunction",
+        "lambda:GetPolicy",
+        "rds:Describe*",
+        "s3:ListAllMyBuckets",
+        "s3:GetBucketLocation",
+        "s3:GetBucketTagging",
+        "s3:GetBucketPolicy",
+        "ecs:List*",
+        "ecs:Describe*",
+        "sqs:ListQueues",
+        "sqs:GetQueueAttributes",
+        "sns:ListTopics",
+        "sns:GetTopicAttributes",
+        "cloudfront:ListDistributions",
+        "route53:ListHostedZones",
+        "route53:ListResourceRecordSets",
+        "apigateway:GET",
+        "elasticloadbalancing:Describe*",
+        "dynamodb:ListTables",
+        "dynamodb:DescribeTable",
+        "iam:ListRoles",
+        "iam:GetRole",
+        "elasticache:Describe*",
+        "secretsmanager:ListSecrets",
+        "events:ListRules",
+        "events:ListTargetsByRule",
+        "tag:GetResources",
+        "config:ListDiscoveredResources",
+        "config:BatchGetResourceConfig"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
