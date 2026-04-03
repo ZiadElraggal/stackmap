@@ -410,7 +410,7 @@ function addLayerAndMove() {
 
 <style scoped>
 .detail-shell {
-  box-shadow: -20px 0 60px rgba(0, 0, 0, 0.5);
+  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.4), -1px 0 0 rgba(255, 255, 255, 0.05);
   border-left: 1px solid rgba(255,255,255,0.06);
 }
 
@@ -432,14 +432,20 @@ function addLayerAndMove() {
   color: var(--panel-color);
 }
 
-.slide-enter-active,
+.slide-enter-active {
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.18s ease;
+}
 .slide-leave-active {
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.18s ease, opacity 0.15s ease;
 }
 
-.slide-enter-from,
+.slide-enter-from {
+  transform: translateX(100%);
+  opacity: 0.6;
+}
 .slide-leave-to {
   transform: translateX(100%);
+  opacity: 0;
 }
 
 .expand-enter-active,
