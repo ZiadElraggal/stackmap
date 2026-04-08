@@ -77,3 +77,22 @@ phase2-check:
 phase3-check:
 	pytest -q tests/parsers/test_phase1_terraform_accuracy.py tests/parsers/test_phase2_relationship_expansion.py tests/parsers/test_phase3_architecture_clarity.py tests/parsers/test_demo_readiness.py tests/parsers/test_additional_fixtures_smoke.py
 	cd frontend && npm run generate
+
+## Phase 5: Advanced features (drift, grouping, trace, analysis, cost).
+trace-check:
+	pytest -v tests/graph/test_trace.py
+
+drift-check:
+	pytest -v tests/drift/
+
+grouping-check:
+	pytest -v tests/grouping/
+
+analysis-check:
+	pytest -v tests/analysis/
+
+cost-check:
+	pytest -v tests/cost/
+
+phase5-check: phase4-check drift-check grouping-check trace-check analysis-check cost-check
+	@echo "Phase 5: All advanced features passing"

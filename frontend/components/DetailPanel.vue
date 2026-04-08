@@ -422,6 +422,32 @@
             </div>
           </Transition>
         </div>
+
+        <div class="rounded-xl border border-white/[0.08] bg-white/[0.02]">
+          <button class="section-toggle" @click="toggleSection('trace')">
+            <span>Dependency Trace</span>
+            <span class="section-toggle__meta">{{ sectionOpen.trace ? 'Hide' : 'Show' }}</span>
+          </button>
+          <Transition name="expand">
+            <div v-if="sectionOpen.trace" class="section-body">
+              <button
+                v-if="!store.traceResult || store.traceOriginId !== node.id"
+                class="w-full rounded-md border border-blue-400/20 bg-blue-500/10 px-3 py-1.5 text-[10px] font-mono text-blue-300 transition hover:bg-blue-500/15"
+                @click="store.traceNode(node.id)"
+              >
+                Trace Dependencies
+              </button>
+              <button
+                v-else
+                class="w-full rounded-md border border-gray-400/20 bg-white/5 px-3 py-1.5 text-[10px] font-mono text-gray-300 transition hover:bg-white/10"
+                @click="store.clearTrace()"
+              >
+                Clear Trace
+              </button>
+              <TracePanel />
+            </div>
+          </Transition>
+        </div>
       </div>
 
       <div class="p-4">
@@ -654,6 +680,7 @@ const sectionOpen = ref<Record<string, boolean>>({
   connections: true,
   neighborhood: false,
   edgeEditor: true,
+  trace: false,
   emptyGuidance: true,
   emptyChanges: true,
   emptyStatus: false,

@@ -32,6 +32,7 @@ class EdgeType(str, Enum):
     CONTAINS = "contains"
     AUTHENTICATES = "authenticates"
     CROSS_ACCOUNT_REFERENCE = "cross_account_reference"
+    DEPENDS_ON = "depends_on"
 
 
 @dataclass

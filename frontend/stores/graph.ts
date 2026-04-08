@@ -28,6 +28,14 @@ export interface StackMapNode {
     region?: string
     org_path?: string
     view_kind?: string
+    // Drift detection
+    drift_status?: 'in_sync' | 'missing' | 'extra' | 'drifted'
+    drift_fields?: Record<string, { iac: any; live: any }>
+    drift_severity?: 'info' | 'warning' | 'critical'
+    // Cost overlay
+    cost_monthly?: number
+    cost_confidence?: 'high' | 'medium' | 'low' | 'unknown'
+    cost_note?: string
   }
 }
 
@@ -957,6 +965,49 @@ export const useGraphStore = defineStore('graph', {
     editorPanelCollapsed: false as boolean,
     hasSeenEditWalkthrough: false as boolean,
     originalNodeSnapshots: {} as Record<string, OriginalNodeSnapshot>,
+
+    // Feature: Drift Detection
+    driftMode: false as boolean,
+    driftSummary: null as { in_sync: number; drifted: number; missing: number; extra: number } | null,
+
+    // Feature: Smart Groups
+    smartGroups: [] as StackMapGroup[],
+    collapsedGroups: new Set<string>() as Set<string>,
+
+    // Feature: Dependency Tracing
+    traceResult: null as {
+      origin_id: string
+      upstream: { node_id: string; depth: number; edge_type: string; edge_label: string; direction: string }[]
+      downstream: { node_id: string; depth: number; edge_type: string; edge_label: string; direction: string }[]
+      blast_radius: number
+      critical_path: string[]
+      critical_path_length: number
+    } | null,
+    traceOriginId: null as string | null,
+
+    // Feature: Suspicious Pattern Detection
+    findings: [] as {
+      id: string
+      pattern_id: string
+      title: string
+      description: string
+      severity: string
+      node_ids: string[]
+      recommendation: string
+      category: string
+    }[],
+    activeFindingFilter: null as string | null,
+
+    // Feature: Cost Overlay
+    costData: null as {
+      total_monthly: number
+      by_node: Record<string, { monthly_estimate: number; confidence: string; estimate_note: string }>
+      by_category: Record<string, number>
+      by_tier: Record<string, number>
+      currency: string
+    } | null,
+    showCosts: false as boolean,
+    costHeatmap: false as boolean,
   }),
 
   getters: {
@@ -1547,6 +1598,12 @@ export const useGraphStore = defineStore('graph', {
       this.editHistoryPast = []
       this.editHistoryFuture = []
       this.loaded = true
+
+      // Auto-load findings and drift data from API (non-blocking)
+      this.loadFindings()
+      if (this.metadata?.drift_summary) {
+        this.driftSummary = this.metadata.drift_summary
+      }
     },
 
     setDiffMode(enabled: boolean) {
@@ -2429,6 +2486,119 @@ export const useGraphStore = defineStore('graph', {
       this.requestRelayout()
       if (typeof window !== 'undefined') {
         localStorage.removeItem('stackmap-edits')
+      }
+    },
+
+    // --- Feature: Dependency Tracing ---
+    async traceNode(nodeId: string) {
+      this.traceOriginId = nodeId
+      try {
+        const res = await fetch(`/api/trace?node=${encodeURIComponent(nodeId)}&depth=5&direction=both`)
+        if (res.ok) {
+          this.traceResult = await res.json()
+        }
+      } catch {
+        // Client-side BFS fallback
+        this.traceResult = this._clientSideTrace(nodeId)
+      }
+    },
+
+    clearTrace() {
+      this.traceResult = null
+      this.traceOriginId = null
+    },
+
+    _clientSideTrace(originId: string) {
+      const forward: Record<string, { target: string; edge_type: string; label: string }[]> = {}
+      const reverse: Record<string, { source: string; edge_type: string; label: string }[]> = {}
+      for (const edge of this.edges) {
+        if (edge.edge_type === 'contains') continue
+        if (!forward[edge.source]) forward[edge.source] = []
+        forward[edge.source].push({ target: edge.target, edge_type: edge.edge_type, label: edge.label })
+        if (!reverse[edge.target]) reverse[edge.target] = []
+        reverse[edge.target].push({ source: edge.source, edge_type: edge.edge_type, label: edge.label })
+      }
+
+      const bfs = (adj: Record<string, any[]>, direction: string, keyField: string) => {
+        const visited = new Set([originId])
+        const queue = [{ id: originId, depth: 0 }]
+        const hops: any[] = []
+        while (queue.length > 0) {
+          const { id, depth } = queue.shift()!
+          if (depth >= 5) continue
+          for (const neighbor of (adj[id] || [])) {
+            const neighborId = neighbor[keyField]
+            if (visited.has(neighborId)) continue
+            visited.add(neighborId)
+            hops.push({ node_id: neighborId, depth: depth + 1, edge_type: neighbor.edge_type, edge_label: neighbor.label || '', direction })
+            queue.push({ id: neighborId, depth: depth + 1 })
+          }
+        }
+        return hops
+      }
+
+      const upstream = bfs(reverse, 'upstream', 'source')
+      const downstream = bfs(forward, 'downstream', 'target')
+
+      return {
+        origin_id: originId,
+        upstream,
+        downstream,
+        blast_radius: new Set(downstream.map((h: any) => h.node_id)).size,
+        critical_path: [originId],
+        critical_path_length: 0,
+      }
+    },
+
+    // --- Feature: Findings ---
+    async loadFindings() {
+      try {
+        const res = await fetch('/api/findings')
+        if (res.ok) {
+          this.findings = await res.json()
+        }
+      } catch { /* ignore */ }
+    },
+
+    setFindingFilter(patternId: string | null) {
+      this.activeFindingFilter = patternId
+    },
+
+    // --- Feature: Cost ---
+    async loadCostData() {
+      try {
+        const res = await fetch('/api/cost')
+        if (res.ok) {
+          this.costData = await res.json()
+        }
+      } catch { /* ignore */ }
+    },
+
+    toggleCosts() {
+      this.showCosts = !this.showCosts
+      if (this.showCosts && !this.costData) {
+        this.loadCostData()
+      }
+    },
+
+    toggleCostHeatmap() {
+      this.costHeatmap = !this.costHeatmap
+    },
+
+    // --- Feature: Drift ---
+    setDriftMode(enabled: boolean) {
+      this.driftMode = enabled
+      if (enabled && this.metadata?.drift_summary) {
+        this.driftSummary = this.metadata.drift_summary
+      }
+    },
+
+    // --- Feature: Smart Groups ---
+    toggleGroupCollapse(groupId: string) {
+      if (this.collapsedGroups.has(groupId)) {
+        this.collapsedGroups.delete(groupId)
+      } else {
+        this.collapsedGroups.add(groupId)
       }
     },
   },

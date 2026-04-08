@@ -345,6 +345,36 @@
         </div>
       </section>
 
+      <section class="sidebar-section">
+        <div class="section-heading">
+          <span>Insights</span>
+        </div>
+        <div class="space-y-2">
+          <button
+            class="filter-row"
+            @click="store.toggleCosts()"
+          >
+            <span class="text-gray-300">Cost estimate</span>
+            <span class="toggle" :class="{ on: store.showCosts }" style="--toggle-color: #4ADE80">
+              <span class="knob" />
+            </span>
+          </button>
+          <button
+            v-if="store.metadata?.drift_summary"
+            class="filter-row"
+            @click="store.setDriftMode(!store.driftMode)"
+          >
+            <span class="text-gray-300">Drift analysis</span>
+            <span class="toggle" :class="{ on: store.driftMode }" style="--toggle-color: #f59e0b">
+              <span class="knob" />
+            </span>
+          </button>
+        </div>
+      </section>
+
+      <FindingsPanel />
+      <CostOverlay />
+
       <section class="pt-2">
         <button
           class="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-xs text-gray-400 transition-all duration-150 hover:border-white/[0.12] hover:bg-white/[0.06] hover:text-white active:scale-[0.98]"

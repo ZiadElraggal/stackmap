@@ -1,0 +1,269 @@
+{
+  "version": "2026-04",
+  "currency": "USD",
+  "services": {
+    "aws_lambda_function": {
+      "pricing_model": "invocation",
+      "base_monthly": 0,
+      "notes": "Estimated at ~1M invocations/month, 200ms avg duration",
+      "tiers": {
+        "128": 0.50,
+        "256": 1.00,
+        "512": 2.50,
+        "1024": 5.00,
+        "1536": 8.00,
+        "2048": 12.00,
+        "3008": 20.00,
+        "4096": 28.00,
+        "5120": 35.00,
+        "6144": 42.00,
+        "7168": 50.00,
+        "8192": 58.00,
+        "10240": 65.00
+      },
+      "estimate_key": "memory_size",
+      "default_tier": "256"
+    },
+    "aws_dynamodb_table": {
+      "pricing_model": "capacity",
+      "on_demand_base": 1.25,
+      "provisioned_base": 25.00,
+      "notes": "On-demand: $1.25/million WRUs + $0.25/million RRUs. Provisioned estimate per 25 WCU + 25 RCU.",
+      "estimate_key": "billing_mode"
+    },
+    "aws_db_instance": {
+      "pricing_model": "instance",
+      "instance_costs": {
+        "db.t3.micro": 12.41,
+        "db.t3.small": 24.82,
+        "db.t3.medium": 49.64,
+        "db.t3.large": 99.28,
+        "db.t3.xlarge": 198.56,
+        "db.t3.2xlarge": 397.12,
+        "db.t4g.micro": 11.52,
+        "db.t4g.small": 23.04,
+        "db.t4g.medium": 46.08,
+        "db.t4g.large": 92.16,
+        "db.r6g.large": 131.40,
+        "db.r6g.xlarge": 262.80,
+        "db.r6g.2xlarge": 525.60,
+        "db.r6g.4xlarge": 1051.20,
+        "db.r6g.8xlarge": 2102.40,
+        "db.r6g.12xlarge": 3153.60,
+        "db.r6g.16xlarge": 4204.80,
+        "db.r5.large": 146.00,
+        "db.r5.xlarge": 292.00,
+        "db.r5.2xlarge": 584.00,
+        "db.r5.4xlarge": 1168.00,
+        "db.m6g.large": 118.26,
+        "db.m6g.xlarge": 236.52,
+        "db.m6g.2xlarge": 473.04,
+        "db.m5.large": 124.10,
+        "db.m5.xlarge": 248.20
+      },
+      "multi_az_multiplier": 2.0,
+      "estimate_key": "instance_class",
+      "default_cost": 49.64
+    },
+    "aws_rds_cluster": {
+      "pricing_model": "instance",
+      "instance_costs": {
+        "db.r6g.large": 196.22,
+        "db.r6g.xlarge": 392.44,
+        "db.r6g.2xlarge": 784.88,
+        "db.r5.large": 210.24,
+        "db.r5.xlarge": 420.48,
+        "db.serverless": 50.00
+      },
+      "estimate_key": "instance_class",
+      "default_cost": 196.22,
+      "notes": "Aurora cluster pricing. Serverless estimated at ~50/mo baseline."
+    },
+    "aws_s3_bucket": {
+      "pricing_model": "storage",
+      "per_gb_monthly": 0.023,
+      "default_gb": 100,
+      "base_monthly": 2.30,
+      "notes": "Standard storage, estimated at 100GB"
+    },
+    "aws_cloudfront_distribution": {
+      "pricing_model": "traffic",
+      "base_monthly": 50.00,
+      "notes": "Estimated at ~1TB/month data transfer"
+    },
+    "aws_nat_gateway": {
+      "pricing_model": "fixed_plus_data",
+      "base_monthly": 32.40,
+      "per_gb_processed": 0.045,
+      "notes": "$0.045/hour + $0.045/GB processed"
+    },
+    "aws_lb": {
+      "pricing_model": "fixed_plus_lcu",
+      "base_monthly": 16.20,
+      "per_lcu_monthly": 5.84,
+      "notes": "ALB: $0.0225/hour + $0.008/LCU-hour"
+    },
+    "aws_alb": {
+      "pricing_model": "fixed_plus_lcu",
+      "base_monthly": 16.20,
+      "per_lcu_monthly": 5.84,
+      "notes": "ALB: $0.0225/hour + $0.008/LCU-hour"
+    },
+    "aws_elb": {
+      "pricing_model": "fixed",
+      "base_monthly": 18.00,
+      "notes": "Classic LB: $0.025/hour"
+    },
+    "aws_ecs_service": {
+      "pricing_model": "fargate",
+      "notes": "Cost depends on task definition CPU/memory. Fargate pricing.",
+      "per_vcpu_hour": 0.04048,
+      "per_gb_hour": 0.004445,
+      "default_monthly": 36.00
+    },
+    "aws_ecs_task_definition": {
+      "pricing_model": "reference",
+      "base_monthly": 0,
+      "notes": "No direct cost (billed via ECS service)"
+    },
+    "aws_ecs_cluster": {
+      "pricing_model": "reference",
+      "base_monthly": 0,
+      "notes": "No direct cost (billed via task/service instances)"
+    },
+    "aws_elasticache_replication_group": {
+      "pricing_model": "instance",
+      "instance_costs": {
+        "cache.t3.micro": 12.24,
+        "cache.t3.small": 24.48,
+        "cache.t3.medium": 48.96,
+        "cache.r6g.large": 131.40,
+        "cache.r6g.xlarge": 262.80,
+        "cache.r6g.2xlarge": 525.60,
+        "cache.m6g.large": 112.68,
+        "cache.m6g.xlarge": 225.36
+      },
+      "estimate_key": "node_type",
+      "default_cost": 48.96
+    },
+    "aws_elasticache_cluster": {
+      "pricing_model": "instance",
+      "instance_costs": {
+        "cache.t3.micro": 12.24,
+        "cache.t3.small": 24.48,
+        "cache.t3.medium": 48.96,
+        "cache.r6g.large": 131.40,
+        "cache.r6g.xlarge": 262.80
+      },
+      "estimate_key": "node_type",
+      "default_cost": 48.96
+    },
+    "aws_sqs_queue": {
+      "pricing_model": "request",
+      "base_monthly": 0,
+      "notes": "First 1M requests free, then $0.40/million. Estimate near-zero for most.",
+      "default_monthly": 1.00
+    },
+    "aws_sns_topic": {
+      "pricing_model": "request",
+      "base_monthly": 0,
+      "notes": "First 1M requests free. Estimate near-zero for most.",
+      "default_monthly": 0.50
+    },
+    "aws_api_gateway_rest_api": {
+      "pricing_model": "request",
+      "per_million_requests": 3.50,
+      "notes": "REST API: $3.50 per million requests. Estimated at 1M/month.",
+      "default_monthly": 3.50
+    },
+    "aws_apigatewayv2_api": {
+      "pricing_model": "request",
+      "per_million_requests": 1.00,
+      "notes": "HTTP API: $1.00 per million requests. Estimated at 1M/month.",
+      "default_monthly": 1.00
+    },
+    "aws_kinesis_stream": {
+      "pricing_model": "shard",
+      "per_shard_monthly": 10.80,
+      "notes": "$0.015/shard-hour. Estimated at 1 shard.",
+      "default_monthly": 10.80
+    },
+    "aws_stepfunctions_state_machine": {
+      "pricing_model": "transitions",
+      "per_1k_transitions": 0.025,
+      "notes": "$0.025 per 1,000 state transitions",
+      "default_monthly": 5.00
+    },
+    "aws_cognito_user_pool": {
+      "pricing_model": "mau",
+      "free_tier_mau": 50000,
+      "per_mau_after_free": 0.0055,
+      "notes": "First 50K MAU free. Estimate based on 10K MAU (free tier).",
+      "default_monthly": 0
+    },
+    "aws_secretsmanager_secret": {
+      "pricing_model": "fixed",
+      "base_monthly": 0.40,
+      "notes": "$0.40/secret/month + $0.05 per 10K API calls"
+    },
+    "aws_kms_key": {
+      "pricing_model": "fixed",
+      "base_monthly": 1.00,
+      "notes": "$1.00/key/month + $0.03 per 10K requests"
+    },
+    "aws_ecr_repository": {
+      "pricing_model": "storage",
+      "per_gb_monthly": 0.10,
+      "default_gb": 5,
+      "base_monthly": 0.50,
+      "notes": "$0.10/GB/month. Estimated at 5GB."
+    },
+    "aws_route53_zone": {
+      "pricing_model": "fixed",
+      "base_monthly": 0.50,
+      "notes": "$0.50/hosted zone/month"
+    },
+    "aws_vpc": {
+      "pricing_model": "reference",
+      "base_monthly": 0,
+      "notes": "No direct cost (billed via NAT, endpoints, etc.)"
+    },
+    "aws_subnet": {
+      "pricing_model": "reference",
+      "base_monthly": 0,
+      "notes": "No direct cost"
+    },
+    "aws_security_group": {
+      "pricing_model": "reference",
+      "base_monthly": 0,
+      "notes": "No direct cost"
+    },
+    "aws_iam_role": {
+      "pricing_model": "reference",
+      "base_monthly": 0,
+      "notes": "No direct cost"
+    },
+    "aws_iam_policy": {
+      "pricing_model": "reference",
+      "base_monthly": 0,
+      "notes": "No direct cost"
+    },
+    "aws_cloudwatch_log_group": {
+      "pricing_model": "ingestion",
+      "per_gb_ingested": 0.50,
+      "default_monthly": 5.00,
+      "notes": "$0.50/GB ingested. Estimated at 10GB/month."
+    },
+    "aws_cloudwatch_metric_alarm": {
+      "pricing_model": "fixed",
+      "base_monthly": 0.10,
+      "notes": "$0.10/alarm/month (standard resolution)"
+    },
+    "aws_appsync_graphql_api": {
+      "pricing_model": "request",
+      "per_million_queries": 4.00,
+      "default_monthly": 4.00,
+      "notes": "$4.00 per million queries/mutations"
+    }
+  }
+}
