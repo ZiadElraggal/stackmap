@@ -1,4 +1,18 @@
-"""Smart grouping engine: apply rules and auto-detect resource clusters."""
+"""Smart grouping engine for explicit rules and UI-first auto-clustering.
+
+Auto-detected groups are intentionally heuristic rather than authoritative.
+The serve flow uses them to make large graphs readable without requiring
+users to hand-author grouping config first.
+
+Detection order matters:
+1. Tag clusters (`service`, `project`, `app` by default)
+2. Name-prefix clusters (`api-*`, `payments_*`, etc.)
+3. VPC clusters
+4. Connectivity clusters
+
+Earlier strategies claim nodes first, which keeps groups easier to explain in
+the UI: business/service tags win over structural fallbacks like VPCs.
+"""
 
 from __future__ import annotations
 

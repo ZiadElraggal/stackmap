@@ -121,6 +121,35 @@ export interface ComponentSummary {
   summary: string
 }
 
+export interface CostOverrideInput {
+  memory_mb?: number
+  invocations_per_month?: number
+  avg_duration_ms?: number
+  storage_gb?: number
+  data_transfer_gb?: number
+}
+
+export interface CostNodeEstimate {
+  resource_id: string
+  resource_name: string
+  resource_type: string
+  monthly_estimate: number
+  confidence: string
+  pricing_model: string
+  estimate_note: string
+  breakdown?: Record<string, unknown> | null
+}
+
+export interface CostReportData {
+  total_monthly: number
+  by_node: Record<string, CostNodeEstimate>
+  by_category: Record<string, number>
+  by_tier: Record<string, number>
+  by_group: Record<string, number>
+  expensive_paths: Array<Record<string, unknown>>
+  currency: string
+}
+
 interface EditHistorySnapshot {
   hiddenNodeIds: string[]
   hiddenNodeIdsBackup: string[] | null
@@ -999,13 +1028,9 @@ export const useGraphStore = defineStore('graph', {
     activeFindingFilter: null as string | null,
 
     // Feature: Cost Overlay
-    costData: null as {
-      total_monthly: number
-      by_node: Record<string, { monthly_estimate: number; confidence: string; estimate_note: string }>
-      by_category: Record<string, number>
-      by_tier: Record<string, number>
-      currency: string
-    } | null,
+    costData: null as CostReportData | null,
+    baseCostData: null as CostReportData | null,
+    costOverrides: {} as Record<string, CostOverrideInput>,
     showCosts: false as boolean,
     costHeatmap: false as boolean,
   }),
@@ -1024,6 +1049,10 @@ export const useGraphStore = defineStore('graph', {
       return state.userEdges.find(edge => edge.id === state.selectedEdgeId)
         ?? this.graphEdges.find(edge => edge.id === state.selectedEdgeId)
         ?? null
+    },
+
+    hasCostOverrides(state): boolean {
+      return Object.keys(state.costOverrides).length > 0
     },
 
     hasOrganizationData(state): boolean {
@@ -2565,19 +2594,125 @@ export const useGraphStore = defineStore('graph', {
     },
 
     // --- Feature: Cost ---
-    async loadCostData() {
+    _sanitizeCostOverrides(overrides: Record<string, CostOverrideInput>): Record<string, CostOverrideInput> {
+      const cleanedEntries = Object.entries(overrides)
+        .map(([nodeId, values]) => {
+          const cleanedValues = Object.fromEntries(
+            Object.entries(values).filter(([, raw]) => typeof raw === 'number' && Number.isFinite(raw) && raw >= 0)
+          ) as CostOverrideInput
+          return [nodeId, cleanedValues] as const
+        })
+        .filter(([, values]) => Object.keys(values).length > 0)
+      return Object.fromEntries(cleanedEntries)
+    },
+
+    _applyCostDataToNodes(report: CostReportData | null) {
+      const byNode = report?.by_node || {}
+      for (const node of this.nodes) {
+        if (!node.position_hint) node.position_hint = { tier: 'compute', weight: 2 }
+        const estimate = byNode[node.id]
+        if (estimate) {
+          node.position_hint.cost_monthly = estimate.monthly_estimate
+          node.position_hint.cost_confidence = estimate.confidence as StackMapNode['position_hint']['cost_confidence']
+          node.position_hint.cost_note = estimate.estimate_note
+        } else {
+          delete node.position_hint.cost_monthly
+          delete node.position_hint.cost_confidence
+          delete node.position_hint.cost_note
+        }
+      }
+    },
+
+    async ensureBaseCostData() {
       try {
         const res = await fetch('/api/cost')
         if (res.ok) {
-          this.costData = await res.json()
+          const report = await res.json() as CostReportData
+          this.baseCostData = report
+          if (!this.hasCostOverrides) {
+            this.costData = report
+            this._applyCostDataToNodes(report)
+          }
         }
       } catch { /* ignore */ }
     },
 
-    toggleCosts() {
+    async refreshCostData(): Promise<{ ok: boolean; error?: string }> {
+      if (!this.baseCostData) {
+        await this.ensureBaseCostData()
+      }
+
+      const overrides = this._sanitizeCostOverrides(this.costOverrides)
+      this.costOverrides = overrides
+
+      if (Object.keys(overrides).length === 0) {
+        this.costData = this.baseCostData
+        this._applyCostDataToNodes(this.costData)
+        return { ok: true }
+      }
+
+      try {
+        const res = await fetch('/api/cost', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ overrides }),
+        })
+        if (res.ok) {
+          const report = await res.json() as CostReportData
+          this.costData = report
+          this._applyCostDataToNodes(report)
+          return { ok: true }
+        }
+        const body = await res.json().catch(() => ({}))
+        return { ok: false, error: body?.error || `Server returned ${res.status}` }
+      } catch (err) {
+        return { ok: false, error: String(err) }
+      }
+    },
+
+    async setNodeCostOverrides(nodeId: string, overrides: CostOverrideInput): Promise<{ ok: boolean; error?: string }> {
+      const current = this.costOverrides[nodeId] || {}
+      // Only merge keys that are explicitly provided (not undefined)
+      const merged = { ...current }
+      for (const [key, value] of Object.entries(overrides)) {
+        if (value !== undefined) {
+          (merged as Record<string, unknown>)[key] = value
+        }
+      }
+      const cleaned = Object.fromEntries(
+        Object.entries(merged).filter(([, value]) => typeof value === 'number' && Number.isFinite(value) && value >= 0)
+      ) as CostOverrideInput
+
+      if (Object.keys(cleaned).length > 0) {
+        this.costOverrides = {
+          ...this.costOverrides,
+          [nodeId]: cleaned,
+        }
+      } else {
+        const { [nodeId]: _removed, ...rest } = this.costOverrides
+        this.costOverrides = rest
+      }
+
+      return this.refreshCostData()
+    },
+
+    async clearNodeCostOverrides(nodeId: string) {
+      if (!(nodeId in this.costOverrides)) return
+      const { [nodeId]: _removed, ...rest } = this.costOverrides
+      this.costOverrides = rest
+      await this.refreshCostData()
+    },
+
+    async loadCostData() {
+      await this.refreshCostData()
+    },
+
+    async toggleCosts() {
       this.showCosts = !this.showCosts
-      if (this.showCosts && !this.costData) {
-        this.loadCostData()
+      if (this.showCosts) {
+        await this.refreshCostData()
       }
     },
 

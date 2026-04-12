@@ -371,9 +371,7 @@
           </button>
         </div>
       </section>
-
       <FindingsPanel />
-      <CostOverlay />
 
       <section class="pt-2">
         <button

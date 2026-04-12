@@ -1,4 +1,17 @@
-"""Drift detection engine: compare IaC IR against Live IR."""
+"""Drift detection engine for comparing IaC intent against live infrastructure.
+
+The comparison works in three stages:
+1. Normalize both IRs into a comparable resource model.
+2. Match resources between the IaC and live graphs.
+3. Compare important properties and relationships to classify each resource as
+   in sync, missing, extra, or drifted.
+
+Property comparison is intentionally selective for common AWS resource types.
+For known types we compare a curated field set; for unknown types we fall back
+to a broad comparison while ignoring unstable metadata such as ARNs, IDs, and
+timestamps. The annotated IR produced by ``DriftReport.to_drift_ir()`` is what
+the frontend reads for badges, counts, and resource-level detail panels.
+"""
 
 from __future__ import annotations
 

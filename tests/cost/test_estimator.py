@@ -245,6 +245,65 @@ class TestAnnotateIR:
         assert "total_monthly" in annotated.metadata["cost_summary"]
 
 
+class TestOverrides:
+    def test_lambda_usage_overrides_raise_confidence(self) -> None:
+        ir = StackMapIR(nodes=[
+            _node("fn1", "handler", "aws_lambda_function", {"memory_size": 256}),
+        ])
+
+        baseline = estimate_costs(ir)
+        adjusted = estimate_costs(
+            ir,
+            overrides={
+                "fn1": {
+                    "memory_mb": 512,
+                    "invocations_per_month": 2_000_000,
+                    "avg_duration_ms": 400,
+                }
+            },
+        )
+
+        assert adjusted.by_node["fn1"].monthly_estimate > baseline.by_node["fn1"].monthly_estimate
+        assert adjusted.by_node["fn1"].confidence == "high"
+        assert "2,000,000 invocations/month" in adjusted.by_node["fn1"].estimate_note
+
+    def test_storage_and_transfer_overrides_adjust_costs(self) -> None:
+        ir = StackMapIR(
+            nodes=[
+                _node("bucket", "assets", "aws_s3_bucket", category=ResourceCategory.STORAGE),
+                _node("cdn", "site-cdn", "aws_cloudfront_distribution", category=ResourceCategory.CDN),
+            ],
+            edges=[_edge("cdn", "bucket", EdgeType.ROUTES_TO)],
+        )
+
+        baseline = estimate_costs(ir)
+        adjusted = estimate_costs(
+            ir,
+            overrides={
+                "bucket": {"storage_gb": 250},
+                "cdn": {"data_transfer_gb": 1200},
+            },
+        )
+
+        assert adjusted.total_monthly > baseline.total_monthly
+        assert adjusted.by_node["bucket"].confidence == "high"
+        assert adjusted.by_node["cdn"].confidence == "high"
+        assert adjusted.expensive_paths[0]["source"] == "cdn"
+
+    def test_serverless_aliases_resolve_to_priced_resources(self) -> None:
+        ir = StackMapIR(nodes=[
+            _node("fn", "handler", "AWS::Serverless::Function", {"memory_size": 256}),
+        ])
+
+        report = estimate_costs(
+            ir,
+            overrides={"fn": {"memory_mb": 512, "invocations_per_month": 2_000_000}},
+        )
+
+        assert report.by_node["fn"].monthly_estimate > 0
+        assert report.by_node["fn"].confidence == "high"
+
+
 class TestEmptyIR:
     def test_empty_ir_zero_cost(self) -> None:
         report = estimate_costs(StackMapIR())

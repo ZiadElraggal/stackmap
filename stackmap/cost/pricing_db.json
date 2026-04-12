@@ -89,6 +89,8 @@
     "aws_cloudfront_distribution": {
       "pricing_model": "traffic",
       "base_monthly": 50.00,
+      "per_gb_transfer": 0.05,
+      "default_transfer_gb": 1000,
       "notes": "Estimated at ~1TB/month data transfer"
     },
     "aws_nat_gateway": {

@@ -10,6 +10,21 @@ from stackmap.parsers.base import StackMapIR, StackMapNode
 
 
 _PRICING_DB: dict | None = None
+_RESOURCE_TYPE_ALIASES = {
+    "AWS::Lambda::Function": "aws_lambda_function",
+    "AWS::Serverless::Function": "aws_lambda_function",
+    "AWS::ApiGateway::RestApi": "aws_api_gateway_rest_api",
+    "AWS::Serverless::Api": "aws_api_gateway_rest_api",
+    "AWS::DynamoDB::Table": "aws_dynamodb_table",
+    "AWS::S3::Bucket": "aws_s3_bucket",
+    "AWS::CloudFront::Distribution": "aws_cloudfront_distribution",
+    "AWS::EC2::NatGateway": "aws_nat_gateway",
+    "AWS::ECS::Service": "aws_ecs_service",
+    "AWS::RDS::DBInstance": "aws_db_instance",
+    "AWS::RDS::DBCluster": "aws_rds_cluster",
+    "AWS::SQS::Queue": "aws_sqs_queue",
+    "AWS::SNS::Topic": "aws_sns_topic",
+}
 
 
 def _load_pricing_db() -> dict:
@@ -20,6 +35,10 @@ def _load_pricing_db() -> dict:
         with open(db_path) as f:
             _PRICING_DB = json.load(f)
     return _PRICING_DB
+
+
+def _pricing_resource_type(resource_type: str) -> str:
+    return _RESOURCE_TYPE_ALIASES.get(resource_type, resource_type)
 
 
 @dataclass
@@ -68,9 +87,16 @@ class CostReport:
         }
 
 
-def _estimate_lambda(node: StackMapNode, service_config: dict) -> CostEstimate:
-    """Estimate Lambda cost based on memory_size tier."""
-    memory = node.properties.get("memory_size", 256)
+def _estimate_lambda(node: StackMapNode, service_config: dict, override: dict | None = None) -> CostEstimate:
+    """Estimate Lambda cost based on memory_size tier.
+
+    Override keys:
+    - memory_mb: memory in MB (default: from properties or 256)
+    - invocations_per_month: invocation count (default: 1_000_000)
+    - avg_duration_ms: average execution time in ms (default: 200)
+    """
+    override = override or {}
+    memory = override.get("memory_mb") or node.properties.get("memory_size", 256)
     tiers = service_config.get("tiers", {})
 
     # Find closest tier
@@ -80,15 +106,33 @@ def _estimate_lambda(node: StackMapNode, service_config: dict) -> CostEstimate:
         memory_str = str(memory)
 
     if memory_str in tiers:
-        cost = tiers[memory_str]
-        confidence = "medium"
+        base_cost = tiers[memory_str]
+        confidence = "medium" if override else "medium"
     else:
-        # Find closest tier
         tier_vals = sorted(int(k) for k in tiers)
         mem_int = int(memory) if isinstance(memory, (int, float)) else 256
         closest = min(tier_vals, key=lambda x: abs(x - mem_int))
-        cost = tiers[str(closest)]
+        base_cost = tiers[str(closest)]
         confidence = "low"
+
+    # Tier prices assume ~1M invocations/month at 200ms.
+    # Scale linearly when user provides actual usage.
+    invocations = override.get("invocations_per_month")
+    duration = override.get("avg_duration_ms")
+    if invocations is not None or duration is not None:
+        inv_actual = invocations if invocations is not None else 1_000_000
+        dur_actual = duration if duration is not None else 200
+        inv_scale = inv_actual / 1_000_000 if inv_actual > 0 else 0
+        dur_scale = dur_actual / 200 if dur_actual > 0 else 0
+        cost = base_cost * inv_scale * dur_scale
+        confidence = "high"
+        note = (
+            f"{memory}MB, {int(inv_actual):,} invocations/month, "
+            f"{int(dur_actual)}ms avg"
+        )
+    else:
+        cost = base_cost
+        note = f"{memory}MB, ~1M invocations/month estimate"
 
     return CostEstimate(
         resource_id=node.id,
@@ -97,7 +141,7 @@ def _estimate_lambda(node: StackMapNode, service_config: dict) -> CostEstimate:
         monthly_estimate=cost,
         confidence=confidence,
         pricing_model="invocation",
-        estimate_note=f"{memory}MB, ~1M invocations/month estimate",
+        estimate_note=note,
     )
 
 
@@ -195,18 +239,55 @@ def _estimate_ecs(node: StackMapNode, service_config: dict) -> CostEstimate:
     )
 
 
-def _estimate_generic(node: StackMapNode, service_config: dict) -> CostEstimate:
-    """Generic cost estimate using base_monthly or default_monthly."""
-    cost = service_config.get("base_monthly", 0) or service_config.get("default_monthly", 0)
+def _estimate_generic(node: StackMapNode, service_config: dict, override: dict | None = None) -> CostEstimate:
+    """Generic cost estimate.
+
+    Honors override keys:
+    - storage_gb: scales 'per_gb_monthly' pricing (S3, EBS, EFS, etc.)
+    - data_transfer_gb: scales 'per_gb_transfer' pricing (CloudFront, NAT GW)
+    """
+    override = override or {}
     pricing_model = service_config.get("pricing_model", "unknown")
     notes = service_config.get("notes", "")
+    base_cost = service_config.get("base_monthly", 0) or service_config.get("default_monthly", 0)
+    cost = base_cost
 
-    if pricing_model == "reference":
+    storage_gb = override.get("storage_gb")
+    transfer_gb = override.get("data_transfer_gb")
+    note_extras: list[str] = []
+
+    per_gb = service_config.get("per_gb_monthly")
+    if per_gb is not None and storage_gb is not None:
+        # Replace base cost component for storage rather than adding to it
+        default_storage_gb = service_config.get("default_gb")
+        if isinstance(default_storage_gb, (int, float)) and default_storage_gb > 0:
+            cost += per_gb * (storage_gb - default_storage_gb)
+        else:
+            cost = per_gb * storage_gb
+        note_extras.append(f"{storage_gb}GB storage")
+
+    per_gb_transfer = service_config.get("per_gb_transfer") or service_config.get("per_gb_processed")
+    if per_gb_transfer is not None and transfer_gb is not None:
+        default_transfer_gb = service_config.get("default_transfer_gb")
+        if isinstance(default_transfer_gb, (int, float)) and default_transfer_gb > 0:
+            cost += per_gb_transfer * (transfer_gb - default_transfer_gb)
+        else:
+            cost += per_gb_transfer * transfer_gb
+        note_extras.append(f"{transfer_gb}GB transfer")
+
+    if note_extras:
+        confidence = "high"
+    elif pricing_model == "reference":
         confidence = "high"  # We know it's $0
     elif cost > 0:
         confidence = "low"
     else:
         confidence = "unknown"
+
+    if note_extras:
+        note = ", ".join(note_extras)
+    else:
+        note = notes or f"Estimate based on {pricing_model} pricing"
 
     return CostEstimate(
         resource_id=node.id,
@@ -215,14 +296,19 @@ def _estimate_generic(node: StackMapNode, service_config: dict) -> CostEstimate:
         monthly_estimate=cost,
         confidence=confidence,
         pricing_model=pricing_model,
-        estimate_note=notes or f"Estimate based on {pricing_model} pricing",
+        estimate_note=note,
     )
 
 
-def _estimate_node_cost(node: StackMapNode, pricing_db: dict) -> CostEstimate:
-    """Estimate cost for a single node."""
+def _estimate_node_cost(
+    node: StackMapNode,
+    pricing_db: dict,
+    override: dict | None = None,
+) -> CostEstimate:
+    """Estimate cost for a single node, optionally with usage overrides."""
     services = pricing_db.get("services", {})
-    service_config = services.get(node.resource_type)
+    pricing_resource_type = _pricing_resource_type(node.resource_type)
+    service_config = services.get(pricing_resource_type)
 
     if service_config is None:
         return CostEstimate(
@@ -237,19 +323,19 @@ def _estimate_node_cost(node: StackMapNode, pricing_db: dict) -> CostEstimate:
 
     pricing_model = service_config.get("pricing_model", "")
 
-    if node.resource_type == "aws_lambda_function":
-        return _estimate_lambda(node, service_config)
+    if pricing_resource_type == "aws_lambda_function":
+        return _estimate_lambda(node, service_config, override)
 
-    if node.resource_type == "aws_dynamodb_table":
+    if pricing_resource_type == "aws_dynamodb_table":
         return _estimate_dynamodb(node, service_config)
 
-    if node.resource_type in ("aws_ecs_service",):
+    if pricing_resource_type in ("aws_ecs_service",):
         return _estimate_ecs(node, service_config)
 
     if pricing_model == "instance" and "instance_costs" in service_config:
         return _estimate_instance_based(node, service_config)
 
-    return _estimate_generic(node, service_config)
+    return _estimate_generic(node, service_config, override)
 
 
 def _find_expensive_paths(
@@ -281,18 +367,29 @@ def _find_expensive_paths(
     return paths[:5]
 
 
-def estimate_costs(ir: StackMapIR) -> CostReport:
+def estimate_costs(
+    ir: StackMapIR,
+    overrides: dict[str, dict] | None = None,
+) -> CostReport:
     """Estimate costs for all resources in the IR.
+
+    Args:
+        ir: parsed infrastructure IR.
+        overrides: optional mapping of node_id -> usage override dict.
+            Supported keys per node:
+            - Lambda: memory_mb, invocations_per_month, avg_duration_ms
+            - Storage/transfer: storage_gb, data_transfer_gb
 
     Returns a CostReport with per-node, per-category, and per-tier breakdowns.
     """
     pricing_db = _load_pricing_db()
+    overrides = overrides or {}
     by_node: dict[str, CostEstimate] = {}
     by_category: dict[str, float] = {}
     by_tier: dict[str, float] = {}
 
     for node in ir.nodes:
-        estimate = _estimate_node_cost(node, pricing_db)
+        estimate = _estimate_node_cost(node, pricing_db, overrides.get(node.id))
         by_node[node.id] = estimate
 
         # Aggregate by category
@@ -329,9 +426,12 @@ def estimate_costs(ir: StackMapIR) -> CostReport:
     )
 
 
-def annotate_ir_with_costs(ir: StackMapIR) -> StackMapIR:
+def annotate_ir_with_costs(
+    ir: StackMapIR,
+    overrides: dict[str, dict] | None = None,
+) -> StackMapIR:
     """Return a new IR with cost annotations in node position_hints and metadata."""
-    report = estimate_costs(ir)
+    report = estimate_costs(ir, overrides=overrides)
 
     annotated_nodes = []
     for node in ir.nodes:

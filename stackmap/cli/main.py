@@ -355,9 +355,9 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
         self._source_type = source_type
         super().__init__(*args, directory=directory, **kwargs)
 
-    def _send_json(self, payload: dict[str, Any]) -> None:
+    def _send_json(self, payload: dict[str, Any], status: int = 200) -> None:
         body = json.dumps(payload).encode("utf-8")
-        self.send_response(200)
+        self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -408,6 +408,39 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
                 self.path = "/index.html"
         super().do_GET()
 
+    def do_POST(self) -> None:  # noqa: N802
+        parsed_url = urlparse(self.path)
+        path = parsed_url.path
+        if path == "/api/cost":
+            self._handle_cost_post()
+            return
+        self.send_response(404)
+        self.end_headers()
+
+    def _read_json_body(self) -> dict[str, Any]:
+        length = int(self.headers.get("Content-Length", "0") or 0)
+        if length <= 0:
+            return {}
+        try:
+            raw = self.rfile.read(length)
+            return json.loads(raw.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return {}
+
+    def _handle_cost_post(self) -> None:
+        from stackmap.cost.estimator import estimate_costs
+
+        try:
+            body = self._read_json_body()
+            overrides = body.get("overrides") or {}
+            if not isinstance(overrides, dict):
+                overrides = {}
+            ir = self._get_ir()
+            report = estimate_costs(ir, overrides=overrides)
+            self._send_json(report.to_dict())
+        except Exception as exc:
+            self._send_json({"error": str(exc)}, status=500)
+
     def _handle_trace(self, query: str) -> None:
         from urllib.parse import parse_qs
 
@@ -445,7 +478,7 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
             report = estimate_costs(ir)
             self._send_json(report.to_dict())
         except Exception as exc:
-            self._send_json({"error": str(exc)})
+            self._send_json({"error": str(exc)}, status=500)
 
     def _handle_drift(self) -> None:
         self._send_json({"error": "Drift requires both IaC and live sources. Use the CLI command instead."})
@@ -933,6 +966,7 @@ def scan_aws(
                 serve_source = temp_json_path
             serve(
                 source=str(serve_source),
+                drift_against=None,
                 terraform_dir=None,
                 auto_pull_remote=False,
                 host="127.0.0.1",
@@ -940,6 +974,7 @@ def scan_aws(
                 watch=False,
                 watch_interval=1.0,
                 open_browser=True,
+                auto_group=True,
             )
         return
 
@@ -1010,6 +1045,7 @@ def scan_aws(
                 serve_source = temp_json_path
             serve(
                 source=str(serve_source),
+                drift_against=None,
                 terraform_dir=None,
                 auto_pull_remote=False,
                 host="127.0.0.1",
@@ -1017,6 +1053,7 @@ def scan_aws(
                 watch=False,
                 watch_interval=1.0,
                 open_browser=True,
+                auto_group=True,
             )
         return
 
@@ -1164,6 +1201,7 @@ def scan_aws(
             serve_source = temp_json
         serve(
             source=str(serve_source),
+            drift_against=None,
             terraform_dir=None,
             auto_pull_remote=False,
             host="127.0.0.1",
@@ -1171,6 +1209,7 @@ def scan_aws(
             watch=False,
             watch_interval=1.0,
             open_browser=True,
+            auto_group=True,
         )
 
 
@@ -1179,6 +1218,11 @@ def serve(
     source: str = typer.Option(
         _default_serve_source,
         help="Path to infrastructure source file (default: stackmap-repo-output.json, stackmap-output.json, or terraform.tfstate if found)",
+    ),
+    drift_against: str | None = typer.Option(
+        None,
+        "--drift-against",
+        help="Optional second source to compare drift against (e.g. live AWS scan). Enables drift overlay in the UI.",
     ),
     terraform_dir: str | None = typer.Option(
         None,
@@ -1194,8 +1238,21 @@ def serve(
     watch: bool = typer.Option(False, help="Watch the source file and auto-reload graph data"),
     watch_interval: float = typer.Option(1.0, help="Watch interval in seconds"),
     open_browser: bool = typer.Option(True, "--open/--no-open", help="Open browser automatically"),
+    auto_group: bool = typer.Option(
+        True,
+        "--auto-group/--no-auto-group",
+        help="Automatically detect and apply smart groups (tag/prefix/VPC clustering)",
+    ),
 ) -> None:
-    """Serve an interactive local StackMap viewer."""
+    """Serve an interactive local StackMap viewer.
+
+    Features available in the UI:
+    - Dependency tracing (click any node, then "Trace Dependencies")
+    - Cost estimates (toggle "Cost estimate" in sidebar)
+    - Findings panel (auto-loaded; click any finding to highlight nodes)
+    - Smart grouping (auto-applied when --auto-group is on)
+    - Drift detection (when --drift-against is provided)
+    """
     try:
         source_path = _resolve_source_with_remote_pull(source, terraform_dir, auto_pull_remote)
     except RuntimeError as exc:
@@ -1216,6 +1273,41 @@ def serve(
         except Exception as exc:
             console.print(f"[red]Error:[/red] {exc}")
             raise typer.Exit(1)
+
+        # Auto-apply smart grouping (tag/prefix/VPC clustering) so users see
+        # logical service groups in the UI without needing a config file.
+        if auto_group:
+            try:
+                from stackmap.grouping.engine import AutoDetectConfig, auto_detect_groups
+                detected = auto_detect_groups(ir, AutoDetectConfig())
+                # Append (rather than replace) so any existing parser-supplied groups remain.
+                existing_ids = {g.id for g in ir.groups}
+                for g in detected:
+                    if g.id not in existing_ids:
+                        ir.groups.append(g)
+            except Exception:
+                # Smart grouping is best-effort; never block serving.
+                pass
+
+        # If a second source is provided, compute drift and annotate the IR
+        # so the UI can show drift badges and the DriftSummaryBar.
+        if drift_against:
+            drift_path = Path(drift_against)
+            if not drift_path.exists():
+                console.print(f"[red]Error:[/red] Drift comparison file not found: {drift_against}")
+                raise typer.Exit(1)
+            try:
+                _, live_ir = _parse_source(str(drift_path))
+                from stackmap.drift.engine import compute_drift
+                report = compute_drift(ir, live_ir)
+                ir = report.to_drift_ir(ir)
+                console.print(
+                    f"[green]✓[/green] Drift computed: {report.summary.in_sync} in sync, "
+                    f"{report.summary.drifted} drifted, {report.summary.missing} missing, "
+                    f"{report.summary.extra} extra"
+                )
+            except Exception as exc:
+                console.print(f"[yellow]Warning:[/yellow] Drift comparison failed: {exc}")
 
     state = _LiveGraphState(ir)
     temp_dir: Path | None = None
@@ -1368,369 +1460,6 @@ def diff(
         f"[red]-{summary.removed}[/red] removed, "
         f"[yellow]~{summary.modified}[/yellow] modified, "
         f"{summary.unchanged} unchanged."
-    )
-
-
-@app.command()
-def trace(
-    source: str = typer.Argument(..., help="Path to IR JSON or IaC source"),
-    resource: str = typer.Argument(..., help="Resource ID or name to trace"),
-    direction: str = typer.Option("both", help="Trace direction: upstream, downstream, or both"),
-    max_depth: int = typer.Option(5, help="Maximum trace depth"),
-    output: str | None = typer.Option(None, help="Output path for trace result JSON"),
-) -> None:
-    """Trace upstream dependencies and downstream impact of a resource."""
-    from rich.tree import Tree
-
-    from stackmap.graph.trace import find_node_by_name, trace_dependencies
-
-    source_path = Path(source)
-    if not source_path.exists():
-        console.print(f"[red]Error:[/red] Source file not found: {source}")
-        raise typer.Exit(1)
-
-    try:
-        _, ir = _parse_source(str(source_path))
-    except Exception as exc:
-        console.print(f"[red]Error:[/red] {exc}")
-        raise typer.Exit(1)
-
-    node = find_node_by_name(ir, resource)
-    if node is None:
-        console.print(f"[red]Error:[/red] Resource not found: {resource}")
-        console.print("[dim]Available resources:[/dim]")
-        for n in ir.nodes[:20]:
-            console.print(f"  - {n.id} ({n.name})")
-        if len(ir.nodes) > 20:
-            console.print(f"  ... and {len(ir.nodes) - 20} more")
-        raise typer.Exit(1)
-
-    if direction not in {"upstream", "downstream", "both"}:
-        console.print(f"[red]Error:[/red] Invalid direction: {direction}. Use upstream, downstream, or both.")
-        raise typer.Exit(1)
-
-    result = trace_dependencies(ir, node.id, max_depth=max_depth, direction=direction)
-
-    if output:
-        Path(output).write_text(json.dumps(result.to_dict(), indent=2))
-        console.print(f"[green]✓[/green] Trace result written to {output}")
-
-    # Build node ID -> node name lookup
-    node_names = {n.id: n.name for n in ir.nodes}
-    node_types = {n.id: n.resource_type for n in ir.nodes}
-
-    console.print()
-    console.print(f"[bold]Tracing:[/bold] {node.name} ({node.resource_type})")
-    console.print()
-
-    if result.upstream:
-        up_tree = Tree("[blue]UPSTREAM[/blue] (what it depends on)")
-        # Group by depth for tree display
-        depth_map: dict[int, list] = {}
-        for hop in result.upstream:
-            depth_map.setdefault(hop.depth, []).append(hop)
-        for hop in sorted(result.upstream, key=lambda h: (h.depth, h.node_id)):
-            name = node_names.get(hop.node_id, hop.node_id)
-            rtype = node_types.get(hop.node_id, "")
-            prefix = "  " * (hop.depth - 1)
-            up_tree.add(f"{prefix}[cyan]{name}[/cyan] ({rtype}) [dim]── {hop.edge_label or hop.edge_type}[/dim]")
-        console.print(up_tree)
-        console.print()
-
-    if result.downstream:
-        down_tree = Tree("[yellow]DOWNSTREAM[/yellow] (what breaks if it fails)")
-        for hop in sorted(result.downstream, key=lambda h: (h.depth, h.node_id)):
-            name = node_names.get(hop.node_id, hop.node_id)
-            rtype = node_types.get(hop.node_id, "")
-            prefix = "  " * (hop.depth - 1)
-            down_tree.add(f"{prefix}[cyan]{name}[/cyan] ({rtype}) [dim]── {hop.edge_label or hop.edge_type}[/dim]")
-        console.print(down_tree)
-        console.print()
-
-    console.print(f"[bold]Blast radius:[/bold] {result.blast_radius} resources affected")
-    if result.critical_path_length > 0:
-        path_names = [node_names.get(nid, nid) for nid in result.critical_path]
-        console.print(
-            f"[bold]Critical path:[/bold] {result.critical_path_length} hops "
-            f"({' -> '.join(path_names)})"
-        )
-
-
-@app.command()
-def analyze(
-    source: str = typer.Argument(..., help="Path to IR JSON or IaC source"),
-    patterns: list[str] | None = typer.Option(None, "--pattern", help="Specific patterns to check (default: all)"),
-    severity: str = typer.Option("info", help="Minimum severity: info, warning, critical"),
-    output: str | None = typer.Option(None, help="Output path for findings JSON"),
-    format: str = typer.Option("table", help="Output format: table or json"),
-) -> None:
-    """Detect suspicious patterns and potential issues in infrastructure."""
-    from stackmap.analysis.patterns import Severity, analyze_patterns
-
-    source_path = Path(source)
-    if not source_path.exists():
-        console.print(f"[red]Error:[/red] Source file not found: {source}")
-        raise typer.Exit(1)
-
-    try:
-        _, ir = _parse_source(str(source_path))
-    except Exception as exc:
-        console.print(f"[red]Error:[/red] {exc}")
-        raise typer.Exit(1)
-
-    findings = analyze_patterns(ir)
-
-    severity_order = {"info": 0, "warning": 1, "critical": 2}
-    min_sev = severity_order.get(severity.lower(), 0)
-    findings = [f for f in findings if severity_order.get(f.severity.value, 0) >= min_sev]
-
-    if patterns:
-        pattern_set = set(patterns)
-        findings = [f for f in findings if f.pattern_id in pattern_set]
-
-    if output:
-        Path(output).write_text(json.dumps([f.to_dict() for f in findings], indent=2))
-        console.print(f"[green]✓[/green] Findings written to {output}")
-
-    if format.lower() == "json":
-        console.print_json(json.dumps([f.to_dict() for f in findings], indent=2))
-        return
-
-    if not findings:
-        console.print("[green]✓[/green] No suspicious patterns detected.")
-        return
-
-    table = Table(title="StackMap Analysis Findings")
-    table.add_column("Severity", style="bold")
-    table.add_column("Pattern", style="cyan")
-    table.add_column("Finding")
-    table.add_column("Resource", style="dim")
-
-    sev_icons = {"critical": "[red]CRIT[/red]", "warning": "[yellow]WARN[/yellow]", "info": "[blue]INFO[/blue]"}
-    for f in sorted(findings, key=lambda x: -severity_order.get(x.severity.value, 0)):
-        icon = sev_icons.get(f.severity.value, f.severity.value)
-        resources = ", ".join(f.node_ids[:3])
-        if len(f.node_ids) > 3:
-            resources += f" +{len(f.node_ids) - 3}"
-        table.add_row(icon, f.pattern_id, f.title, resources)
-
-    console.print()
-    console.print(table)
-    crit = sum(1 for f in findings if f.severity == Severity.CRITICAL)
-    warn = sum(1 for f in findings if f.severity == Severity.WARNING)
-    info = sum(1 for f in findings if f.severity == Severity.INFO)
-    console.print(f"\n{len(findings)} findings ({crit} critical, {warn} warnings, {info} info)")
-
-
-@app.command()
-def cost(
-    source: str = typer.Argument(..., help="Path to IR JSON or IaC source"),
-    output: str | None = typer.Option(None, help="Output path for cost report JSON"),
-    format: str = typer.Option("table", help="Output format: table or json"),
-) -> None:
-    """Estimate monthly costs for infrastructure resources."""
-    from stackmap.cost.estimator import estimate_costs
-
-    source_path = Path(source)
-    if not source_path.exists():
-        console.print(f"[red]Error:[/red] Source file not found: {source}")
-        raise typer.Exit(1)
-
-    try:
-        _, ir = _parse_source(str(source_path))
-    except Exception as exc:
-        console.print(f"[red]Error:[/red] {exc}")
-        raise typer.Exit(1)
-
-    report = estimate_costs(ir)
-
-    if output:
-        Path(output).write_text(json.dumps(report.to_dict(), indent=2))
-        console.print(f"[green]✓[/green] Cost report written to {output}")
-
-    if format.lower() == "json":
-        console.print_json(json.dumps(report.to_dict(), indent=2))
-        return
-
-    console.print()
-    console.print("[bold]Monthly Cost Estimate[/bold]")
-    console.print()
-
-    if report.by_category:
-        cat_table = Table(show_header=True)
-        cat_table.add_column("Category", style="bold")
-        cat_table.add_column("Cost/mo", style="cyan", justify="right")
-        for cat, amount in sorted(report.by_category.items(), key=lambda x: -x[1]):
-            if amount > 0:
-                cat_table.add_row(cat, f"${amount:,.2f}")
-        cat_table.add_section()
-        cat_table.add_row("[bold]TOTAL[/bold]", f"[bold]${report.total_monthly:,.2f}[/bold]")
-        console.print(cat_table)
-
-    # Top expensive resources
-    if report.by_node:
-        console.print()
-        console.print("[bold]Top expensive resources:[/bold]")
-        sorted_nodes = sorted(report.by_node.values(), key=lambda x: -x.monthly_estimate)
-        for i, est in enumerate(sorted_nodes[:5], 1):
-            if est.monthly_estimate > 0:
-                console.print(
-                    f"  {i}. [cyan]{est.resource_id}[/cyan] — ${est.monthly_estimate:,.2f}/mo "
-                    f"[dim]({est.confidence})[/dim]"
-                )
-
-    # Confidence breakdown
-    confidence_counts: dict[str, int] = {}
-    for est in report.by_node.values():
-        confidence_counts[est.confidence] = confidence_counts.get(est.confidence, 0) + 1
-    parts = [f"{count} {level}" for level, count in sorted(confidence_counts.items())]
-    if parts:
-        console.print(f"\n[dim]Confidence: {', '.join(parts)}[/dim]")
-
-
-@app.command("suggest-groups")
-def suggest_groups(
-    source: str = typer.Argument(..., help="Path to IR JSON or IaC source"),
-    output: str = typer.Option(".stackmap/groups.yaml", help="Output path for suggested config"),
-) -> None:
-    """Analyze infrastructure and suggest grouping rules."""
-    import yaml
-
-    from stackmap.grouping.suggest import suggest_groups as _suggest
-
-    source_path = Path(source)
-    if not source_path.exists():
-        console.print(f"[red]Error:[/red] Source file not found: {source}")
-        raise typer.Exit(1)
-
-    try:
-        _, ir = _parse_source(str(source_path))
-    except Exception as exc:
-        console.print(f"[red]Error:[/red] {exc}")
-        raise typer.Exit(1)
-
-    suggestions = _suggest(ir)
-
-    if not suggestions:
-        console.print("[yellow]No grouping suggestions found.[/yellow]")
-        return
-
-    # Build YAML config
-    config: dict = {
-        "version": 1,
-        "groups": [],
-    }
-    for sg in suggestions:
-        group_entry: dict = {
-            "name": sg.name,
-            "rules": [],
-        }
-        if sg.icon:
-            group_entry["icon"] = sg.icon
-        if sg.color:
-            group_entry["color"] = sg.color
-        for rule in sg.rules:
-            rule_entry: dict = {"match": rule.match_type}
-            if rule.key:
-                rule_entry["key"] = rule.key
-            if rule.value:
-                rule_entry["value"] = rule.value
-            if rule.pattern:
-                rule_entry["pattern"] = rule.pattern
-            if rule.values:
-                rule_entry["values"] = rule.values
-            group_entry["rules"].append(rule_entry)
-        config["groups"].append(group_entry)
-
-    out_path = Path(output)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(yaml.dump(config, default_flow_style=False, sort_keys=False))
-
-    console.print(f"[green]✓[/green] Suggested {len(suggestions)} groups written to {output}")
-    for sg in suggestions:
-        console.print(f"  - [cyan]{sg.name}[/cyan] ({len(sg.rules)} rules)")
-
-
-@app.command()
-def drift(
-    iac_source: str = typer.Argument(..., help="Path to IaC source (tfstate, CFN template, or StackMap IR JSON)"),
-    live_source: str = typer.Option(None, help="Path to live scan JSON. If omitted, runs scan-aws automatically."),
-    output: str | None = typer.Option(None, help="Output path for drift report JSON"),
-    serve_after: bool = typer.Option(False, "--serve", help="Launch UI with drift overlay"),
-    format: str = typer.Option("table", help="Output format: table or json"),
-) -> None:
-    """Compare infrastructure-as-code against live AWS state to detect drift."""
-    from stackmap.drift.engine import compute_drift
-
-    iac_path = Path(iac_source)
-    if not iac_path.exists():
-        console.print(f"[red]Error:[/red] IaC source file not found: {iac_source}")
-        raise typer.Exit(1)
-
-    try:
-        _, iac_ir = _parse_source(str(iac_path))
-    except Exception as exc:
-        console.print(f"[red]Error:[/red] Failed to parse IaC source: {exc}")
-        raise typer.Exit(1)
-
-    if live_source:
-        live_path = Path(live_source)
-        if not live_path.exists():
-            console.print(f"[red]Error:[/red] Live source file not found: {live_source}")
-            raise typer.Exit(1)
-        try:
-            _, live_ir = _parse_source(str(live_path))
-        except Exception as exc:
-            console.print(f"[red]Error:[/red] Failed to parse live source: {exc}")
-            raise typer.Exit(1)
-    else:
-        console.print("[yellow]No --live-source provided. Running scan-aws to get live state...[/yellow]")
-        console.print("[red]Error:[/red] Auto scan-aws not yet implemented for drift. Please provide --live-source.")
-        raise typer.Exit(1)
-
-    with mascot_status(console, "[bold]Computing drift...[/bold]"):
-        report = compute_drift(iac_ir, live_ir)
-
-    if output:
-        Path(output).write_text(json.dumps(report.to_dict(), indent=2))
-        console.print(f"[green]✓[/green] Drift report written to {output}")
-
-    if format.lower() == "json":
-        console.print_json(json.dumps(report.to_dict(), indent=2))
-        return
-
-    table = Table(title="StackMap Drift Report")
-    table.add_column("Status", style="bold")
-    table.add_column("Resource", style="cyan")
-    table.add_column("Type", style="dim")
-    table.add_column("Details")
-
-    status_icons = {
-        "in_sync": "[green]IN SYNC[/green]",
-        "missing": "[red]MISSING[/red]",
-        "extra": "[blue]EXTRA[/blue]",
-        "drifted": "[yellow]DRIFTED[/yellow]",
-    }
-
-    for item in report.items:
-        if item.status.value == "in_sync":
-            continue
-        icon = status_icons.get(item.status.value, item.status.value)
-        details = ""
-        if item.drifted_fields:
-            fields = list(item.drifted_fields.keys())[:3]
-            details = ", ".join(fields)
-            if len(item.drifted_fields) > 3:
-                details += f" +{len(item.drifted_fields) - 3}"
-        table.add_row(icon, item.resource_name, item.resource_type, details)
-
-    console.print()
-    console.print(table)
-    s = report.summary
-    console.print(
-        f"\n[green]✓[/green] Drift analysis: "
-        f"{s.in_sync} in sync, {s.drifted} drifted, "
-        f"{s.missing} missing, {s.extra} extra"
     )
 
 

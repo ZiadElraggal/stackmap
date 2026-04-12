@@ -37,6 +37,11 @@ The StackMap web UI supports:
 - search
 - category and relationship filtering
 - component landing views for large graphs
+- smart grouping overlays for large AWS graphs
+- dependency tracing from the detail panel
+- findings and suspicious-pattern surfacing
+- forecasted cost overlays with per-resource usage inputs
+- drift badges and summary bars when comparing IaC vs live state
 - minimap navigation
 - diff and timeline-oriented views
 - presentation mode
@@ -179,6 +184,12 @@ stackmap scan --source terraform.tfstate --format html --output stackmap-output.
 stackmap serve --source terraform.tfstate
 ```
 
+Serve with drift detection against a second source:
+
+```bash
+stackmap serve --source terraform.tfstate --drift-against aws-live.json
+```
+
 If `stackmap-output.json` already exists, you can also serve that:
 
 ```bash
@@ -262,6 +273,11 @@ Use this when:
 - you want editing, filtering, or presentation workflows
 - you want to inspect large graphs interactively
 
+Useful options:
+
+- `--drift-against <file>` compares the served graph against another snapshot and enables drift badges in the UI
+- `--auto-group/--no-auto-group` controls heuristic smart grouping during serve
+
 ### `stackmap diff`
 
 Computes a diff between two infrastructure snapshots and outputs a graph with change metadata.
@@ -296,6 +312,54 @@ When you open the StackMap UI, you get:
 - keyboard shortcuts
 - timeline / diff controls
 - edit mode
+
+### Advanced insight panels
+
+#### Smart grouping
+
+Smart grouping is currently applied automatically during `stackmap serve` unless you disable it with `--no-auto-group`.
+
+The grouping engine uses a heuristic pass in this order:
+
+1. shared business tags such as `service`, `project`, and `app`
+2. common resource name prefixes
+3. shared VPC membership
+4. connectivity-based clustering as a fallback
+
+Earlier strategies win, so a tagged service cluster is preferred over a lower-signal VPC bucket. This keeps the UI focused on business components first and infrastructure topology second.
+
+#### Cost forecasting
+
+The cost panel in the UI is a forecast overlay, not a live AWS bill import.
+
+Current behavior:
+
+- StackMap computes a baseline monthly estimate from resource metadata and bundled pricing heuristics
+- the top-right cost panel shows total forecast plus top components and category totals
+- the detail panel lets you add resource-level usage inputs such as Lambda memory, invocations, duration, storage GB, and transfer GB
+- when you add inputs, StackMap recomputes the estimate and shows the delta from the baseline forecast
+
+Current limitation:
+
+- AWS billing scans for actual-spend import are not wired yet, so the UI currently shows baseline vs adjusted forecast rather than current bill vs forecast-after-edits
+
+#### Drift detection
+
+Drift detection is enabled by serving one graph against another:
+
+```bash
+stackmap serve --source desired.json --drift-against live.json
+```
+
+Current behavior:
+
+1. StackMap normalizes both graphs into a shared comparison model
+2. it matches resources across the two graphs
+3. it compares a curated set of important properties for known resource types
+4. it compares relationships to detect missing or extra connections
+5. it annotates the served IR so the UI can show resource badges and summary counts
+
+Unknown resource types fall back to a broader property comparison with unstable keys such as IDs, ARNs, and timestamps ignored.
 
 ### Edit mode details
 
@@ -433,6 +497,18 @@ On GitHub Release publish (`vX.Y.Z`), the `Homebrew Release` workflow:
 5. Uploads the formula as a workflow artifact.
 6. Pushes the formula update to the Homebrew tap if configured.
 
+### Windows release automation
+
+On GitHub Release publish (`vX.Y.Z`), the `Windows Release` workflow:
+
+1. Builds the frontend static app from the tagged source.
+2. Syncs generated assets into the Python package bundle.
+3. Installs StackMap plus PyInstaller on `windows-latest`.
+4. Builds a standalone `stackmap.exe`.
+5. Compresses the binary into a release zip and uploads it to the GitHub Release.
+
+You can also run the workflow manually from Actions to generate a Windows artifact before cutting a public release.
+
 ### Required GitHub configuration for automatic tap updates
 
 - repository variable: `HOMEBREW_TAP_REPO`
@@ -445,11 +521,17 @@ On GitHub Release publish (`vX.Y.Z`), the `Homebrew Release` workflow:
 1. Bump version in [pyproject.toml](/Users/ziadelraggal/Documents/GitHub/stackmap/pyproject.toml).
 2. Merge to `main`.
 3. Create and publish a GitHub Release tag in `vX.Y.Z` format.
-4. Wait for workflow `Homebrew Release` to complete.
-5. Users can then run:
+4. Wait for workflows `Homebrew Release` and `Windows Release` to complete.
+5. macOS users can then run:
 
 ```bash
 brew upgrade stackmap
+```
+
+6. Windows users can download the release zip, extract `stackmap.exe`, and run:
+
+```powershell
+.\stackmap.exe version
 ```
 
 ## Project Direction
