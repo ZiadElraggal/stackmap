@@ -191,34 +191,34 @@ stackmap version
 stackmap --help
 ```
 
-### Windows release zip
+### Windows: winget
 
-Windows releases are published as a standalone CLI executable named `stackmap.exe`.
-
-From the GitHub Releases page, download:
-
-```text
-stackmap-<version>-windows-x64.zip
-```
-
-Extract it, then run:
+Install via [winget](https://learn.microsoft.com/en-us/windows/package-manager/winget/):
 
 ```powershell
-.\stackmap.exe version
-.\stackmap.exe --help
+winget install ZiadElraggal.StackMap
 ```
 
-You can also download it from PowerShell by replacing the version and repository URL:
+Verify install:
 
 ```powershell
-$version = "0.2.2"
-$url = "https://github.com/ziadelraggal/stackmap/releases/download/v$version/stackmap-$version-windows-x64.zip"
-Invoke-WebRequest $url -OutFile stackmap-windows-x64.zip
-Expand-Archive stackmap-windows-x64.zip -DestinationPath .\stackmap
-.\stackmap\stackmap.exe version
+stackmap version
+stackmap --help
 ```
 
-The Windows binary is still the same StackMap CLI experience. It can run commands such as `scan`, `scan-repo`, `scan-aws`, `serve`, `diff`, `aws-policy`, and `version`. The packaged executable includes the built frontend assets used by `stackmap serve`.
+Update:
+
+```powershell
+winget upgrade ZiadElraggal.StackMap
+```
+
+Uninstall:
+
+```powershell
+winget uninstall ZiadElraggal.StackMap
+```
+
+New releases are automatically submitted to the winget package repository when a GitHub Release is published, just like Homebrew.
 
 ## Quick Start
 
@@ -646,24 +646,26 @@ On GitHub Release publish (`vX.Y.Z`), the `Homebrew Release` workflow:
 5. Uploads the formula as a workflow artifact.
 6. Pushes the formula update to the Homebrew tap if configured.
 
-### Windows release automation
+### Windows / winget release automation
 
 On GitHub Release publish (`vX.Y.Z`), the `Windows Release` workflow:
 
 1. Builds the frontend static app from the tagged source.
 2. Syncs generated assets into the Python package bundle.
 3. Installs StackMap plus PyInstaller on `windows-latest`.
-4. Builds a standalone `stackmap.exe`.
-5. Compresses the binary into a release zip and uploads it to the GitHub Release.
+4. Builds a standalone `stackmap.exe` and uploads it to the GitHub Release.
+5. Uses `wingetcreate` to automatically submit an updated manifest PR to [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs).
 
 You can also run the workflow manually from Actions to generate a Windows artifact before cutting a public release.
 
-### Required GitHub configuration for automatic tap updates
+### Required GitHub configuration for automatic releases
 
 - repository variable: `HOMEBREW_TAP_REPO`
   - example: `ziadelraggal/homebrew-stackmap`
 - repository secret: `HOMEBREW_TAP_TOKEN`
   - token with push access to that tap repo
+- repository secret: `WINGET_PAT`
+  - a GitHub PAT with `public_repo` scope, used by `wingetcreate` to fork `microsoft/winget-pkgs` and open manifest update PRs
 
 ### Release flow
 
@@ -677,10 +679,10 @@ You can also run the workflow manually from Actions to generate a Windows artifa
 brew upgrade stackmap
 ```
 
-6. Windows users can download the release zip, extract `stackmap.exe`, and run:
+6. Windows users can then run:
 
 ```powershell
-.\stackmap.exe version
+winget upgrade ZiadElraggal.StackMap
 ```
 
 ## Project Direction

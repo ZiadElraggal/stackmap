@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+PackageIdentifier: ZiadElraggal.StackMap
+PackageVersion: 0.3.0
+PackageLocale: en-US
+Publisher: Ziad Elraggal
+PackageName: StackMap
+PackageUrl: https://github.com/ZiadElraggal/stackmap
+License: MIT
+LicenseUrl: https://github.com/ZiadElraggal/stackmap/blob/main/LICENSE
+ShortDescription: Architecture diagrams that generate themselves from your infrastructure code.
+Description: |-
+  StackMap is a CLI-first IaC visualization tool that generates interactive architecture diagrams
+  from Terraform, CloudFormation, SAM templates, and live AWS accounts. Customizable, interactive,
+  and always up-to-date.
+Tags:
+  - cli
+  - terraform
+  - cloudformation
+  - aws
+  - infrastructure-as-code
+  - architecture
+  - devops
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0
