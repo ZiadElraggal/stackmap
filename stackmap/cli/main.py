@@ -584,7 +584,11 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
                     if result.events:
                         all_events.extend(e.to_dict() for e in result.events)
                         all_groups.extend(result.log_groups)
-                    if result.error and "No log group pattern" not in result.error:
+                    if (
+                        result.error
+                        and "No log group pattern" not in result.error
+                        and "No log groups found matching" not in result.error
+                    ):
                         errors.append(result.error)
 
                 all_events.sort(key=lambda e: e["timestamp"], reverse=True)

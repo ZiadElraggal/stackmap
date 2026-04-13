@@ -54,7 +54,7 @@
       </div>
 
       <div v-else-if="filteredEvents.length === 0" class="log-status">
-        No log events found in the last hour.
+        No log events found in the last {{ rangeLabel }}.
       </div>
 
       <div v-else class="log-events">
@@ -114,6 +114,13 @@ const filteredEvents = computed(() => {
 })
 
 const displayedEvents = computed(() => filteredEvents.value.slice(0, displayLimit.value))
+const rangeLabel = computed(() => {
+  if (store.logMinutes < 60) return `${store.logMinutes} minutes`
+  if (store.logMinutes === 60) return 'hour'
+  if (store.logMinutes < 1440) return `${Math.round(store.logMinutes / 60)} hours`
+  if (store.logMinutes === 1440) return '24 hours'
+  return `${Math.round(store.logMinutes / 1440)} days`
+})
 
 function formatTimestamp(ts: number): string {
   const d = new Date(ts)
