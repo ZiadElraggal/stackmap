@@ -5,11 +5,12 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
@@ -87,6 +88,11 @@ POLICY_ACTIONS_CORE = [
     "dynamodb:DescribeTable",
     "iam:ListRoles",
     "iam:GetRole",
+    "iam:ListRolePolicies",
+    "iam:GetRolePolicy",
+    "iam:ListAttachedRolePolicies",
+    "iam:GetPolicy",
+    "iam:GetPolicyVersion",
 ]
 POLICY_ACTIONS_BROAD = POLICY_ACTIONS_CORE + [
     "elasticache:Describe*",
@@ -126,6 +132,24 @@ POLICY_ACTIONS_LOGS = [
 POLICY_ACTIONS_OPTIONAL = {
     "billing": POLICY_ACTIONS_BILLING,
     "logs": POLICY_ACTIONS_LOGS,
+}
+
+_LIVE_WRITE_ACTIONS = {
+    "PutItem", "UpdateItem", "DeleteItem", "BatchWriteItem", "PutObject",
+    "DeleteObject", "SendMessage", "Publish", "StartExecution",
+    "PutEvents", "UpdateSecret", "PutSecretValue",
+}
+_LIVE_READ_ACTIONS = {
+    "GetItem", "Query", "Scan", "BatchGetItem", "GetObject", "ListBucket",
+    "ReceiveMessage", "GetQueueAttributes", "GetSecretValue", "DescribeSecret",
+}
+_LIVE_INVOKE_ACTIONS = {"InvokeFunction", "Invoke", "StartExecution"}
+_FUNCTIONAL_EDGE_TYPES = {
+    EdgeType.TRIGGERS,
+    EdgeType.ROUTES_TO,
+    EdgeType.READS_FROM,
+    EdgeType.WRITES_TO,
+    EdgeType.CROSS_ACCOUNT_REFERENCE,
 }
 
 
@@ -235,6 +259,41 @@ class AccountScanContext:
     errors: list[str] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class LiveEdgeEvidence:
+    inference_rule: str
+    confidence: str
+    evidence: str
+    api_calls: tuple[str, ...] = ()
+
+    def to_metadata(self) -> dict[str, Any]:
+        return {
+            "source": "aws_live_inference",
+            "inference_rule": self.inference_rule,
+            "confidence": self.confidence,
+            "evidence": self.evidence,
+            "api_calls": list(self.api_calls),
+        }
+
+
+@dataclass(frozen=True)
+class PendingLiveEdge:
+    source_id: str
+    target_ref: str | None
+    label: str
+    edge_type: EdgeType
+    evidence: LiveEdgeEvidence | None = None
+
+    def __iter__(self) -> Iterator[Any]:
+        yield self.source_id
+        yield self.target_ref
+        yield self.label
+        yield self.edge_type
+
+    def __getitem__(self, index: int) -> Any:
+        return tuple(self)[index]
+
+
 def _tag_map(tag_items: list[dict[str, Any]] | None, key_name: str = "Key", value_name: str = "Value") -> dict[str, str]:
     tags: dict[str, str] = {}
     for item in tag_items or []:
@@ -259,6 +318,154 @@ def _resource_id_from_arn(arn: str) -> str:
     if ":" in arn:
         return arn.rsplit(":", 1)[-1]
     return arn
+
+
+def _clean_arn_ref(value: str) -> str:
+    return value.rstrip("*").rstrip("/")
+
+
+def _extract_lambda_arn_from_apigw_uri(value: str) -> str | None:
+    match = re.search(r"/functions/(arn:aws[a-zA-Z-]*:lambda:[^/]+)/invocations", value)
+    if match:
+        return match.group(1)
+    if value.startswith("arn:") and ":lambda:" in value:
+        return _clean_arn_ref(value)
+    return None
+
+
+def _extract_execute_api_id(value: str) -> str | None:
+    match = re.match(r"arn:aws[a-zA-Z-]*:execute-api:[^:]+:[^:]+:([^/*:]+)", value)
+    return match.group(1) if match else None
+
+
+def _dns_variants(value: str) -> set[str]:
+    cleaned = value.strip().rstrip(".")
+    variants = {cleaned}
+    if cleaned.startswith("dualstack."):
+        variants.add(cleaned.removeprefix("dualstack."))
+    if ".cloudfront.net" in cleaned:
+        variants.add(cleaned.lower())
+    return {variant for variant in variants if variant}
+
+
+def _edge_metadata(
+    inference_rule: str,
+    confidence: str,
+    evidence: str,
+    *api_calls: str,
+) -> LiveEdgeEvidence:
+    return LiveEdgeEvidence(
+        inference_rule=inference_rule,
+        confidence=confidence,
+        evidence=evidence,
+        api_calls=tuple(api_calls),
+    )
+
+
+def _as_list(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
+def _policy_statements(policy_value: Any) -> list[dict[str, Any]]:
+    if not policy_value:
+        return []
+    if isinstance(policy_value, str):
+        try:
+            policy_value = json.loads(policy_value)
+        except Exception:
+            return []
+    if isinstance(policy_value, dict) and "PolicyDocument" in policy_value:
+        policy_value = policy_value.get("PolicyDocument")
+    if not isinstance(policy_value, dict):
+        return []
+    statements = policy_value.get("Statement", [])
+    if isinstance(statements, dict):
+        statements = [statements]
+    return [statement for statement in statements if isinstance(statement, dict) and statement.get("Effect", "Allow") == "Allow"]
+
+
+def _classify_live_actions(actions: list[Any]) -> EdgeType | None:
+    has_write = False
+    has_read = False
+    has_invoke = False
+    for raw_action in actions:
+        if not isinstance(raw_action, str) or ":" not in raw_action:
+            continue
+        service, action_name = raw_action.split(":", 1)
+        if service in {"logs", "cloudwatch", "xray"}:
+            continue
+        if action_name == "*" or action_name.endswith("*"):
+            if service in {"dynamodb", "s3", "sqs", "sns", "secretsmanager"}:
+                has_write = True
+                has_read = True
+            elif service in {"lambda", "states"}:
+                has_invoke = True
+            continue
+        if action_name in _LIVE_INVOKE_ACTIONS:
+            has_invoke = True
+        if action_name in _LIVE_WRITE_ACTIONS:
+            has_write = True
+        if action_name in _LIVE_READ_ACTIONS:
+            has_read = True
+    if has_invoke:
+        return EdgeType.TRIGGERS
+    if has_write:
+        return EdgeType.WRITES_TO
+    if has_read:
+        return EdgeType.READS_FROM
+    return None
+
+
+def _action_label_for_edge(edge_type: EdgeType) -> str:
+    if edge_type == EdgeType.WRITES_TO:
+        return "writes to"
+    if edge_type == EdgeType.READS_FROM:
+        return "reads from"
+    if edge_type == EdgeType.TRIGGERS:
+        return "invokes"
+    return "references"
+
+
+def _resolve_policy_resource(
+    resource: str,
+    nodes: list[StackMapNode],
+    resolve_target: Callable[[str | None], str | None],
+) -> list[tuple[str, str]]:
+    clean = _clean_arn_ref(resource)
+    direct = resolve_target(clean)
+    if direct:
+        return [(direct, "high")]
+    if "*" not in resource:
+        return []
+
+    prefix = resource.split("*", 1)[0].rstrip("/")
+    matches: list[tuple[str, str]] = []
+    for node in nodes:
+        arn = node.properties.get("arn")
+        if isinstance(arn, str) and arn.startswith(prefix):
+            matches.append((node.id, "medium"))
+    return matches
+
+
+def _component_group_name(nodes: list[StackMapNode], index: int) -> str:
+    for tag_key in ("aws:cloudformation:stack-name", "service", "app", "application", "project", "component"):
+        values = [node.tags.get(tag_key) for node in nodes if node.tags.get(tag_key)]
+        if values:
+            return str(sorted(values, key=len)[0])
+    entry = next(
+        (
+            node for node in nodes
+            if node.resource_type in {"aws_api_gateway_rest_api", "aws_apigatewayv2_api", "aws_cloudfront_distribution", "aws_lb"}
+        ),
+        None,
+    )
+    if entry:
+        return str(entry.name)
+    return f"Component {index}"
 
 
 def _build_live_node(
@@ -1034,7 +1241,7 @@ class AWSLiveScanner:
         self,
         context: AccountScanContext,
         nodes: list[StackMapNode],
-        pending_edges: list[tuple[str, str | None, str, EdgeType]],
+        pending_edges: list[tuple[str, str | None, str, EdgeType] | PendingLiveEdge],
         groups: list[StackMapGroup],
     ) -> StackMapIR:
         node_by_id = {node.id: node for node in nodes}
@@ -1046,11 +1253,25 @@ class AWSLiveScanner:
         for node in nodes:
             id_index[node.id] = node.id
             if isinstance(node.properties.get("arn"), str):
-                arn_index[str(node.properties["arn"])] = node.id
-            for key in ("id", "name", "function_name", "bucket", "url", "domain_name", "dns_name"):
+                arn = str(node.properties["arn"])
+                arn_index[arn] = node.id
+                arn_index[_clean_arn_ref(arn)] = node.id
+            for key in (
+                "id",
+                "name",
+                "function_name",
+                "bucket",
+                "url",
+                "domain_name",
+                "dns_name",
+                "role_name",
+                "queue_name",
+                "topic_name",
+            ):
                 value = node.properties.get(key)
                 if isinstance(value, str) and value:
                     id_index[value] = node.id
+                    id_index[_clean_arn_ref(value)] = node.id
             if node.resource_type == "aws_s3_bucket" and isinstance(node.properties.get("bucket"), str):
                 bucket_name = str(node.properties["bucket"])
                 bucket_name_index[bucket_name] = node.id
@@ -1062,24 +1283,33 @@ class AWSLiveScanner:
                 if isinstance(regional_domain, str) and regional_domain:
                     bucket_name_index[regional_domain] = node.id
             if isinstance(node.properties.get("dns_name"), str):
-                dns_index[str(node.properties["dns_name"])] = node.id
+                for variant in _dns_variants(str(node.properties["dns_name"])):
+                    dns_index[variant] = node.id
+            if isinstance(node.properties.get("domain_name"), str):
+                for variant in _dns_variants(str(node.properties["domain_name"])):
+                    dns_index[variant] = node.id
+            for domain_key in ("bucket_domain_name", "bucket_regional_domain_name"):
+                if isinstance(node.properties.get(domain_key), str):
+                    for variant in _dns_variants(str(node.properties[domain_key])):
+                        bucket_name_index[variant] = node.id
 
         edges: list[StackMapEdge] = []
         seen: set[tuple[str, str, str]] = set()
-        for source_id, target_ref, label, edge_type in pending_edges:
-            if source_id not in node_by_id or not target_ref:
-                continue
-            target_id = (
-                arn_index.get(target_ref)
-                or id_index.get(target_ref)
-                or bucket_name_index.get(target_ref)
-                or dns_index.get(target_ref)
-            )
-            if not target_id or target_id == source_id:
-                continue
+
+        def add_edge(
+            source_id: str,
+            target_id: str,
+            label: str,
+            edge_type: EdgeType,
+            evidence: LiveEdgeEvidence | None = None,
+        ) -> None:
+            if source_id not in node_by_id:
+                return
+            if target_id not in node_by_id or target_id == source_id:
+                return
             key = (source_id, target_id, edge_type.value)
             if key in seen:
-                continue
+                return
             seen.add(key)
             edges.append(
                 StackMapEdge(
@@ -1088,8 +1318,60 @@ class AWSLiveScanner:
                     target=target_id,
                     edge_type=edge_type,
                     label=label,
+                    metadata=evidence.to_metadata() if evidence else {},
                 )
             )
+
+        def resolve_target(target_ref: str | None) -> str | None:
+            if not target_ref:
+                return None
+            candidates = [target_ref, _clean_arn_ref(target_ref)]
+            candidates.extend(sorted(_dns_variants(target_ref)))
+            lambda_arn = _extract_lambda_arn_from_apigw_uri(target_ref)
+            if lambda_arn:
+                candidates.extend([lambda_arn, _clean_arn_ref(lambda_arn)])
+            for candidate in candidates:
+                target_id = (
+                    arn_index.get(candidate)
+                    or id_index.get(candidate)
+                    or bucket_name_index.get(candidate)
+                    or dns_index.get(candidate)
+                )
+                if target_id:
+                    return target_id
+            return None
+
+        for pending in pending_edges:
+            if isinstance(pending, PendingLiveEdge):
+                source_id = pending.source_id
+                target_ref = pending.target_ref
+                label = pending.label
+                edge_type = pending.edge_type
+                evidence = pending.evidence
+            else:
+                source_id, target_ref, label, edge_type = pending
+                evidence = None
+            target_id = resolve_target(target_ref)
+            if target_id:
+                if evidence is None:
+                    evidence = _edge_metadata(
+                        "direct_reference",
+                        "high" if edge_type != EdgeType.REFERENCES else "medium",
+                        f"{label} references {target_ref}",
+                    )
+                add_edge(source_id, target_id, label, edge_type, evidence)
+
+        self._infer_live_relationships(nodes, add_edge, resolve_target)
+
+        inference_counts: dict[str, int] = {}
+        confidence_counts: dict[str, int] = {}
+        for edge in edges:
+            rule = edge.metadata.get("inference_rule")
+            confidence = edge.metadata.get("confidence")
+            if rule:
+                inference_counts[str(rule)] = inference_counts.get(str(rule), 0) + 1
+            if confidence:
+                confidence_counts[str(confidence)] = confidence_counts.get(str(confidence), 0) + 1
 
         group_map = {group.id: group for group in groups}
         child_sets: dict[str, set[str]] = {group.id: set(group.children) for group in groups}
@@ -1148,6 +1430,11 @@ class AWSLiveScanner:
                 "errors": context.errors,
                 "dry_run": context.dry_run,
                 "api_calls": context.recorder.actual_count,
+                "live_inference": {
+                    "edge_count": len(edges),
+                    "rules": inference_counts,
+                    "confidence": confidence_counts,
+                },
                 "planned_api_calls": [
                     {
                         "account_id": call.account_id,
@@ -1163,9 +1450,260 @@ class AWSLiveScanner:
             edges=edges,
             groups=normalized_groups,
         )
+        self._apply_live_smart_groups(ir)
         overlay_organization_groups(ir, org=load_organization_document(self.org_file) if self.org_file else None, strict=False)
         ir.metadata["cross_account_edges"] = infer_cross_account_edges(ir)
         return ir
+
+    def _infer_live_relationships(
+        self,
+        nodes: list[StackMapNode],
+        add_edge: Callable[[str, str, str, EdgeType, LiveEdgeEvidence | None], None],
+        resolve_target: Callable[[str | None], str | None],
+    ) -> None:
+        """Infer cross-service live relationships from collected AWS facts."""
+        nodes_by_id = {node.id: node for node in nodes}
+        nodes_by_arn = {
+            str(node.properties.get("arn")): node
+            for node in nodes
+            if isinstance(node.properties.get("arn"), str)
+        }
+        api_by_execute_id = {
+            str(node.properties.get("id")): node
+            for node in nodes
+            if node.resource_type in {"aws_api_gateway_rest_api", "aws_apigatewayv2_api"}
+            and isinstance(node.properties.get("id"), str)
+        }
+        task_definition_consumers: dict[str, list[StackMapNode]] = {}
+        for node in nodes:
+            if node.resource_type != "aws_ecs_service":
+                continue
+            task_definition = node.properties.get("task_definition")
+            if isinstance(task_definition, str) and task_definition:
+                task_definition_consumers.setdefault(task_definition, []).append(node)
+
+        role_to_principals: dict[str, list[StackMapNode]] = {}
+        for node in nodes:
+            role_arn = node.properties.get("role_arn") or node.properties.get("task_role_arn")
+            if isinstance(role_arn, str) and role_arn:
+                principals = role_to_principals.setdefault(role_arn, [])
+                principals.append(node)
+                if node.resource_type == "aws_ecs_task_definition":
+                    node_arn = node.properties.get("arn")
+                    if isinstance(node_arn, str):
+                        principals.extend(task_definition_consumers.get(node_arn, []))
+
+        for api in api_by_execute_id.values():
+            for uri in api.properties.get("integration_uris", []) or []:
+                if not isinstance(uri, str):
+                    continue
+                lambda_arn = _extract_lambda_arn_from_apigw_uri(uri)
+                target_id = resolve_target(lambda_arn or uri)
+                if target_id:
+                    add_edge(
+                        api.id,
+                        target_id,
+                        "invokes",
+                        EdgeType.TRIGGERS,
+                        _edge_metadata(
+                            "apigateway_lambda_integration_uri",
+                            "high",
+                            f"API Gateway integration URI references {lambda_arn or uri}",
+                            "apigateway:get_integration",
+                            "apigatewayv2:get_integrations",
+                        ),
+                    )
+
+        for fn in nodes:
+            if fn.resource_type != "aws_lambda_function":
+                continue
+            for statement in _policy_statements(fn.properties.get("resource_policy")):
+                principal = statement.get("Principal")
+                principal_text = json.dumps(principal, default=str)
+                if "apigateway.amazonaws.com" not in principal_text:
+                    continue
+                source_arn = statement.get("Condition", {}).get("ArnLike", {}).get("AWS:SourceArn")
+                if not isinstance(source_arn, str):
+                    source_arn = statement.get("Condition", {}).get("ArnEquals", {}).get("AWS:SourceArn")
+                api_id = _extract_execute_api_id(source_arn) if isinstance(source_arn, str) else None
+                api = api_by_execute_id.get(api_id or "")
+                if api:
+                    add_edge(
+                        api.id,
+                        fn.id,
+                        "invokes",
+                        EdgeType.TRIGGERS,
+                        _edge_metadata(
+                            "lambda_policy_execute_api_source_arn",
+                            "medium",
+                            f"Lambda policy allows API Gateway SourceArn {source_arn}",
+                            "lambda:get_policy",
+                        ),
+                    )
+
+        for role_arn, principals in role_to_principals.items():
+            role = nodes_by_arn.get(role_arn)
+            if not role:
+                continue
+            for policy in role.properties.get("policies", []) or []:
+                for statement in _policy_statements(policy):
+                    edge_type = _classify_live_actions(_as_list(statement.get("Action")))
+                    if edge_type is None:
+                        continue
+                    for resource in _as_list(statement.get("Resource")):
+                        if not isinstance(resource, str) or resource == "*":
+                            continue
+                        for target_id, confidence in _resolve_policy_resource(resource, nodes, resolve_target):
+                            target_node = nodes_by_id.get(target_id)
+                            if target_node and target_node.resource_type == "aws_cloudwatch_log_group":
+                                continue
+                            for principal in principals:
+                                add_edge(
+                                    principal.id,
+                                    target_id,
+                                    _action_label_for_edge(edge_type),
+                                    edge_type,
+                                    _edge_metadata(
+                                        "iam_role_policy_resource_access",
+                                        confidence,
+                                        f"{principal.name} role policy grants {statement.get('Action')} on {resource}",
+                                        "iam:get_role_policy",
+                                        "iam:get_policy_version",
+                                    ),
+                                )
+
+        for service in nodes:
+            if service.resource_type != "aws_ecs_service":
+                continue
+            for tg_arn in service.properties.get("target_group_arns", []) or []:
+                if not isinstance(tg_arn, str):
+                    continue
+                target_group_id = resolve_target(tg_arn)
+                if target_group_id:
+                    add_edge(
+                        target_group_id,
+                        service.id,
+                        "routes to",
+                        EdgeType.ROUTES_TO,
+                        _edge_metadata(
+                            "ecs_service_target_group",
+                            "high",
+                            f"ECS service is registered with target group {tg_arn}",
+                            "ecs:describe_services",
+                        ),
+                    )
+
+    def _apply_live_smart_groups(self, ir: StackMapIR) -> None:
+        """Create app/component groups for live scans using tags and inferred edges."""
+        if ir.metadata.get("source_type") != "aws_live":
+            return
+
+        # VPC/subnet groups are topology context; they should not prevent
+        # business/component groups from claiming the same workloads.
+        existing_children = {
+            child
+            for group in ir.groups
+            if group.group_type not in {"vpc", "subnet"}
+            for child in group.children
+        }
+        groups: list[StackMapGroup] = []
+
+        def add_group(group_id: str, name: str, children: list[str], metadata: dict[str, Any]) -> None:
+            unique_children = sorted({child for child in children if child not in existing_children})
+            if len(unique_children) < 2:
+                return
+            existing_children.update(unique_children)
+            node_lookup = {node.id: node for node in ir.nodes}
+            accounts = sorted({
+                str(node_lookup[child].metadata.get("account_id"))
+                for child in unique_children
+                if child in node_lookup and node_lookup[child].metadata.get("account_id")
+            })
+            regions = sorted({
+                str(node_lookup[child].metadata.get("region"))
+                for child in unique_children
+                if child in node_lookup and node_lookup[child].metadata.get("region")
+            })
+            type_counts: dict[str, int] = {}
+            for child in unique_children:
+                node = node_lookup.get(child)
+                if node:
+                    type_counts[node.resource_type] = type_counts.get(node.resource_type, 0) + 1
+            groups.append(StackMapGroup(
+                id=group_id,
+                name=name,
+                group_type="smart_group",
+                children=unique_children,
+                metadata={
+                    **metadata,
+                    "accounts": accounts,
+                    "regions": regions,
+                    "resource_count_by_type": type_counts,
+                },
+            ))
+
+        for tag_key in ("aws:cloudformation:stack-name", "service", "app", "application", "project", "component"):
+            clusters: dict[str, list[str]] = {}
+            for node in ir.nodes:
+                tag_value = node.tags.get(tag_key)
+                if tag_value:
+                    clusters.setdefault(tag_value, []).append(node.id)
+            for tag_value, node_ids in clusters.items():
+                add_group(
+                    f"live:{tag_key}:{tag_value}".replace(" ", "_").lower(),
+                    tag_value,
+                    node_ids,
+                    {
+                        "auto_strategy": "cloudformation_stack" if tag_key.startswith("aws:cloudformation") else "business_tag",
+                        "confidence": "high",
+                        "evidence": f"Grouped by tag {tag_key}={tag_value}",
+                    },
+                )
+
+        adj: dict[str, set[str]] = {}
+        for edge in ir.edges:
+            confidence = edge.metadata.get("confidence", "medium")
+            if edge.edge_type not in _FUNCTIONAL_EDGE_TYPES or confidence == "low":
+                continue
+            adj.setdefault(edge.source, set()).add(edge.target)
+            adj.setdefault(edge.target, set()).add(edge.source)
+
+        visited: set[str] = set()
+        component_index = 1
+        for node in ir.nodes:
+            if node.id in visited or node.id in existing_children:
+                continue
+            queue = [node.id]
+            component: list[str] = []
+            while queue:
+                current = queue.pop(0)
+                if current in visited or current in existing_children:
+                    continue
+                visited.add(current)
+                component.append(current)
+                queue.extend(sorted(adj.get(current, set()) - visited))
+            if len(component) < 3:
+                continue
+            component_nodes = [n for n in ir.nodes if n.id in component]
+            entrypoints = [
+                n.id for n in component_nodes
+                if n.resource_type in {"aws_api_gateway_rest_api", "aws_apigatewayv2_api", "aws_cloudfront_distribution", "aws_lb"}
+            ]
+            name = _component_group_name(component_nodes, component_index)
+            add_group(
+                f"live:component:{component_index}",
+                name,
+                component,
+                {
+                    "auto_strategy": "inferred_service_graph",
+                    "confidence": "medium",
+                    "evidence": "Grouped by high/medium-confidence live relationships",
+                    "entrypoints": entrypoints,
+                },
+            )
+            component_index += 1
+
+        ir.groups.extend(groups)
 
     def _collect_service(
         self,
@@ -1456,18 +1994,59 @@ class AWSLiveScanner:
                 },
             )
             nodes.append(node)
+            targets_resp = executor.call_optional(
+                "elbv2",
+                "describe_target_health",
+                region=region,
+                swallow_codes={"AccessDeniedException", "TargetGroupNotFound"},
+                TargetGroupArn=tg_arn,
+            ) or {}
+            for desc in targets_resp.get("TargetHealthDescriptions", []):
+                target = desc.get("Target", {})
+                target_id = target.get("Id")
+                if not isinstance(target_id, str) or not target_id:
+                    continue
+                ref = target_id
+                if tg.get("TargetType") == "instance":
+                    ref = f"arn:aws:ec2:{region}:{account_id}:instance/{target_id}"
+                pending.append(PendingLiveEdge(
+                    node.id,
+                    ref,
+                    "targets",
+                    EdgeType.ROUTES_TO,
+                    _edge_metadata(
+                        "elbv2_target_health",
+                        "high",
+                        f"Target group contains target {target_id}",
+                        "elbv2:describe_target_health",
+                    ),
+                ))
 
         return nodes, pending, []
 
     def _collect_lambda(self, region: str, executor: AWSAPIExecutor) -> tuple[list[StackMapNode], list[tuple[str, str | None, str, EdgeType]], list[StackMapGroup]]:
         account_id = executor.context.account_id
         nodes: list[StackMapNode] = []
-        pending: list[tuple[str, str | None, str, EdgeType]] = []
+        pending: list[tuple[str, str | None, str, EdgeType] | PendingLiveEdge] = []
         functions = executor.paginate("lambda", "list_functions", "Functions", region=region)
         for fn in functions:
             arn = fn["FunctionArn"]
             vpc_cfg = fn.get("VpcConfig", {})
             env_vars = fn.get("Environment", {}).get("Variables", {})
+            tags_resp = executor.call_optional(
+                "lambda",
+                "list_tags",
+                region=region,
+                swallow_codes={"AccessDeniedException", "ResourceNotFoundException"},
+                Resource=arn,
+            ) or {}
+            policy_resp = executor.call_optional(
+                "lambda",
+                "get_policy",
+                region=region,
+                swallow_codes={"AccessDeniedException", "ResourceNotFoundException"},
+                FunctionName=fn["FunctionName"],
+            ) or {}
             node = _build_live_node(
                 account_id=account_id,
                 region=region,
@@ -1488,11 +2067,24 @@ class AWSLiveScanner:
                     "security_group_ids": vpc_cfg.get("SecurityGroupIds", []),
                     "environment": env_vars,
                     "last_modified": fn.get("LastModified"),
+                    "resource_policy": policy_resp.get("Policy"),
                 },
+                tags=tags_resp.get("Tags") if isinstance(tags_resp.get("Tags"), dict) else None,
             )
             nodes.append(node)
             if fn.get("Role"):
-                pending.append((node.id, fn.get("Role"), "assumes role", EdgeType.AUTHENTICATES))
+                pending.append(PendingLiveEdge(
+                    node.id,
+                    fn.get("Role"),
+                    "assumes role",
+                    EdgeType.AUTHENTICATES,
+                    _edge_metadata(
+                        "lambda_execution_role",
+                        "high",
+                        f"Lambda configuration role is {fn.get('Role')}",
+                        "lambda:list_functions",
+                    ),
+                ))
             for subnet_id in vpc_cfg.get("SubnetIds", []):
                 pending.append((node.id, f"arn:aws:ec2:{region}:{account_id}:subnet/{subnet_id}", "in subnet", EdgeType.REFERENCES))
             if vpc_cfg.get("VpcId"):
@@ -1507,11 +2099,17 @@ class AWSLiveScanner:
             source_arn = mapping.get("EventSourceArn")
             if fn_arn and source_arn:
                 pending.append(
-                    (
+                    PendingLiveEdge(
                         f"aws:{account_id}:{region}:aws_lambda_function:{fn_arn.split(':')[-1]}",
                         source_arn,
                         "reads from",
                         EdgeType.READS_FROM,
+                        _edge_metadata(
+                            "lambda_event_source_mapping",
+                            "high",
+                            f"Lambda event source mapping connects {source_arn}",
+                            "lambda:list_event_source_mappings",
+                        ),
                     )
                 )
 
@@ -1537,6 +2135,7 @@ class AWSLiveScanner:
                     "arn": api_arn,
                     "name": api.get("name"),
                     "description": api.get("description"),
+                    "integration_uris": [],
                 },
             )
             nodes.append(node)
@@ -1563,8 +2162,25 @@ class AWSLiveScanner:
                     uri = integration.get("uri")
                     if not uri:
                         continue
+                    node.properties.setdefault("integration_uris", []).append(uri)
                     edge_type = EdgeType.TRIGGERS if ":lambda:" in uri else EdgeType.ROUTES_TO
-                    pending.append((node.id, uri, f"{http_method} integration", edge_type))
+                    inference_rule = (
+                        "apigateway_lambda_integration_uri"
+                        if ":lambda:" in uri
+                        else "apigateway_integration_uri"
+                    )
+                    pending.append(PendingLiveEdge(
+                        node.id,
+                        uri,
+                        f"{http_method} integration",
+                        edge_type,
+                        _edge_metadata(
+                            inference_rule,
+                            "high",
+                            f"{http_method} {resource.get('path', '')} integration URI is {uri}",
+                            "apigateway:get_integration",
+                        ),
+                    ))
 
         v2 = executor.call("apigatewayv2", "get_apis", region=region) or {}
         for api in v2.get("Items", []):
@@ -1580,6 +2196,7 @@ class AWSLiveScanner:
                     "id": api_id,
                     "arn": api_arn,
                     "protocol_type": api.get("ProtocolType"),
+                    "integration_uris": [],
                 },
             )
             nodes.append(node)
@@ -1588,8 +2205,25 @@ class AWSLiveScanner:
                 uri = integration.get("IntegrationUri")
                 if not uri:
                     continue
+                node.properties.setdefault("integration_uris", []).append(uri)
                 edge_type = EdgeType.TRIGGERS if ":lambda:" in uri else EdgeType.ROUTES_TO
-                pending.append((node.id, uri, "integration", edge_type))
+                inference_rule = (
+                    "apigateway_lambda_integration_uri"
+                    if ":lambda:" in uri
+                    else "apigatewayv2_integration_uri"
+                )
+                pending.append(PendingLiveEdge(
+                    node.id,
+                    uri,
+                    "integration",
+                    edge_type,
+                    _edge_metadata(
+                        inference_rule,
+                        "high",
+                        f"API Gateway v2 integration URI is {uri}",
+                        "apigatewayv2:get_integrations",
+                    ),
+                ))
 
         return nodes, pending, []
 
@@ -1841,6 +2475,7 @@ class AWSLiveScanner:
     def _collect_route53(self, region: str, executor: AWSAPIExecutor) -> tuple[list[StackMapNode], list[tuple[str, str | None, str, EdgeType]], list[StackMapGroup]]:
         account_id = executor.context.account_id
         nodes: list[StackMapNode] = []
+        pending: list[tuple[str, str | None, str, EdgeType] | PendingLiveEdge] = []
         zones: list[dict[str, Any]] = []
         resp = executor.call("route53", "list_hosted_zones", region=region) or {}
         zones.extend(resp.get("HostedZones", []))
@@ -1849,21 +2484,80 @@ class AWSLiveScanner:
             zones.extend(resp.get("HostedZones", []))
         for zone in zones:
             zone_id = zone["Id"].split("/")[-1]
-            nodes.append(
-                _build_live_node(
+            zone_node = _build_live_node(
+                account_id=account_id,
+                region="global",
+                resource_type="aws_route53_zone",
+                resource_id=zone_id,
+                name=zone["Name"].rstrip("."),
+                properties={
+                    "id": zone_id,
+                    "arn": f"arn:aws:route53:::hostedzone/{zone_id}",
+                    "name": zone["Name"].rstrip("."),
+                },
+            )
+            nodes.append(zone_node)
+            records = executor.call_optional(
+                "route53",
+                "list_resource_record_sets",
+                region=region,
+                swallow_codes={"AccessDenied", "NoSuchHostedZone", "NoSuchHostedZoneException"},
+                HostedZoneId=zone["Id"],
+            ) or {}
+            for record in records.get("ResourceRecordSets", []):
+                record_name = str(record.get("Name", "")).rstrip(".")
+                record_type = str(record.get("Type", ""))
+                values: list[str] = []
+                alias_dns = record.get("AliasTarget", {}).get("DNSName")
+                if isinstance(alias_dns, str):
+                    values.append(alias_dns.rstrip("."))
+                for resource_record in record.get("ResourceRecords", []) or []:
+                    value = resource_record.get("Value")
+                    if isinstance(value, str):
+                        values.append(value.rstrip("."))
+                if not values:
+                    continue
+                record_node = _build_live_node(
                     account_id=account_id,
                     region="global",
-                    resource_type="aws_route53_zone",
-                    resource_id=zone_id,
-                    name=zone["Name"].rstrip("."),
+                    resource_type="aws_route53_record",
+                    resource_id=f"{zone_id}:{record_name}:{record_type}",
+                    name=f"{record_name} {record_type}",
                     properties={
-                        "id": zone_id,
-                        "arn": f"arn:aws:route53:::hostedzone/{zone_id}",
-                        "name": zone["Name"].rstrip("."),
+                        "id": f"{zone_id}:{record_name}:{record_type}",
+                        "name": record_name,
+                        "type": record_type,
+                        "zone_id": zone_id,
+                        "targets": values,
                     },
                 )
-            )
-        return nodes, [], []
+                nodes.append(record_node)
+                pending.append(PendingLiveEdge(
+                    record_node.id,
+                    zone_node.id,
+                    "in zone",
+                    EdgeType.REFERENCES,
+                    _edge_metadata(
+                        "route53_record_zone",
+                        "high",
+                        f"Route53 record belongs to zone {zone_node.name}",
+                        "route53:list_resource_record_sets",
+                    ),
+                ))
+                for value in values:
+                    pending.append(PendingLiveEdge(
+                        record_node.id,
+                        value,
+                        "routes to",
+                        EdgeType.ROUTES_TO,
+                        _edge_metadata(
+                            "route53_record_target",
+                            "high",
+                            f"Route53 record target is {value}",
+                            "route53:list_resource_record_sets",
+                        ),
+                    ))
+        return nodes, pending, []
 
     def _collect_sqs(self, region: str, executor: AWSAPIExecutor) -> tuple[list[StackMapNode], list[tuple[str, str | None, str, EdgeType]], list[StackMapGroup]]:
         account_id = executor.context.account_id
@@ -1951,6 +2645,67 @@ class AWSLiveScanner:
             arn = role["Arn"]
             role_resp = executor.call("iam", "get_role", region=region, RoleName=role["RoleName"]) or {}
             full_role = role_resp.get("Role", role)
+            policies: list[dict[str, Any]] = []
+            inline_names = executor.paginate(
+                "iam",
+                "list_role_policies",
+                "PolicyNames",
+                region=region,
+                RoleName=role["RoleName"],
+            )
+            for policy_name in inline_names:
+                policy_resp = executor.call_optional(
+                    "iam",
+                    "get_role_policy",
+                    region=region,
+                    swallow_codes={"AccessDenied", "NoSuchEntity", "NoSuchEntityException"},
+                    RoleName=role["RoleName"],
+                    PolicyName=policy_name,
+                ) or {}
+                if policy_resp.get("PolicyDocument"):
+                    policies.append({
+                        "name": policy_name,
+                        "type": "inline",
+                        "PolicyDocument": policy_resp.get("PolicyDocument"),
+                    })
+
+            attached = executor.paginate(
+                "iam",
+                "list_attached_role_policies",
+                "AttachedPolicies",
+                region=region,
+                RoleName=role["RoleName"],
+            )
+            for attached_policy in attached:
+                policy_arn = attached_policy.get("PolicyArn")
+                if not policy_arn:
+                    continue
+                policy_meta = executor.call_optional(
+                    "iam",
+                    "get_policy",
+                    region=region,
+                    swallow_codes={"AccessDenied", "NoSuchEntity", "NoSuchEntityException"},
+                    PolicyArn=policy_arn,
+                ) or {}
+                default_version = policy_meta.get("Policy", {}).get("DefaultVersionId")
+                if not default_version:
+                    continue
+                policy_version = executor.call_optional(
+                    "iam",
+                    "get_policy_version",
+                    region=region,
+                    swallow_codes={"AccessDenied", "NoSuchEntity", "NoSuchEntityException"},
+                    PolicyArn=policy_arn,
+                    VersionId=default_version,
+                ) or {}
+                document = policy_version.get("PolicyVersion", {}).get("Document")
+                if document:
+                    policies.append({
+                        "name": attached_policy.get("PolicyName") or policy_arn,
+                        "arn": policy_arn,
+                        "type": "attached",
+                        "PolicyDocument": document,
+                    })
             node = _build_live_node(
                 account_id=account_id,
                 region="global",
@@ -1962,6 +2717,7 @@ class AWSLiveScanner:
                     "arn": arn,
                     "role_name": role["RoleName"],
                     "assume_role_policy": json.dumps(full_role.get("AssumeRolePolicyDocument"), default=str),
+                    "policies": policies,
                     "create_date": str(full_role.get("CreateDate")) if full_role.get("CreateDate") else None,
                 },
             )

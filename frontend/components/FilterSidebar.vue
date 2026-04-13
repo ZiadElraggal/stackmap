@@ -389,6 +389,15 @@
               <span class="knob" />
             </span>
           </button>
+          <button
+            class="filter-row"
+            @click="store.setShowLowConfidenceEdges(!store.showLowConfidenceEdges)"
+          >
+            <span class="text-gray-300">Low-confidence edges</span>
+            <span class="toggle" :class="{ on: store.showLowConfidenceEdges }" style="--toggle-color: #94a3b8">
+              <span class="knob" />
+            </span>
+          </button>
         </div>
       </section>
       <FindingsPanel />

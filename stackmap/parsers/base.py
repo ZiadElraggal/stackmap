@@ -55,6 +55,7 @@ class StackMapEdge:
     target: str
     edge_type: EdgeType
     label: str = ""
+    metadata: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -141,6 +142,7 @@ def _edge_to_dict(edge: StackMapEdge) -> dict:
         "target": edge.target,
         "edge_type": edge.edge_type.value,
         "label": edge.label,
+        "metadata": edge.metadata,
     }
 
 
@@ -151,6 +153,7 @@ def _edge_from_dict(data: dict) -> StackMapEdge:
         target=data["target"],
         edge_type=EdgeType(data["edge_type"]),
         label=data.get("label", ""),
+        metadata=data.get("metadata", {}),
     )
 
 

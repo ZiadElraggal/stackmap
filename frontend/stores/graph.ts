@@ -46,6 +46,14 @@ export interface StackMapEdge {
   edge_type: string
   label: string
   color?: string
+  metadata?: {
+    source?: string
+    inference_rule?: string
+    confidence?: 'high' | 'medium' | 'low' | string
+    evidence?: string
+    api_calls?: string[]
+    [key: string]: any
+  }
 }
 
 export type EditSubmode = 'inspect' | 'structure' | 'connect'
@@ -87,6 +95,10 @@ export interface StackMapGroup {
     account_name?: string
     ou_id?: string
     org_path?: string
+    auto_strategy?: string
+    evidence?: string
+    confidence?: string
+    [key: string]: any
   }
 }
 
@@ -968,6 +980,7 @@ export const useGraphStore = defineStore('graph', {
     showWeaklyLinkedComponents: false as boolean,
     collapseNetworkScaffolding: true as boolean,
     showCrossAccountEdges: true as boolean,
+    showLowConfidenceEdges: true as boolean,
 
     // Edit mode state
     editMode: false as boolean,
@@ -1159,6 +1172,9 @@ export const useGraphStore = defineStore('graph', {
       if (!state.showCrossAccountEdges) {
         baseEdges = baseEdges.filter(edge => edge.edge_type !== 'cross_account_reference')
       }
+      if (!state.showLowConfidenceEdges) {
+        baseEdges = baseEdges.filter(edge => edge.metadata?.confidence !== 'low')
+      }
 
       const parentMap = this.helperParentMap
       const dedup = new Set<string>()
@@ -1206,6 +1222,9 @@ export const useGraphStore = defineStore('graph', {
       let baseEdges = state.edges
       if (!state.showCrossAccountEdges) {
         baseEdges = baseEdges.filter(edge => edge.edge_type !== 'cross_account_reference')
+      }
+      if (!state.showLowConfidenceEdges) {
+        baseEdges = baseEdges.filter(edge => edge.metadata?.confidence !== 'low')
       }
       if (!state.activeAccountId) return baseEdges
       const visibleIds = new Set(this.rawSourceNodes.map(node => node.id))
@@ -1769,6 +1788,10 @@ export const useGraphStore = defineStore('graph', {
 
     setShowCrossAccountEdges(show: boolean) {
       this.showCrossAccountEdges = show
+    },
+
+    setShowLowConfidenceEdges(show: boolean) {
+      this.showLowConfidenceEdges = show
     },
 
     openComponent(componentId: string) {

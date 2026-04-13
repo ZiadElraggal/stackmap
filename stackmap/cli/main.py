@@ -708,10 +708,6 @@ def scan(
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(1)
 
-    if (live_logs or live_billing) and not aws_profile:
-        console.print("[red]Error:[/red] --live-logs/--live-billing require --aws-profile.")
-        raise typer.Exit(1)
-
     if not source_path.exists():
         console.print(f"[red]Error:[/red] Source file not found: {source}")
         raise typer.Exit(1)

@@ -282,6 +282,10 @@
                   </button>
                 </div>
               </div>
+              <div v-if="smartGroupReason" class="mb-3 rounded-lg border border-blue-400/15 bg-blue-500/[0.05] px-3 py-2">
+                <div class="text-[10px] uppercase tracking-widest text-blue-300">Smart group reason</div>
+                <div class="mt-1 text-xs font-mono text-gray-300">{{ smartGroupReason }}</div>
+              </div>
               <dl>
                 <div
                   v-for="([key, val], idx) in topProperties"
@@ -632,6 +636,32 @@
           <div class="mt-3 flex items-center gap-1.5 flex-wrap">
             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium tracking-wide" :style="{ backgroundColor: `${edgeColor}20`, color: edgeColor }">{{ edge.edge_type }}</span>
             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] text-gray-500 bg-white/5">{{ edge.label }}</span>
+            <span
+              v-if="edgeConfidence"
+              class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium"
+              :class="edgeConfidenceClass"
+            >
+              {{ edgeConfidence }} confidence
+            </span>
+          </div>
+        </div>
+
+        <div v-if="edgeEvidence" class="p-4 border-b border-white/10">
+          <div class="rounded-xl border border-blue-400/15 bg-blue-500/[0.06] p-3">
+            <div class="mb-2 flex items-center justify-between gap-2">
+              <span class="text-[10px] font-mono uppercase tracking-wider text-blue-300">Inference Evidence</span>
+              <span v-if="edgeInferenceRule" class="text-[10px] font-mono text-blue-200/70">{{ edgeInferenceRule }}</span>
+            </div>
+            <p class="text-xs leading-relaxed text-gray-300">{{ edgeEvidence }}</p>
+            <div v-if="edgeApiCalls.length" class="mt-2 flex flex-wrap gap-1">
+              <span
+                v-for="call in edgeApiCalls"
+                :key="call"
+                class="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-mono text-gray-400"
+              >
+                {{ call }}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -837,6 +867,22 @@ const costFeedbackTone = ref<'success' | 'warning'>('success')
 
 const node = computed(() => store.selectedNode)
 const edge = computed(() => store.selectedEdge)
+const edgeEvidence = computed(() => edge.value?.metadata?.evidence || '')
+const edgeInferenceRule = computed(() => String(edge.value?.metadata?.inference_rule || '').replace(/_/g, ' '))
+const edgeConfidence = computed(() => edge.value?.metadata?.confidence || '')
+const edgeApiCalls = computed(() => Array.isArray(edge.value?.metadata?.api_calls) ? edge.value!.metadata!.api_calls! : [])
+const edgeConfidenceClass = computed(() => {
+  switch (edgeConfidence.value) {
+    case 'high':
+      return 'bg-emerald-500/15 text-emerald-300'
+    case 'medium':
+      return 'bg-amber-500/15 text-amber-300'
+    case 'low':
+      return 'bg-gray-500/15 text-gray-300'
+    default:
+      return 'bg-blue-500/15 text-blue-300'
+  }
+})
 const diffStatus = computed(() => node.value?.position_hint?.diff_status as string | undefined)
 const diffChanges = computed(() => node.value?.position_hint?.diff_changes as Record<string, unknown> | undefined)
 const diffStatusColor = computed(() => {
@@ -883,6 +929,15 @@ const componentLabel = computed(() => {
   if (!node.value) return null
   const component = store.componentSummaries.find(summary => summary.nodeIds.includes(node.value!.id))
   return component ? component.name.replace(/-/g, ' ') : null
+})
+const smartGroupReason = computed(() => {
+  if (!node.value) return ''
+  const group = store.graphGroups.find(candidate =>
+    candidate.children.includes(node.value!.id)
+    && candidate.metadata?.auto_strategy
+  )
+  if (!group) return ''
+  return String(group.metadata?.evidence || `Grouped by ${String(group.metadata?.auto_strategy).replace(/_/g, ' ')}`)
 })
 const selectedNodeCost = computed(() => {
   if (!node.value) return null
