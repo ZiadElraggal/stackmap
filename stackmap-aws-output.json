@@ -59,7 +59,7 @@
     ],
     "errors": [],
     "dry_run": false,
-    "api_calls": 205,
+    "api_calls": 509,
     "planned_api_calls": [
       {
         "account_id": "783435133831",
@@ -91,6 +91,13 @@
       },
       {
         "account_id": "783435133831",
+        "region": "ap-northeast-3",
+        "service": "apigatewayv2",
+        "operation": "get_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
         "region": "ap-northeast-1",
         "service": "apigatewayv2",
         "operation": "get_apis",
@@ -99,20 +106,6 @@
       {
         "account_id": "783435133831",
         "region": "ap-northeast-2",
-        "service": "apigatewayv2",
-        "operation": "get_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-northeast-1",
-        "service": "appsync",
-        "operation": "list_graphql_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-northeast-3",
         "service": "apigatewayv2",
         "operation": "get_apis",
         "params": {}
@@ -133,6 +126,13 @@
       },
       {
         "account_id": "783435133831",
+        "region": "ap-northeast-1",
+        "service": "appsync",
+        "operation": "list_graphql_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
         "region": "ap-northeast-2",
         "service": "appsync",
         "operation": "list_graphql_apis",
@@ -144,6 +144,15 @@
         "service": "appsync",
         "operation": "list_graphql_apis",
         "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-northeast-3",
+        "service": "cognito-idp",
+        "operation": "list_user_pools",
+        "params": {
+          "MaxResults": 60
+        }
       },
       {
         "account_id": "783435133831",
@@ -154,15 +163,6 @@
       },
       {
         "account_id": "783435133831",
-        "region": "ap-northeast-3",
-        "service": "cognito-idp",
-        "operation": "list_user_pools",
-        "params": {
-          "MaxResults": 60
-        }
-      },
-      {
-        "account_id": "783435133831",
         "region": "ap-northeast-2",
         "service": "cognito-idp",
         "operation": "list_user_pools",
@@ -181,33 +181,6 @@
       },
       {
         "account_id": "783435133831",
-        "region": "ap-northeast-2",
-        "service": "cognito-identity",
-        "operation": "list_identity_pools",
-        "params": {
-          "MaxResults": 60
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-northeast-3",
-        "service": "cognito-identity",
-        "operation": "list_identity_pools",
-        "params": {
-          "MaxResults": 60
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-south-1",
-        "service": "cognito-identity",
-        "operation": "list_identity_pools",
-        "params": {
-          "MaxResults": 60
-        }
-      },
-      {
-        "account_id": "783435133831",
         "region": "ap-northeast-1",
         "service": "cognito-idp",
         "operation": "list_user_pools",
@@ -217,6 +190,51 @@
       },
       {
         "account_id": "783435133831",
+        "region": "ap-northeast-3",
+        "service": "cognito-identity",
+        "operation": "list_identity_pools",
+        "params": {
+          "MaxResults": 60
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-northeast-2",
+        "service": "cognito-identity",
+        "operation": "list_identity_pools",
+        "params": {
+          "MaxResults": 60
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-northeast-1",
+        "service": "cognito-identity",
+        "operation": "list_identity_pools",
+        "params": {
+          "MaxResults": 60
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-south-1",
+        "service": "cognito-identity",
+        "operation": "list_identity_pools",
+        "params": {
+          "MaxResults": 60
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-northeast-3",
+        "service": "config",
+        "operation": "list_discovered_resources",
+        "params": {
+          "resourceType": "AWS::EC2::VPC"
+        }
+      },
+      {
+        "account_id": "783435133831",
         "region": "ap-northeast-2",
         "service": "config",
         "operation": "list_discovered_resources",
@@ -226,7 +244,7 @@
       },
       {
         "account_id": "783435133831",
-        "region": "ap-northeast-3",
+        "region": "ap-northeast-1",
         "service": "config",
         "operation": "list_discovered_resources",
         "params": {
@@ -244,25 +262,28 @@
       },
       {
         "account_id": "783435133831",
-        "region": "ap-northeast-1",
-        "service": "cognito-identity",
-        "operation": "list_identity_pools",
-        "params": {
-          "MaxResults": 60
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-northeast-1",
-        "service": "config",
-        "operation": "list_discovered_resources",
-        "params": {
-          "resourceType": "AWS::EC2::VPC"
-        }
-      },
-      {
-        "account_id": "783435133831",
         "region": "ap-northeast-3",
+        "service": "ec2",
+        "operation": "describe_vpcs",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-northeast-2",
+        "service": "ec2",
+        "operation": "describe_vpcs",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-northeast-1",
+        "service": "ec2",
+        "operation": "describe_vpcs",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-south-1",
         "service": "ec2",
         "operation": "describe_vpcs",
         "params": {}
@@ -290,9 +311,9 @@
       },
       {
         "account_id": "783435133831",
-        "region": "ap-northeast-2",
+        "region": "ap-northeast-1",
         "service": "ec2",
-        "operation": "describe_vpcs",
+        "operation": "describe_subnets",
         "params": {}
       },
       {
@@ -304,7 +325,7 @@
       },
       {
         "account_id": "783435133831",
-        "region": "ap-northeast-2",
+        "region": "ap-northeast-1",
         "service": "ec2",
         "operation": "describe_security_groups",
         "params": {}
@@ -312,27 +333,6 @@
       {
         "account_id": "783435133831",
         "region": "ap-northeast-2",
-        "service": "ec2",
-        "operation": "describe_instances",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-northeast-1",
-        "service": "ec2",
-        "operation": "describe_vpcs",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-northeast-1",
-        "service": "ec2",
-        "operation": "describe_subnets",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-northeast-1",
         "service": "ec2",
         "operation": "describe_security_groups",
         "params": {}
@@ -348,14 +348,14 @@
         "account_id": "783435133831",
         "region": "ap-south-1",
         "service": "ec2",
-        "operation": "describe_vpcs",
+        "operation": "describe_subnets",
         "params": {}
       },
       {
         "account_id": "783435133831",
-        "region": "ap-south-1",
+        "region": "ap-northeast-2",
         "service": "ec2",
-        "operation": "describe_subnets",
+        "operation": "describe_instances",
         "params": {}
       },
       {
@@ -375,6 +375,24 @@
       {
         "account_id": "783435133831",
         "region": "ap-northeast-3",
+        "service": "elasticache",
+        "operation": "describe_cache_clusters",
+        "params": {
+          "ShowCacheNodeInfo": false
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-northeast-1",
+        "service": "elasticache",
+        "operation": "describe_cache_clusters",
+        "params": {
+          "ShowCacheNodeInfo": false
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-northeast-2",
         "service": "elasticache",
         "operation": "describe_cache_clusters",
         "params": {
@@ -387,31 +405,6 @@
         "service": "elasticache",
         "operation": "describe_replication_groups",
         "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-northeast-2",
-        "service": "elasticache",
-        "operation": "describe_cache_clusters",
-        "params": {
-          "ShowCacheNodeInfo": false
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-northeast-2",
-        "service": "elasticache",
-        "operation": "describe_replication_groups",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-northeast-1",
-        "service": "elasticache",
-        "operation": "describe_cache_clusters",
-        "params": {
-          "ShowCacheNodeInfo": false
-        }
       },
       {
         "account_id": "783435133831",
@@ -428,6 +421,13 @@
         "params": {
           "ShowCacheNodeInfo": false
         }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-northeast-2",
+        "service": "elasticache",
+        "operation": "describe_replication_groups",
+        "params": {}
       },
       {
         "account_id": "783435133831",
@@ -441,13 +441,6 @@
         "region": "ap-northeast-3",
         "service": "rds",
         "operation": "describe_db_instances",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-northeast-3",
-        "service": "rds",
-        "operation": "describe_db_clusters",
         "params": {}
       },
       {
@@ -542,6 +535,13 @@
       },
       {
         "account_id": "783435133831",
+        "region": "ap-northeast-3",
+        "service": "rds",
+        "operation": "describe_db_clusters",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
         "region": "ap-northeast-1",
         "service": "iam",
         "operation": "get_role",
@@ -575,6 +575,13 @@
         "params": {
           "RoleName": "AWSServiceRoleForResourceExplorer"
         }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-northeast-2",
+        "service": "rds",
+        "operation": "describe_db_instances",
+        "params": {}
       },
       {
         "account_id": "783435133831",
@@ -670,14 +677,14 @@
         "account_id": "783435133831",
         "region": "ap-northeast-2",
         "service": "rds",
-        "operation": "describe_db_instances",
+        "operation": "describe_db_clusters",
         "params": {}
       },
       {
         "account_id": "783435133831",
-        "region": "ap-northeast-2",
+        "region": "ap-south-1",
         "service": "rds",
-        "operation": "describe_db_clusters",
+        "operation": "describe_db_instances",
         "params": {}
       },
       {
@@ -685,6 +692,13 @@
         "region": "ap-northeast-1",
         "service": "rds",
         "operation": "describe_db_instances",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-south-1",
+        "service": "rds",
+        "operation": "describe_db_clusters",
         "params": {}
       },
       {
@@ -700,6 +714,15 @@
         "service": "route53",
         "operation": "list_hosted_zones",
         "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-northeast-3",
+        "service": "resourcegroupstaggingapi",
+        "operation": "get_resources",
+        "params": {
+          "ResourcesPerPage": 50
+        }
       },
       {
         "account_id": "783435133831",
@@ -728,6 +751,13 @@
       },
       {
         "account_id": "783435133831",
+        "region": "ap-southeast-1",
+        "service": "apigateway",
+        "operation": "get_rest_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
         "region": "ap-northeast-1",
         "service": "s3",
         "operation": "get_bucket_policy",
@@ -782,6 +812,22 @@
       },
       {
         "account_id": "783435133831",
+        "region": "ap-southeast-1",
+        "service": "apigatewayv2",
+        "operation": "get_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-northeast-2",
+        "service": "resourcegroupstaggingapi",
+        "operation": "get_resources",
+        "params": {
+          "ResourcesPerPage": 50
+        }
+      },
+      {
+        "account_id": "783435133831",
         "region": "ap-northeast-1",
         "service": "s3",
         "operation": "get_bucket_policy",
@@ -836,6 +882,20 @@
       },
       {
         "account_id": "783435133831",
+        "region": "ap-southeast-1",
+        "service": "appsync",
+        "operation": "list_graphql_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-southeast-2",
+        "service": "apigateway",
+        "operation": "get_rest_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
         "region": "ap-northeast-1",
         "service": "s3",
         "operation": "get_bucket_policy",
@@ -890,6 +950,31 @@
       },
       {
         "account_id": "783435133831",
+        "region": "ap-south-1",
+        "service": "resourcegroupstaggingapi",
+        "operation": "get_resources",
+        "params": {
+          "ResourcesPerPage": 50
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-southeast-1",
+        "service": "cognito-idp",
+        "operation": "list_user_pools",
+        "params": {
+          "MaxResults": 60
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-southeast-2",
+        "service": "apigatewayv2",
+        "operation": "get_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
         "region": "ap-northeast-1",
         "service": "s3",
         "operation": "get_bucket_policy",
@@ -899,56 +984,17 @@
       },
       {
         "account_id": "783435133831",
-        "region": "ap-south-1",
-        "service": "rds",
-        "operation": "describe_db_instances",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-south-1",
-        "service": "rds",
-        "operation": "describe_db_clusters",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-northeast-3",
-        "service": "resourcegroupstaggingapi",
-        "operation": "get_resources",
-        "params": {
-          "ResourcesPerPage": 50
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-southeast-1",
-        "service": "apigateway",
-        "operation": "get_rest_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-southeast-1",
-        "service": "apigatewayv2",
-        "operation": "get_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-southeast-1",
+        "region": "ap-southeast-2",
         "service": "appsync",
         "operation": "list_graphql_apis",
         "params": {}
       },
       {
         "account_id": "783435133831",
-        "region": "ap-southeast-1",
-        "service": "cognito-idp",
-        "operation": "list_user_pools",
-        "params": {
-          "MaxResults": 60
-        }
+        "region": "ca-central-1",
+        "service": "apigateway",
+        "operation": "get_rest_apis",
+        "params": {}
       },
       {
         "account_id": "783435133831",
@@ -961,39 +1007,14 @@
       },
       {
         "account_id": "783435133831",
-        "region": "ap-southeast-1",
-        "service": "config",
-        "operation": "list_discovered_resources",
-        "params": {
-          "resourceType": "AWS::EC2::VPC"
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-northeast-2",
-        "service": "resourcegroupstaggingapi",
-        "operation": "get_resources",
-        "params": {
-          "ResourcesPerPage": 50
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-southeast-2",
-        "service": "apigateway",
-        "operation": "get_rest_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-southeast-2",
+        "region": "ca-central-1",
         "service": "apigatewayv2",
         "operation": "get_apis",
         "params": {}
       },
       {
         "account_id": "783435133831",
-        "region": "ap-southeast-2",
+        "region": "ca-central-1",
         "service": "appsync",
         "operation": "list_graphql_apis",
         "params": {}
@@ -1009,7 +1030,25 @@
       },
       {
         "account_id": "783435133831",
-        "region": "ap-southeast-2",
+        "region": "ap-southeast-1",
+        "service": "config",
+        "operation": "list_discovered_resources",
+        "params": {
+          "resourceType": "AWS::EC2::VPC"
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ca-central-1",
+        "service": "cognito-idp",
+        "operation": "list_user_pools",
+        "params": {
+          "MaxResults": 60
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ca-central-1",
         "service": "cognito-identity",
         "operation": "list_identity_pools",
         "params": {
@@ -1019,11 +1058,50 @@
       {
         "account_id": "783435133831",
         "region": "ap-southeast-2",
+        "service": "cognito-identity",
+        "operation": "list_identity_pools",
+        "params": {
+          "MaxResults": 60
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ca-central-1",
         "service": "config",
         "operation": "list_discovered_resources",
         "params": {
           "resourceType": "AWS::EC2::VPC"
         }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ca-central-1",
+        "service": "ec2",
+        "operation": "describe_vpcs",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-southeast-2",
+        "service": "config",
+        "operation": "list_discovered_resources",
+        "params": {
+          "resourceType": "AWS::EC2::VPC"
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ca-central-1",
+        "service": "ec2",
+        "operation": "describe_subnets",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ca-central-1",
+        "service": "ec2",
+        "operation": "describe_security_groups",
+        "params": {}
       },
       {
         "account_id": "783435133831",
@@ -1036,830 +1114,6 @@
       },
       {
         "account_id": "783435133831",
-        "region": "ca-central-1",
-        "service": "apigateway",
-        "operation": "get_rest_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ca-central-1",
-        "service": "apigatewayv2",
-        "operation": "get_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ca-central-1",
-        "service": "appsync",
-        "operation": "list_graphql_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ca-central-1",
-        "service": "cognito-idp",
-        "operation": "list_user_pools",
-        "params": {
-          "MaxResults": 60
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ca-central-1",
-        "service": "cognito-identity",
-        "operation": "list_identity_pools",
-        "params": {
-          "MaxResults": 60
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ca-central-1",
-        "service": "config",
-        "operation": "list_discovered_resources",
-        "params": {
-          "resourceType": "AWS::EC2::VPC"
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ca-central-1",
-        "service": "ec2",
-        "operation": "describe_vpcs",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ca-central-1",
-        "service": "ec2",
-        "operation": "describe_subnets",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ca-central-1",
-        "service": "ec2",
-        "operation": "describe_security_groups",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ca-central-1",
-        "service": "ec2",
-        "operation": "describe_instances",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-southeast-2",
-        "service": "ec2",
-        "operation": "describe_vpcs",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-southeast-2",
-        "service": "ec2",
-        "operation": "describe_subnets",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-southeast-2",
-        "service": "ec2",
-        "operation": "describe_security_groups",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-southeast-2",
-        "service": "ec2",
-        "operation": "describe_instances",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-south-1",
-        "service": "resourcegroupstaggingapi",
-        "operation": "get_resources",
-        "params": {
-          "ResourcesPerPage": 50
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-central-1",
-        "service": "apigateway",
-        "operation": "get_rest_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-central-1",
-        "service": "apigatewayv2",
-        "operation": "get_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-central-1",
-        "service": "appsync",
-        "operation": "list_graphql_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-central-1",
-        "service": "cognito-idp",
-        "operation": "list_user_pools",
-        "params": {
-          "MaxResults": 60
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-central-1",
-        "service": "cognito-identity",
-        "operation": "list_identity_pools",
-        "params": {
-          "MaxResults": 60
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-central-1",
-        "service": "config",
-        "operation": "list_discovered_resources",
-        "params": {
-          "resourceType": "AWS::EC2::VPC"
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ca-central-1",
-        "service": "elasticache",
-        "operation": "describe_cache_clusters",
-        "params": {
-          "ShowCacheNodeInfo": false
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ca-central-1",
-        "service": "elasticache",
-        "operation": "describe_replication_groups",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-central-1",
-        "service": "ec2",
-        "operation": "describe_vpcs",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-central-1",
-        "service": "ec2",
-        "operation": "describe_subnets",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-central-1",
-        "service": "ec2",
-        "operation": "describe_security_groups",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-central-1",
-        "service": "ec2",
-        "operation": "describe_instances",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ca-central-1",
-        "service": "rds",
-        "operation": "describe_db_instances",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ca-central-1",
-        "service": "rds",
-        "operation": "describe_db_clusters",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-central-1",
-        "service": "elasticache",
-        "operation": "describe_cache_clusters",
-        "params": {
-          "ShowCacheNodeInfo": false
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-central-1",
-        "service": "elasticache",
-        "operation": "describe_replication_groups",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-southeast-2",
-        "service": "elasticache",
-        "operation": "describe_cache_clusters",
-        "params": {
-          "ShowCacheNodeInfo": false
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-southeast-2",
-        "service": "elasticache",
-        "operation": "describe_replication_groups",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ca-central-1",
-        "service": "resourcegroupstaggingapi",
-        "operation": "get_resources",
-        "params": {
-          "ResourcesPerPage": 50
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-north-1",
-        "service": "apigateway",
-        "operation": "get_rest_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-north-1",
-        "service": "apigatewayv2",
-        "operation": "get_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-north-1",
-        "service": "appsync",
-        "operation": "list_graphql_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-north-1",
-        "service": "cognito-idp",
-        "operation": "list_user_pools",
-        "params": {
-          "MaxResults": 60
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-north-1",
-        "service": "cognito-identity",
-        "operation": "list_identity_pools",
-        "params": {
-          "MaxResults": 60
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-north-1",
-        "service": "config",
-        "operation": "list_discovered_resources",
-        "params": {
-          "resourceType": "AWS::EC2::VPC"
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-north-1",
-        "service": "ec2",
-        "operation": "describe_vpcs",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-north-1",
-        "service": "ec2",
-        "operation": "describe_subnets",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-north-1",
-        "service": "ec2",
-        "operation": "describe_security_groups",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-north-1",
-        "service": "ec2",
-        "operation": "describe_instances",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-central-1",
-        "service": "rds",
-        "operation": "describe_db_instances",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-central-1",
-        "service": "rds",
-        "operation": "describe_db_clusters",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-north-1",
-        "service": "elasticache",
-        "operation": "describe_cache_clusters",
-        "params": {
-          "ShowCacheNodeInfo": false
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-north-1",
-        "service": "elasticache",
-        "operation": "describe_replication_groups",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-southeast-2",
-        "service": "rds",
-        "operation": "describe_db_instances",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-southeast-2",
-        "service": "rds",
-        "operation": "describe_db_clusters",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-north-1",
-        "service": "rds",
-        "operation": "describe_db_instances",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-north-1",
-        "service": "rds",
-        "operation": "describe_db_clusters",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-central-1",
-        "service": "resourcegroupstaggingapi",
-        "operation": "get_resources",
-        "params": {
-          "ResourcesPerPage": 50
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-1",
-        "service": "apigateway",
-        "operation": "get_rest_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-1",
-        "service": "apigatewayv2",
-        "operation": "get_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-1",
-        "service": "appsync",
-        "operation": "list_graphql_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-1",
-        "service": "cognito-idp",
-        "operation": "list_user_pools",
-        "params": {
-          "MaxResults": 60
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-1",
-        "service": "cognito-identity",
-        "operation": "list_identity_pools",
-        "params": {
-          "MaxResults": 60
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-1",
-        "service": "config",
-        "operation": "list_discovered_resources",
-        "params": {
-          "resourceType": "AWS::EC2::VPC"
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-1",
-        "service": "ec2",
-        "operation": "describe_vpcs",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-1",
-        "service": "ec2",
-        "operation": "describe_subnets",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-1",
-        "service": "ec2",
-        "operation": "describe_security_groups",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-1",
-        "service": "ec2",
-        "operation": "describe_instances",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-1",
-        "service": "elasticache",
-        "operation": "describe_cache_clusters",
-        "params": {
-          "ShowCacheNodeInfo": false
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-1",
-        "service": "elasticache",
-        "operation": "describe_replication_groups",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-southeast-2",
-        "service": "resourcegroupstaggingapi",
-        "operation": "get_resources",
-        "params": {
-          "ResourcesPerPage": 50
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-2",
-        "service": "apigateway",
-        "operation": "get_rest_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-2",
-        "service": "apigatewayv2",
-        "operation": "get_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-2",
-        "service": "appsync",
-        "operation": "list_graphql_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-2",
-        "service": "cognito-idp",
-        "operation": "list_user_pools",
-        "params": {
-          "MaxResults": 60
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-2",
-        "service": "cognito-identity",
-        "operation": "list_identity_pools",
-        "params": {
-          "MaxResults": 60
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-2",
-        "service": "config",
-        "operation": "list_discovered_resources",
-        "params": {
-          "resourceType": "AWS::EC2::VPC"
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-north-1",
-        "service": "resourcegroupstaggingapi",
-        "operation": "get_resources",
-        "params": {
-          "ResourcesPerPage": 50
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-3",
-        "service": "apigateway",
-        "operation": "get_rest_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-3",
-        "service": "apigatewayv2",
-        "operation": "get_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-3",
-        "service": "appsync",
-        "operation": "list_graphql_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-3",
-        "service": "cognito-idp",
-        "operation": "list_user_pools",
-        "params": {
-          "MaxResults": 60
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-3",
-        "service": "cognito-identity",
-        "operation": "list_identity_pools",
-        "params": {
-          "MaxResults": 60
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-3",
-        "service": "config",
-        "operation": "list_discovered_resources",
-        "params": {
-          "resourceType": "AWS::EC2::VPC"
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-3",
-        "service": "ec2",
-        "operation": "describe_vpcs",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-3",
-        "service": "ec2",
-        "operation": "describe_subnets",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-3",
-        "service": "ec2",
-        "operation": "describe_security_groups",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-3",
-        "service": "ec2",
-        "operation": "describe_instances",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-2",
-        "service": "ec2",
-        "operation": "describe_vpcs",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-2",
-        "service": "ec2",
-        "operation": "describe_subnets",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-2",
-        "service": "ec2",
-        "operation": "describe_security_groups",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-2",
-        "service": "ec2",
-        "operation": "describe_instances",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-2",
-        "service": "elasticache",
-        "operation": "describe_cache_clusters",
-        "params": {
-          "ShowCacheNodeInfo": false
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-2",
-        "service": "elasticache",
-        "operation": "describe_replication_groups",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-1",
-        "service": "rds",
-        "operation": "describe_db_instances",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-1",
-        "service": "rds",
-        "operation": "describe_db_clusters",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-3",
-        "service": "elasticache",
-        "operation": "describe_cache_clusters",
-        "params": {
-          "ShowCacheNodeInfo": false
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-3",
-        "service": "elasticache",
-        "operation": "describe_replication_groups",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-3",
-        "service": "rds",
-        "operation": "describe_db_instances",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-3",
-        "service": "rds",
-        "operation": "describe_db_clusters",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-2",
-        "service": "rds",
-        "operation": "describe_db_instances",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-2",
-        "service": "rds",
-        "operation": "describe_db_clusters",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-1",
-        "service": "resourcegroupstaggingapi",
-        "operation": "get_resources",
-        "params": {
-          "ResourcesPerPage": 50
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "sa-east-1",
-        "service": "apigateway",
-        "operation": "get_rest_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "sa-east-1",
-        "service": "apigatewayv2",
-        "operation": "get_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "sa-east-1",
-        "service": "appsync",
-        "operation": "list_graphql_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "sa-east-1",
-        "service": "cognito-idp",
-        "operation": "list_user_pools",
-        "params": {
-          "MaxResults": 60
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "sa-east-1",
-        "service": "cognito-identity",
-        "operation": "list_identity_pools",
-        "params": {
-          "MaxResults": 60
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "sa-east-1",
-        "service": "config",
-        "operation": "list_discovered_resources",
-        "params": {
-          "resourceType": "AWS::EC2::VPC"
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "sa-east-1",
-        "service": "ec2",
-        "operation": "describe_vpcs",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "sa-east-1",
-        "service": "ec2",
-        "operation": "describe_subnets",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "sa-east-1",
-        "service": "ec2",
-        "operation": "describe_security_groups",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "sa-east-1",
-        "service": "ec2",
-        "operation": "describe_instances",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
         "region": "ap-southeast-1",
         "service": "ec2",
         "operation": "describe_vpcs",
@@ -1867,9 +1121,60 @@
       },
       {
         "account_id": "783435133831",
+        "region": "ca-central-1",
+        "service": "ec2",
+        "operation": "describe_instances",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-central-1",
+        "service": "apigateway",
+        "operation": "get_rest_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ca-central-1",
+        "service": "elasticache",
+        "operation": "describe_cache_clusters",
+        "params": {
+          "ShowCacheNodeInfo": false
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-southeast-2",
+        "service": "ec2",
+        "operation": "describe_vpcs",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-central-1",
+        "service": "apigatewayv2",
+        "operation": "get_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ca-central-1",
+        "service": "elasticache",
+        "operation": "describe_replication_groups",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
         "region": "ap-southeast-1",
         "service": "ec2",
         "operation": "describe_subnets",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-central-1",
+        "service": "appsync",
+        "operation": "list_graphql_apis",
         "params": {}
       },
       {
@@ -1888,12 +1193,716 @@
       },
       {
         "account_id": "783435133831",
-        "region": "eu-west-2",
+        "region": "eu-central-1",
+        "service": "cognito-idp",
+        "operation": "list_user_pools",
+        "params": {
+          "MaxResults": 60
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-southeast-2",
+        "service": "ec2",
+        "operation": "describe_subnets",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-central-1",
+        "service": "cognito-identity",
+        "operation": "list_identity_pools",
+        "params": {
+          "MaxResults": 60
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-southeast-2",
+        "service": "ec2",
+        "operation": "describe_security_groups",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ca-central-1",
+        "service": "rds",
+        "operation": "describe_db_instances",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-southeast-2",
+        "service": "ec2",
+        "operation": "describe_instances",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-central-1",
+        "service": "config",
+        "operation": "list_discovered_resources",
+        "params": {
+          "resourceType": "AWS::EC2::VPC"
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ca-central-1",
+        "service": "rds",
+        "operation": "describe_db_clusters",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-central-1",
+        "service": "ec2",
+        "operation": "describe_vpcs",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-southeast-1",
+        "service": "elasticache",
+        "operation": "describe_cache_clusters",
+        "params": {
+          "ShowCacheNodeInfo": false
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ca-central-1",
         "service": "resourcegroupstaggingapi",
         "operation": "get_resources",
         "params": {
           "ResourcesPerPage": 50
         }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-central-1",
+        "service": "ec2",
+        "operation": "describe_subnets",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-central-1",
+        "service": "ec2",
+        "operation": "describe_security_groups",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-north-1",
+        "service": "apigateway",
+        "operation": "get_rest_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-central-1",
+        "service": "ec2",
+        "operation": "describe_instances",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-southeast-2",
+        "service": "elasticache",
+        "operation": "describe_cache_clusters",
+        "params": {
+          "ShowCacheNodeInfo": false
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-north-1",
+        "service": "apigatewayv2",
+        "operation": "get_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-southeast-1",
+        "service": "elasticache",
+        "operation": "describe_replication_groups",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-north-1",
+        "service": "appsync",
+        "operation": "list_graphql_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-southeast-2",
+        "service": "elasticache",
+        "operation": "describe_replication_groups",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-central-1",
+        "service": "elasticache",
+        "operation": "describe_cache_clusters",
+        "params": {
+          "ShowCacheNodeInfo": false
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-north-1",
+        "service": "cognito-idp",
+        "operation": "list_user_pools",
+        "params": {
+          "MaxResults": 60
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-central-1",
+        "service": "elasticache",
+        "operation": "describe_replication_groups",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-north-1",
+        "service": "cognito-identity",
+        "operation": "list_identity_pools",
+        "params": {
+          "MaxResults": 60
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-north-1",
+        "service": "config",
+        "operation": "list_discovered_resources",
+        "params": {
+          "resourceType": "AWS::EC2::VPC"
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-north-1",
+        "service": "ec2",
+        "operation": "describe_vpcs",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-central-1",
+        "service": "rds",
+        "operation": "describe_db_instances",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-southeast-1",
+        "service": "rds",
+        "operation": "describe_db_instances",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-north-1",
+        "service": "ec2",
+        "operation": "describe_subnets",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-central-1",
+        "service": "rds",
+        "operation": "describe_db_clusters",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-southeast-2",
+        "service": "rds",
+        "operation": "describe_db_instances",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-north-1",
+        "service": "ec2",
+        "operation": "describe_security_groups",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-north-1",
+        "service": "ec2",
+        "operation": "describe_instances",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-southeast-2",
+        "service": "rds",
+        "operation": "describe_db_clusters",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-southeast-1",
+        "service": "rds",
+        "operation": "describe_db_clusters",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-north-1",
+        "service": "elasticache",
+        "operation": "describe_cache_clusters",
+        "params": {
+          "ShowCacheNodeInfo": false
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-central-1",
+        "service": "resourcegroupstaggingapi",
+        "operation": "get_resources",
+        "params": {
+          "ResourcesPerPage": 50
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-north-1",
+        "service": "elasticache",
+        "operation": "describe_replication_groups",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-1",
+        "service": "apigateway",
+        "operation": "get_rest_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-1",
+        "service": "apigatewayv2",
+        "operation": "get_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-1",
+        "service": "appsync",
+        "operation": "list_graphql_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-1",
+        "service": "cognito-idp",
+        "operation": "list_user_pools",
+        "params": {
+          "MaxResults": 60
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-1",
+        "service": "cognito-identity",
+        "operation": "list_identity_pools",
+        "params": {
+          "MaxResults": 60
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-southeast-2",
+        "service": "resourcegroupstaggingapi",
+        "operation": "get_resources",
+        "params": {
+          "ResourcesPerPage": 50
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-north-1",
+        "service": "rds",
+        "operation": "describe_db_instances",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-1",
+        "service": "config",
+        "operation": "list_discovered_resources",
+        "params": {
+          "resourceType": "AWS::EC2::VPC"
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "ap-southeast-1",
+        "service": "resourcegroupstaggingapi",
+        "operation": "get_resources",
+        "params": {
+          "ResourcesPerPage": 50
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-2",
+        "service": "apigateway",
+        "operation": "get_rest_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-north-1",
+        "service": "rds",
+        "operation": "describe_db_clusters",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-1",
+        "service": "ec2",
+        "operation": "describe_vpcs",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-2",
+        "service": "apigatewayv2",
+        "operation": "get_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-2",
+        "service": "appsync",
+        "operation": "list_graphql_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-3",
+        "service": "apigateway",
+        "operation": "get_rest_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-1",
+        "service": "ec2",
+        "operation": "describe_subnets",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-2",
+        "service": "cognito-idp",
+        "operation": "list_user_pools",
+        "params": {
+          "MaxResults": 60
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-3",
+        "service": "apigatewayv2",
+        "operation": "get_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-1",
+        "service": "ec2",
+        "operation": "describe_security_groups",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-1",
+        "service": "ec2",
+        "operation": "describe_instances",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-3",
+        "service": "appsync",
+        "operation": "list_graphql_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-2",
+        "service": "cognito-identity",
+        "operation": "list_identity_pools",
+        "params": {
+          "MaxResults": 60
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-2",
+        "service": "config",
+        "operation": "list_discovered_resources",
+        "params": {
+          "resourceType": "AWS::EC2::VPC"
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-3",
+        "service": "cognito-idp",
+        "operation": "list_user_pools",
+        "params": {
+          "MaxResults": 60
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-north-1",
+        "service": "resourcegroupstaggingapi",
+        "operation": "get_resources",
+        "params": {
+          "ResourcesPerPage": 50
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-3",
+        "service": "cognito-identity",
+        "operation": "list_identity_pools",
+        "params": {
+          "MaxResults": 60
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-1",
+        "service": "elasticache",
+        "operation": "describe_cache_clusters",
+        "params": {
+          "ShowCacheNodeInfo": false
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-2",
+        "service": "ec2",
+        "operation": "describe_vpcs",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-3",
+        "service": "config",
+        "operation": "list_discovered_resources",
+        "params": {
+          "resourceType": "AWS::EC2::VPC"
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-1",
+        "service": "elasticache",
+        "operation": "describe_replication_groups",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "sa-east-1",
+        "service": "apigateway",
+        "operation": "get_rest_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-2",
+        "service": "ec2",
+        "operation": "describe_subnets",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "sa-east-1",
+        "service": "apigatewayv2",
+        "operation": "get_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-2",
+        "service": "ec2",
+        "operation": "describe_security_groups",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-3",
+        "service": "ec2",
+        "operation": "describe_vpcs",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-2",
+        "service": "ec2",
+        "operation": "describe_instances",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "sa-east-1",
+        "service": "appsync",
+        "operation": "list_graphql_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-3",
+        "service": "ec2",
+        "operation": "describe_subnets",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "sa-east-1",
+        "service": "cognito-idp",
+        "operation": "list_user_pools",
+        "params": {
+          "MaxResults": 60
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-3",
+        "service": "ec2",
+        "operation": "describe_security_groups",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-3",
+        "service": "ec2",
+        "operation": "describe_instances",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-1",
+        "service": "rds",
+        "operation": "describe_db_instances",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-2",
+        "service": "elasticache",
+        "operation": "describe_cache_clusters",
+        "params": {
+          "ShowCacheNodeInfo": false
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "sa-east-1",
+        "service": "cognito-identity",
+        "operation": "list_identity_pools",
+        "params": {
+          "MaxResults": 60
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-1",
+        "service": "rds",
+        "operation": "describe_db_clusters",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-2",
+        "service": "elasticache",
+        "operation": "describe_replication_groups",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "sa-east-1",
+        "service": "config",
+        "operation": "list_discovered_resources",
+        "params": {
+          "resourceType": "AWS::EC2::VPC"
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-3",
+        "service": "elasticache",
+        "operation": "describe_cache_clusters",
+        "params": {
+          "ShowCacheNodeInfo": false
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-3",
+        "service": "elasticache",
+        "operation": "describe_replication_groups",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "sa-east-1",
+        "service": "ec2",
+        "operation": "describe_vpcs",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-2",
+        "service": "rds",
+        "operation": "describe_db_instances",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-1",
+        "service": "resourcegroupstaggingapi",
+        "operation": "get_resources",
+        "params": {
+          "ResourcesPerPage": 50
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "sa-east-1",
+        "service": "ec2",
+        "operation": "describe_subnets",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-2",
+        "service": "rds",
+        "operation": "describe_db_clusters",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "sa-east-1",
+        "service": "ec2",
+        "operation": "describe_security_groups",
+        "params": {}
       },
       {
         "account_id": "783435133831",
@@ -1904,9 +1913,23 @@
       },
       {
         "account_id": "783435133831",
+        "region": "sa-east-1",
+        "service": "ec2",
+        "operation": "describe_instances",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
         "region": "us-east-1",
         "service": "apigatewayv2",
         "operation": "get_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-3",
+        "service": "rds",
+        "operation": "describe_db_instances",
         "params": {}
       },
       {
@@ -1923,6 +1946,13 @@
         "region": "us-east-1",
         "service": "appsync",
         "operation": "list_graphql_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-3",
+        "service": "rds",
+        "operation": "describe_db_clusters",
         "params": {}
       },
       {
@@ -1974,6 +2004,24 @@
       },
       {
         "account_id": "783435133831",
+        "region": "sa-east-1",
+        "service": "elasticache",
+        "operation": "describe_cache_clusters",
+        "params": {
+          "ShowCacheNodeInfo": false
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-2",
+        "service": "resourcegroupstaggingapi",
+        "operation": "get_resources",
+        "params": {
+          "ResourcesPerPage": 50
+        }
+      },
+      {
+        "account_id": "783435133831",
         "region": "us-east-1",
         "service": "cognito-identity",
         "operation": "describe_identity_pool",
@@ -1992,9 +2040,46 @@
       },
       {
         "account_id": "783435133831",
+        "region": "us-east-2",
+        "service": "apigateway",
+        "operation": "get_rest_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "sa-east-1",
+        "service": "elasticache",
+        "operation": "describe_replication_groups",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "us-east-2",
+        "service": "apigatewayv2",
+        "operation": "get_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
         "region": "us-east-1",
         "service": "ec2",
         "operation": "describe_vpcs",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "eu-west-3",
+        "service": "resourcegroupstaggingapi",
+        "operation": "get_resources",
+        "params": {
+          "ResourcesPerPage": 50
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "us-east-2",
+        "service": "appsync",
+        "operation": "list_graphql_apis",
         "params": {}
       },
       {
@@ -2013,6 +2098,15 @@
       },
       {
         "account_id": "783435133831",
+        "region": "us-east-2",
+        "service": "cognito-idp",
+        "operation": "list_user_pools",
+        "params": {
+          "MaxResults": 60
+        }
+      },
+      {
+        "account_id": "783435133831",
         "region": "us-east-1",
         "service": "ec2",
         "operation": "describe_instances",
@@ -2020,74 +2114,10 @@
       },
       {
         "account_id": "783435133831",
-        "region": "us-east-1",
-        "service": "elasticache",
-        "operation": "describe_cache_clusters",
-        "params": {
-          "ShowCacheNodeInfo": false
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "us-east-1",
-        "service": "elasticache",
-        "operation": "describe_replication_groups",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-southeast-1",
-        "service": "elasticache",
-        "operation": "describe_cache_clusters",
-        "params": {
-          "ShowCacheNodeInfo": false
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-southeast-1",
-        "service": "elasticache",
-        "operation": "describe_replication_groups",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "eu-west-3",
-        "service": "resourcegroupstaggingapi",
-        "operation": "get_resources",
-        "params": {
-          "ResourcesPerPage": 50
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "us-east-2",
+        "region": "us-west-1",
         "service": "apigateway",
         "operation": "get_rest_apis",
         "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "us-east-2",
-        "service": "apigatewayv2",
-        "operation": "get_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "us-east-2",
-        "service": "appsync",
-        "operation": "list_graphql_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "us-east-2",
-        "service": "cognito-idp",
-        "operation": "list_user_pools",
-        "params": {
-          "MaxResults": 60
-        }
       },
       {
         "account_id": "783435133831",
@@ -2100,7 +2130,106 @@
       },
       {
         "account_id": "783435133831",
+        "region": "us-west-1",
+        "service": "apigatewayv2",
+        "operation": "get_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
         "region": "us-east-2",
+        "service": "config",
+        "operation": "list_discovered_resources",
+        "params": {
+          "resourceType": "AWS::EC2::VPC"
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "us-west-1",
+        "service": "appsync",
+        "operation": "list_graphql_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "us-east-1",
+        "service": "elasticache",
+        "operation": "describe_cache_clusters",
+        "params": {
+          "ShowCacheNodeInfo": false
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "us-east-2",
+        "service": "ec2",
+        "operation": "describe_vpcs",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "us-west-1",
+        "service": "cognito-idp",
+        "operation": "list_user_pools",
+        "params": {
+          "MaxResults": 60
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "sa-east-1",
+        "service": "rds",
+        "operation": "describe_db_instances",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "us-east-1",
+        "service": "elasticache",
+        "operation": "describe_replication_groups",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "us-east-2",
+        "service": "ec2",
+        "operation": "describe_subnets",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "us-west-1",
+        "service": "cognito-identity",
+        "operation": "list_identity_pools",
+        "params": {
+          "MaxResults": 60
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "us-east-2",
+        "service": "ec2",
+        "operation": "describe_security_groups",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "sa-east-1",
+        "service": "rds",
+        "operation": "describe_db_clusters",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "us-east-2",
+        "service": "ec2",
+        "operation": "describe_instances",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "us-west-1",
         "service": "config",
         "operation": "list_discovered_resources",
         "params": {
@@ -2120,27 +2249,57 @@
       {
         "account_id": "783435133831",
         "region": "us-east-2",
+        "service": "elasticache",
+        "operation": "describe_cache_clusters",
+        "params": {
+          "ShowCacheNodeInfo": false
+        }
+      },
+      {
+        "account_id": "783435133831",
+        "region": "us-east-1",
+        "service": "rds",
+        "operation": "describe_db_instances",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "us-west-1",
         "service": "ec2",
         "operation": "describe_vpcs",
         "params": {}
       },
       {
         "account_id": "783435133831",
+        "region": "us-east-1",
+        "service": "rds",
+        "operation": "describe_db_clusters",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
         "region": "us-east-2",
+        "service": "elasticache",
+        "operation": "describe_replication_groups",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "us-west-1",
         "service": "ec2",
         "operation": "describe_subnets",
         "params": {}
       },
       {
         "account_id": "783435133831",
-        "region": "us-east-2",
+        "region": "us-west-1",
         "service": "ec2",
         "operation": "describe_security_groups",
         "params": {}
       },
       {
         "account_id": "783435133831",
-        "region": "us-east-2",
+        "region": "us-west-1",
         "service": "ec2",
         "operation": "describe_instances",
         "params": {}
@@ -2148,94 +2307,6 @@
       {
         "account_id": "783435133831",
         "region": "sa-east-1",
-        "service": "elasticache",
-        "operation": "describe_cache_clusters",
-        "params": {
-          "ShowCacheNodeInfo": false
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "sa-east-1",
-        "service": "elasticache",
-        "operation": "describe_replication_groups",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "us-east-1",
-        "service": "rds",
-        "operation": "describe_db_instances",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "us-east-1",
-        "service": "rds",
-        "operation": "describe_db_clusters",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "us-east-2",
-        "service": "elasticache",
-        "operation": "describe_cache_clusters",
-        "params": {
-          "ShowCacheNodeInfo": false
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "us-east-2",
-        "service": "elasticache",
-        "operation": "describe_replication_groups",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-southeast-1",
-        "service": "rds",
-        "operation": "describe_db_instances",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "ap-southeast-1",
-        "service": "rds",
-        "operation": "describe_db_clusters",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "us-east-2",
-        "service": "rds",
-        "operation": "describe_db_instances",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "us-east-2",
-        "service": "rds",
-        "operation": "describe_db_clusters",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "sa-east-1",
-        "service": "rds",
-        "operation": "describe_db_instances",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "sa-east-1",
-        "service": "rds",
-        "operation": "describe_db_clusters",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "us-east-2",
         "service": "resourcegroupstaggingapi",
         "operation": "get_resources",
         "params": {
@@ -2244,78 +2315,9 @@
       },
       {
         "account_id": "783435133831",
-        "region": "us-west-1",
-        "service": "apigateway",
-        "operation": "get_rest_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "us-west-1",
-        "service": "apigatewayv2",
-        "operation": "get_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "us-west-1",
-        "service": "appsync",
-        "operation": "list_graphql_apis",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "us-west-1",
-        "service": "cognito-idp",
-        "operation": "list_user_pools",
-        "params": {
-          "MaxResults": 60
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "us-west-1",
-        "service": "cognito-identity",
-        "operation": "list_identity_pools",
-        "params": {
-          "MaxResults": 60
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "us-west-1",
-        "service": "config",
-        "operation": "list_discovered_resources",
-        "params": {
-          "resourceType": "AWS::EC2::VPC"
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "us-west-1",
-        "service": "ec2",
-        "operation": "describe_vpcs",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "us-west-1",
-        "service": "ec2",
-        "operation": "describe_subnets",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "us-west-1",
-        "service": "ec2",
-        "operation": "describe_security_groups",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "us-west-1",
-        "service": "ec2",
-        "operation": "describe_instances",
+        "region": "us-east-2",
+        "service": "rds",
+        "operation": "describe_db_instances",
         "params": {}
       },
       {
@@ -2345,6 +2347,13 @@
       },
       {
         "account_id": "783435133831",
+        "region": "us-east-2",
+        "service": "rds",
+        "operation": "describe_db_clusters",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
         "region": "us-west-2",
         "service": "apigatewayv2",
         "operation": "get_apis",
@@ -2352,9 +2361,25 @@
       },
       {
         "account_id": "783435133831",
+        "region": "us-west-1",
+        "service": "elasticache",
+        "operation": "describe_cache_clusters",
+        "params": {
+          "ShowCacheNodeInfo": false
+        }
+      },
+      {
+        "account_id": "783435133831",
         "region": "us-west-2",
         "service": "appsync",
         "operation": "list_graphql_apis",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "us-west-1",
+        "service": "elasticache",
+        "operation": "describe_replication_groups",
         "params": {}
       },
       {
@@ -2377,6 +2402,15 @@
       },
       {
         "account_id": "783435133831",
+        "region": "us-east-2",
+        "service": "resourcegroupstaggingapi",
+        "operation": "get_resources",
+        "params": {
+          "ResourcesPerPage": 50
+        }
+      },
+      {
+        "account_id": "783435133831",
         "region": "us-west-2",
         "service": "config",
         "operation": "list_discovered_resources",
@@ -2393,9 +2427,23 @@
       },
       {
         "account_id": "783435133831",
+        "region": "us-west-1",
+        "service": "rds",
+        "operation": "describe_db_instances",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
         "region": "us-west-2",
         "service": "ec2",
         "operation": "describe_subnets",
+        "params": {}
+      },
+      {
+        "account_id": "783435133831",
+        "region": "us-west-1",
+        "service": "rds",
+        "operation": "describe_db_clusters",
         "params": {}
       },
       {
@@ -2414,31 +2462,6 @@
       },
       {
         "account_id": "783435133831",
-        "region": "us-west-1",
-        "service": "elasticache",
-        "operation": "describe_cache_clusters",
-        "params": {
-          "ShowCacheNodeInfo": false
-        }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "us-west-1",
-        "service": "elasticache",
-        "operation": "describe_replication_groups",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "sa-east-1",
-        "service": "resourcegroupstaggingapi",
-        "operation": "get_resources",
-        "params": {
-          "ResourcesPerPage": 50
-        }
-      },
-      {
-        "account_id": "783435133831",
         "region": "us-west-2",
         "service": "elasticache",
         "operation": "describe_cache_clusters",
@@ -2455,26 +2478,12 @@
       },
       {
         "account_id": "783435133831",
-        "region": "ap-southeast-1",
+        "region": "us-west-1",
         "service": "resourcegroupstaggingapi",
         "operation": "get_resources",
         "params": {
           "ResourcesPerPage": 50
         }
-      },
-      {
-        "account_id": "783435133831",
-        "region": "us-west-1",
-        "service": "rds",
-        "operation": "describe_db_instances",
-        "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "us-west-1",
-        "service": "rds",
-        "operation": "describe_db_clusters",
-        "params": {}
       },
       {
         "account_id": "783435133831",
@@ -2489,15 +2498,6 @@
         "service": "rds",
         "operation": "describe_db_clusters",
         "params": {}
-      },
-      {
-        "account_id": "783435133831",
-        "region": "us-west-1",
-        "service": "resourcegroupstaggingapi",
-        "operation": "get_resources",
-        "params": {
-          "ResourcesPerPage": 50
-        }
       },
       {
         "account_id": "783435133831",
@@ -2518,7 +2518,7 @@
       "unscanned_account_ids": []
     },
     "cross_account_edges": 0,
-    "scanned_at": "2026-04-08T14:27:55.419517+00:00",
+    "scanned_at": "2026-04-13T01:28:37.355430+00:00",
     "source_path": "stackmap-aws-output.json"
   },
   "nodes": [
@@ -2833,6 +2833,149 @@
         "weight": 2,
         "account_id": "783435133831",
         "region": "ap-northeast-2",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:783435133831:ap-south-1:aws_vpc:vpc-021b7858f4a83f3f8",
+      "name": "vpc-021b7858f4a83f3f8",
+      "resource_type": "aws_vpc",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "vpc-021b7858f4a83f3f8",
+        "arn": "arn:aws:ec2:ap-south-1:783435133831:vpc/vpc-021b7858f4a83f3f8",
+        "cidr_block": "172.31.0.0/16",
+        "state": "available"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "783435133831",
+        "region": "ap-south-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 3,
+        "account_id": "783435133831",
+        "region": "ap-south-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:783435133831:ap-south-1:aws_subnet:subnet-0ee1bfd0cbb98411e",
+      "name": "subnet-0ee1bfd0cbb98411e",
+      "resource_type": "aws_subnet",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "subnet-0ee1bfd0cbb98411e",
+        "arn": "arn:aws:ec2:ap-south-1:783435133831:subnet/subnet-0ee1bfd0cbb98411e",
+        "vpc_id": "vpc-021b7858f4a83f3f8",
+        "cidr_block": "172.31.32.0/20",
+        "availability_zone": "ap-south-1a"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "783435133831",
+        "region": "ap-south-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "783435133831",
+        "region": "ap-south-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:783435133831:ap-south-1:aws_subnet:subnet-08f1e811ce001ca97",
+      "name": "subnet-08f1e811ce001ca97",
+      "resource_type": "aws_subnet",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "subnet-08f1e811ce001ca97",
+        "arn": "arn:aws:ec2:ap-south-1:783435133831:subnet/subnet-08f1e811ce001ca97",
+        "vpc_id": "vpc-021b7858f4a83f3f8",
+        "cidr_block": "172.31.0.0/20",
+        "availability_zone": "ap-south-1b"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "783435133831",
+        "region": "ap-south-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "783435133831",
+        "region": "ap-south-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:783435133831:ap-south-1:aws_subnet:subnet-00f4384b3d35d3857",
+      "name": "subnet-00f4384b3d35d3857",
+      "resource_type": "aws_subnet",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "subnet-00f4384b3d35d3857",
+        "arn": "arn:aws:ec2:ap-south-1:783435133831:subnet/subnet-00f4384b3d35d3857",
+        "vpc_id": "vpc-021b7858f4a83f3f8",
+        "cidr_block": "172.31.16.0/20",
+        "availability_zone": "ap-south-1c"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "783435133831",
+        "region": "ap-south-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "783435133831",
+        "region": "ap-south-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:783435133831:ap-south-1:aws_security_group:sg-068f620edfc381839",
+      "name": "default",
+      "resource_type": "aws_security_group",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "sg-068f620edfc381839",
+        "arn": "arn:aws:ec2:ap-south-1:783435133831:security-group/sg-068f620edfc381839",
+        "vpc_id": "vpc-021b7858f4a83f3f8",
+        "description": "default VPC security group"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "783435133831",
+        "region": "ap-south-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "783435133831",
+        "region": "ap-south-1",
         "source_type": "aws_live",
         "source_kind": "live_scan"
       }
@@ -4013,149 +4156,6 @@
       }
     },
     {
-      "id": "aws:783435133831:ap-south-1:aws_vpc:vpc-021b7858f4a83f3f8",
-      "name": "vpc-021b7858f4a83f3f8",
-      "resource_type": "aws_vpc",
-      "provider": "aws",
-      "category": "network",
-      "properties": {
-        "id": "vpc-021b7858f4a83f3f8",
-        "arn": "arn:aws:ec2:ap-south-1:783435133831:vpc/vpc-021b7858f4a83f3f8",
-        "cidr_block": "172.31.0.0/16",
-        "state": "available"
-      },
-      "tags": {},
-      "metadata": {
-        "account_id": "783435133831",
-        "region": "ap-south-1",
-        "source_type": "aws_live",
-        "source_kind": "live_scan"
-      },
-      "position_hint": {
-        "tier": "api",
-        "weight": 3,
-        "account_id": "783435133831",
-        "region": "ap-south-1",
-        "source_type": "aws_live",
-        "source_kind": "live_scan"
-      }
-    },
-    {
-      "id": "aws:783435133831:ap-south-1:aws_subnet:subnet-0ee1bfd0cbb98411e",
-      "name": "subnet-0ee1bfd0cbb98411e",
-      "resource_type": "aws_subnet",
-      "provider": "aws",
-      "category": "network",
-      "properties": {
-        "id": "subnet-0ee1bfd0cbb98411e",
-        "arn": "arn:aws:ec2:ap-south-1:783435133831:subnet/subnet-0ee1bfd0cbb98411e",
-        "vpc_id": "vpc-021b7858f4a83f3f8",
-        "cidr_block": "172.31.32.0/20",
-        "availability_zone": "ap-south-1a"
-      },
-      "tags": {},
-      "metadata": {
-        "account_id": "783435133831",
-        "region": "ap-south-1",
-        "source_type": "aws_live",
-        "source_kind": "live_scan"
-      },
-      "position_hint": {
-        "tier": "api",
-        "weight": 2,
-        "account_id": "783435133831",
-        "region": "ap-south-1",
-        "source_type": "aws_live",
-        "source_kind": "live_scan"
-      }
-    },
-    {
-      "id": "aws:783435133831:ap-south-1:aws_subnet:subnet-08f1e811ce001ca97",
-      "name": "subnet-08f1e811ce001ca97",
-      "resource_type": "aws_subnet",
-      "provider": "aws",
-      "category": "network",
-      "properties": {
-        "id": "subnet-08f1e811ce001ca97",
-        "arn": "arn:aws:ec2:ap-south-1:783435133831:subnet/subnet-08f1e811ce001ca97",
-        "vpc_id": "vpc-021b7858f4a83f3f8",
-        "cidr_block": "172.31.0.0/20",
-        "availability_zone": "ap-south-1b"
-      },
-      "tags": {},
-      "metadata": {
-        "account_id": "783435133831",
-        "region": "ap-south-1",
-        "source_type": "aws_live",
-        "source_kind": "live_scan"
-      },
-      "position_hint": {
-        "tier": "api",
-        "weight": 2,
-        "account_id": "783435133831",
-        "region": "ap-south-1",
-        "source_type": "aws_live",
-        "source_kind": "live_scan"
-      }
-    },
-    {
-      "id": "aws:783435133831:ap-south-1:aws_subnet:subnet-00f4384b3d35d3857",
-      "name": "subnet-00f4384b3d35d3857",
-      "resource_type": "aws_subnet",
-      "provider": "aws",
-      "category": "network",
-      "properties": {
-        "id": "subnet-00f4384b3d35d3857",
-        "arn": "arn:aws:ec2:ap-south-1:783435133831:subnet/subnet-00f4384b3d35d3857",
-        "vpc_id": "vpc-021b7858f4a83f3f8",
-        "cidr_block": "172.31.16.0/20",
-        "availability_zone": "ap-south-1c"
-      },
-      "tags": {},
-      "metadata": {
-        "account_id": "783435133831",
-        "region": "ap-south-1",
-        "source_type": "aws_live",
-        "source_kind": "live_scan"
-      },
-      "position_hint": {
-        "tier": "api",
-        "weight": 2,
-        "account_id": "783435133831",
-        "region": "ap-south-1",
-        "source_type": "aws_live",
-        "source_kind": "live_scan"
-      }
-    },
-    {
-      "id": "aws:783435133831:ap-south-1:aws_security_group:sg-068f620edfc381839",
-      "name": "default",
-      "resource_type": "aws_security_group",
-      "provider": "aws",
-      "category": "network",
-      "properties": {
-        "id": "sg-068f620edfc381839",
-        "arn": "arn:aws:ec2:ap-south-1:783435133831:security-group/sg-068f620edfc381839",
-        "vpc_id": "vpc-021b7858f4a83f3f8",
-        "description": "default VPC security group"
-      },
-      "tags": {},
-      "metadata": {
-        "account_id": "783435133831",
-        "region": "ap-south-1",
-        "source_type": "aws_live",
-        "source_kind": "live_scan"
-      },
-      "position_hint": {
-        "tier": "api",
-        "weight": 2,
-        "account_id": "783435133831",
-        "region": "ap-south-1",
-        "source_type": "aws_live",
-        "source_kind": "live_scan"
-      }
-    },
-    {
       "id": "aws:783435133831:ca-central-1:aws_vpc:vpc-0d406d1b7a1d710d2",
       "name": "vpc-0d406d1b7a1d710d2",
       "resource_type": "aws_vpc",
@@ -4580,6 +4580,149 @@
         "weight": 2,
         "account_id": "783435133831",
         "region": "ap-southeast-2",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:783435133831:ap-southeast-1:aws_vpc:vpc-0d703e19b9b93243f",
+      "name": "vpc-0d703e19b9b93243f",
+      "resource_type": "aws_vpc",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "vpc-0d703e19b9b93243f",
+        "arn": "arn:aws:ec2:ap-southeast-1:783435133831:vpc/vpc-0d703e19b9b93243f",
+        "cidr_block": "172.31.0.0/16",
+        "state": "available"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "783435133831",
+        "region": "ap-southeast-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 3,
+        "account_id": "783435133831",
+        "region": "ap-southeast-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:783435133831:ap-southeast-1:aws_subnet:subnet-0f58c6fe764af0dcf",
+      "name": "subnet-0f58c6fe764af0dcf",
+      "resource_type": "aws_subnet",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "subnet-0f58c6fe764af0dcf",
+        "arn": "arn:aws:ec2:ap-southeast-1:783435133831:subnet/subnet-0f58c6fe764af0dcf",
+        "vpc_id": "vpc-0d703e19b9b93243f",
+        "cidr_block": "172.31.0.0/20",
+        "availability_zone": "ap-southeast-1c"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "783435133831",
+        "region": "ap-southeast-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "783435133831",
+        "region": "ap-southeast-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:783435133831:ap-southeast-1:aws_subnet:subnet-07f341a63c5ff19d2",
+      "name": "subnet-07f341a63c5ff19d2",
+      "resource_type": "aws_subnet",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "subnet-07f341a63c5ff19d2",
+        "arn": "arn:aws:ec2:ap-southeast-1:783435133831:subnet/subnet-07f341a63c5ff19d2",
+        "vpc_id": "vpc-0d703e19b9b93243f",
+        "cidr_block": "172.31.32.0/20",
+        "availability_zone": "ap-southeast-1a"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "783435133831",
+        "region": "ap-southeast-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "783435133831",
+        "region": "ap-southeast-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:783435133831:ap-southeast-1:aws_subnet:subnet-0d8f0a74a9a53f7f2",
+      "name": "subnet-0d8f0a74a9a53f7f2",
+      "resource_type": "aws_subnet",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "subnet-0d8f0a74a9a53f7f2",
+        "arn": "arn:aws:ec2:ap-southeast-1:783435133831:subnet/subnet-0d8f0a74a9a53f7f2",
+        "vpc_id": "vpc-0d703e19b9b93243f",
+        "cidr_block": "172.31.16.0/20",
+        "availability_zone": "ap-southeast-1b"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "783435133831",
+        "region": "ap-southeast-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "783435133831",
+        "region": "ap-southeast-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:783435133831:ap-southeast-1:aws_security_group:sg-024d9e2f4781f3f7c",
+      "name": "default",
+      "resource_type": "aws_security_group",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "sg-024d9e2f4781f3f7c",
+        "arn": "arn:aws:ec2:ap-southeast-1:783435133831:security-group/sg-024d9e2f4781f3f7c",
+        "vpc_id": "vpc-0d703e19b9b93243f",
+        "description": "default VPC security group"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "783435133831",
+        "region": "ap-southeast-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "783435133831",
+        "region": "ap-southeast-1",
         "source_type": "aws_live",
         "source_kind": "live_scan"
       }
@@ -5157,21 +5300,21 @@
       }
     },
     {
-      "id": "aws:783435133831:us-east-2:aws_vpc:vpc-0d1423d52bc9a53cc",
-      "name": "vpc-0d1423d52bc9a53cc",
+      "id": "aws:783435133831:sa-east-1:aws_vpc:vpc-0bfd231f37093f997",
+      "name": "vpc-0bfd231f37093f997",
       "resource_type": "aws_vpc",
       "provider": "aws",
       "category": "network",
       "properties": {
-        "id": "vpc-0d1423d52bc9a53cc",
-        "arn": "arn:aws:ec2:us-east-2:783435133831:vpc/vpc-0d1423d52bc9a53cc",
+        "id": "vpc-0bfd231f37093f997",
+        "arn": "arn:aws:ec2:sa-east-1:783435133831:vpc/vpc-0bfd231f37093f997",
         "cidr_block": "172.31.0.0/16",
         "state": "available"
       },
       "tags": {},
       "metadata": {
         "account_id": "783435133831",
-        "region": "us-east-2",
+        "region": "sa-east-1",
         "source_type": "aws_live",
         "source_kind": "live_scan"
       },
@@ -5179,86 +5322,28 @@
         "tier": "api",
         "weight": 3,
         "account_id": "783435133831",
-        "region": "us-east-2",
+        "region": "sa-east-1",
         "source_type": "aws_live",
         "source_kind": "live_scan"
       }
     },
     {
-      "id": "aws:783435133831:us-east-2:aws_subnet:subnet-0403a2bd2278caf6c",
-      "name": "subnet-0403a2bd2278caf6c",
+      "id": "aws:783435133831:sa-east-1:aws_subnet:subnet-0818fd5f1dce88be7",
+      "name": "subnet-0818fd5f1dce88be7",
       "resource_type": "aws_subnet",
       "provider": "aws",
       "category": "network",
       "properties": {
-        "id": "subnet-0403a2bd2278caf6c",
-        "arn": "arn:aws:ec2:us-east-2:783435133831:subnet/subnet-0403a2bd2278caf6c",
-        "vpc_id": "vpc-0d1423d52bc9a53cc",
-        "cidr_block": "172.31.16.0/20",
-        "availability_zone": "us-east-2b"
-      },
-      "tags": {},
-      "metadata": {
-        "account_id": "783435133831",
-        "region": "us-east-2",
-        "source_type": "aws_live",
-        "source_kind": "live_scan"
-      },
-      "position_hint": {
-        "tier": "api",
-        "weight": 2,
-        "account_id": "783435133831",
-        "region": "us-east-2",
-        "source_type": "aws_live",
-        "source_kind": "live_scan"
-      }
-    },
-    {
-      "id": "aws:783435133831:us-east-2:aws_subnet:subnet-08fe3e4f78d94cc8c",
-      "name": "subnet-08fe3e4f78d94cc8c",
-      "resource_type": "aws_subnet",
-      "provider": "aws",
-      "category": "network",
-      "properties": {
-        "id": "subnet-08fe3e4f78d94cc8c",
-        "arn": "arn:aws:ec2:us-east-2:783435133831:subnet/subnet-08fe3e4f78d94cc8c",
-        "vpc_id": "vpc-0d1423d52bc9a53cc",
-        "cidr_block": "172.31.0.0/20",
-        "availability_zone": "us-east-2a"
-      },
-      "tags": {},
-      "metadata": {
-        "account_id": "783435133831",
-        "region": "us-east-2",
-        "source_type": "aws_live",
-        "source_kind": "live_scan"
-      },
-      "position_hint": {
-        "tier": "api",
-        "weight": 2,
-        "account_id": "783435133831",
-        "region": "us-east-2",
-        "source_type": "aws_live",
-        "source_kind": "live_scan"
-      }
-    },
-    {
-      "id": "aws:783435133831:us-east-2:aws_subnet:subnet-0eb86f3df0d16c98b",
-      "name": "subnet-0eb86f3df0d16c98b",
-      "resource_type": "aws_subnet",
-      "provider": "aws",
-      "category": "network",
-      "properties": {
-        "id": "subnet-0eb86f3df0d16c98b",
-        "arn": "arn:aws:ec2:us-east-2:783435133831:subnet/subnet-0eb86f3df0d16c98b",
-        "vpc_id": "vpc-0d1423d52bc9a53cc",
+        "id": "subnet-0818fd5f1dce88be7",
+        "arn": "arn:aws:ec2:sa-east-1:783435133831:subnet/subnet-0818fd5f1dce88be7",
+        "vpc_id": "vpc-0bfd231f37093f997",
         "cidr_block": "172.31.32.0/20",
-        "availability_zone": "us-east-2c"
+        "availability_zone": "sa-east-1c"
       },
       "tags": {},
       "metadata": {
         "account_id": "783435133831",
-        "region": "us-east-2",
+        "region": "sa-east-1",
         "source_type": "aws_live",
         "source_kind": "live_scan"
       },
@@ -5266,27 +5351,85 @@
         "tier": "api",
         "weight": 2,
         "account_id": "783435133831",
-        "region": "us-east-2",
+        "region": "sa-east-1",
         "source_type": "aws_live",
         "source_kind": "live_scan"
       }
     },
     {
-      "id": "aws:783435133831:us-east-2:aws_security_group:sg-07568fbace5b785b0",
+      "id": "aws:783435133831:sa-east-1:aws_subnet:subnet-052062b5832cb742d",
+      "name": "subnet-052062b5832cb742d",
+      "resource_type": "aws_subnet",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "subnet-052062b5832cb742d",
+        "arn": "arn:aws:ec2:sa-east-1:783435133831:subnet/subnet-052062b5832cb742d",
+        "vpc_id": "vpc-0bfd231f37093f997",
+        "cidr_block": "172.31.16.0/20",
+        "availability_zone": "sa-east-1b"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "783435133831",
+        "region": "sa-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "783435133831",
+        "region": "sa-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:783435133831:sa-east-1:aws_subnet:subnet-0ff5812f594289b7e",
+      "name": "subnet-0ff5812f594289b7e",
+      "resource_type": "aws_subnet",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "subnet-0ff5812f594289b7e",
+        "arn": "arn:aws:ec2:sa-east-1:783435133831:subnet/subnet-0ff5812f594289b7e",
+        "vpc_id": "vpc-0bfd231f37093f997",
+        "cidr_block": "172.31.0.0/20",
+        "availability_zone": "sa-east-1a"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "783435133831",
+        "region": "sa-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "783435133831",
+        "region": "sa-east-1",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:783435133831:sa-east-1:aws_security_group:sg-0b6903d03e3194155",
       "name": "default",
       "resource_type": "aws_security_group",
       "provider": "aws",
       "category": "network",
       "properties": {
-        "id": "sg-07568fbace5b785b0",
-        "arn": "arn:aws:ec2:us-east-2:783435133831:security-group/sg-07568fbace5b785b0",
-        "vpc_id": "vpc-0d1423d52bc9a53cc",
+        "id": "sg-0b6903d03e3194155",
+        "arn": "arn:aws:ec2:sa-east-1:783435133831:security-group/sg-0b6903d03e3194155",
+        "vpc_id": "vpc-0bfd231f37093f997",
         "description": "default VPC security group"
       },
       "tags": {},
       "metadata": {
         "account_id": "783435133831",
-        "region": "us-east-2",
+        "region": "sa-east-1",
         "source_type": "aws_live",
         "source_kind": "live_scan"
       },
@@ -5294,7 +5437,7 @@
         "tier": "api",
         "weight": 2,
         "account_id": "783435133831",
-        "region": "us-east-2",
+        "region": "sa-east-1",
         "source_type": "aws_live",
         "source_kind": "live_scan"
       }
@@ -6241,21 +6384,21 @@
       }
     },
     {
-      "id": "aws:783435133831:sa-east-1:aws_vpc:vpc-0bfd231f37093f997",
-      "name": "vpc-0bfd231f37093f997",
+      "id": "aws:783435133831:us-east-2:aws_vpc:vpc-0d1423d52bc9a53cc",
+      "name": "vpc-0d1423d52bc9a53cc",
       "resource_type": "aws_vpc",
       "provider": "aws",
       "category": "network",
       "properties": {
-        "id": "vpc-0bfd231f37093f997",
-        "arn": "arn:aws:ec2:sa-east-1:783435133831:vpc/vpc-0bfd231f37093f997",
+        "id": "vpc-0d1423d52bc9a53cc",
+        "arn": "arn:aws:ec2:us-east-2:783435133831:vpc/vpc-0d1423d52bc9a53cc",
         "cidr_block": "172.31.0.0/16",
         "state": "available"
       },
       "tags": {},
       "metadata": {
         "account_id": "783435133831",
-        "region": "sa-east-1",
+        "region": "us-east-2",
         "source_type": "aws_live",
         "source_kind": "live_scan"
       },
@@ -6263,57 +6406,28 @@
         "tier": "api",
         "weight": 3,
         "account_id": "783435133831",
-        "region": "sa-east-1",
+        "region": "us-east-2",
         "source_type": "aws_live",
         "source_kind": "live_scan"
       }
     },
     {
-      "id": "aws:783435133831:sa-east-1:aws_subnet:subnet-0818fd5f1dce88be7",
-      "name": "subnet-0818fd5f1dce88be7",
+      "id": "aws:783435133831:us-east-2:aws_subnet:subnet-0403a2bd2278caf6c",
+      "name": "subnet-0403a2bd2278caf6c",
       "resource_type": "aws_subnet",
       "provider": "aws",
       "category": "network",
       "properties": {
-        "id": "subnet-0818fd5f1dce88be7",
-        "arn": "arn:aws:ec2:sa-east-1:783435133831:subnet/subnet-0818fd5f1dce88be7",
-        "vpc_id": "vpc-0bfd231f37093f997",
-        "cidr_block": "172.31.32.0/20",
-        "availability_zone": "sa-east-1c"
-      },
-      "tags": {},
-      "metadata": {
-        "account_id": "783435133831",
-        "region": "sa-east-1",
-        "source_type": "aws_live",
-        "source_kind": "live_scan"
-      },
-      "position_hint": {
-        "tier": "api",
-        "weight": 2,
-        "account_id": "783435133831",
-        "region": "sa-east-1",
-        "source_type": "aws_live",
-        "source_kind": "live_scan"
-      }
-    },
-    {
-      "id": "aws:783435133831:sa-east-1:aws_subnet:subnet-052062b5832cb742d",
-      "name": "subnet-052062b5832cb742d",
-      "resource_type": "aws_subnet",
-      "provider": "aws",
-      "category": "network",
-      "properties": {
-        "id": "subnet-052062b5832cb742d",
-        "arn": "arn:aws:ec2:sa-east-1:783435133831:subnet/subnet-052062b5832cb742d",
-        "vpc_id": "vpc-0bfd231f37093f997",
+        "id": "subnet-0403a2bd2278caf6c",
+        "arn": "arn:aws:ec2:us-east-2:783435133831:subnet/subnet-0403a2bd2278caf6c",
+        "vpc_id": "vpc-0d1423d52bc9a53cc",
         "cidr_block": "172.31.16.0/20",
-        "availability_zone": "sa-east-1b"
+        "availability_zone": "us-east-2b"
       },
       "tags": {},
       "metadata": {
         "account_id": "783435133831",
-        "region": "sa-east-1",
+        "region": "us-east-2",
         "source_type": "aws_live",
         "source_kind": "live_scan"
       },
@@ -6321,28 +6435,28 @@
         "tier": "api",
         "weight": 2,
         "account_id": "783435133831",
-        "region": "sa-east-1",
+        "region": "us-east-2",
         "source_type": "aws_live",
         "source_kind": "live_scan"
       }
     },
     {
-      "id": "aws:783435133831:sa-east-1:aws_subnet:subnet-0ff5812f594289b7e",
-      "name": "subnet-0ff5812f594289b7e",
+      "id": "aws:783435133831:us-east-2:aws_subnet:subnet-08fe3e4f78d94cc8c",
+      "name": "subnet-08fe3e4f78d94cc8c",
       "resource_type": "aws_subnet",
       "provider": "aws",
       "category": "network",
       "properties": {
-        "id": "subnet-0ff5812f594289b7e",
-        "arn": "arn:aws:ec2:sa-east-1:783435133831:subnet/subnet-0ff5812f594289b7e",
-        "vpc_id": "vpc-0bfd231f37093f997",
+        "id": "subnet-08fe3e4f78d94cc8c",
+        "arn": "arn:aws:ec2:us-east-2:783435133831:subnet/subnet-08fe3e4f78d94cc8c",
+        "vpc_id": "vpc-0d1423d52bc9a53cc",
         "cidr_block": "172.31.0.0/20",
-        "availability_zone": "sa-east-1a"
+        "availability_zone": "us-east-2a"
       },
       "tags": {},
       "metadata": {
         "account_id": "783435133831",
-        "region": "sa-east-1",
+        "region": "us-east-2",
         "source_type": "aws_live",
         "source_kind": "live_scan"
       },
@@ -6350,27 +6464,56 @@
         "tier": "api",
         "weight": 2,
         "account_id": "783435133831",
-        "region": "sa-east-1",
+        "region": "us-east-2",
         "source_type": "aws_live",
         "source_kind": "live_scan"
       }
     },
     {
-      "id": "aws:783435133831:sa-east-1:aws_security_group:sg-0b6903d03e3194155",
+      "id": "aws:783435133831:us-east-2:aws_subnet:subnet-0eb86f3df0d16c98b",
+      "name": "subnet-0eb86f3df0d16c98b",
+      "resource_type": "aws_subnet",
+      "provider": "aws",
+      "category": "network",
+      "properties": {
+        "id": "subnet-0eb86f3df0d16c98b",
+        "arn": "arn:aws:ec2:us-east-2:783435133831:subnet/subnet-0eb86f3df0d16c98b",
+        "vpc_id": "vpc-0d1423d52bc9a53cc",
+        "cidr_block": "172.31.32.0/20",
+        "availability_zone": "us-east-2c"
+      },
+      "tags": {},
+      "metadata": {
+        "account_id": "783435133831",
+        "region": "us-east-2",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      },
+      "position_hint": {
+        "tier": "api",
+        "weight": 2,
+        "account_id": "783435133831",
+        "region": "us-east-2",
+        "source_type": "aws_live",
+        "source_kind": "live_scan"
+      }
+    },
+    {
+      "id": "aws:783435133831:us-east-2:aws_security_group:sg-07568fbace5b785b0",
       "name": "default",
       "resource_type": "aws_security_group",
       "provider": "aws",
       "category": "network",
       "properties": {
-        "id": "sg-0b6903d03e3194155",
-        "arn": "arn:aws:ec2:sa-east-1:783435133831:security-group/sg-0b6903d03e3194155",
-        "vpc_id": "vpc-0bfd231f37093f997",
+        "id": "sg-07568fbace5b785b0",
+        "arn": "arn:aws:ec2:us-east-2:783435133831:security-group/sg-07568fbace5b785b0",
+        "vpc_id": "vpc-0d1423d52bc9a53cc",
         "description": "default VPC security group"
       },
       "tags": {},
       "metadata": {
         "account_id": "783435133831",
-        "region": "sa-east-1",
+        "region": "us-east-2",
         "source_type": "aws_live",
         "source_kind": "live_scan"
       },
@@ -6378,150 +6521,7 @@
         "tier": "api",
         "weight": 2,
         "account_id": "783435133831",
-        "region": "sa-east-1",
-        "source_type": "aws_live",
-        "source_kind": "live_scan"
-      }
-    },
-    {
-      "id": "aws:783435133831:ap-southeast-1:aws_vpc:vpc-0d703e19b9b93243f",
-      "name": "vpc-0d703e19b9b93243f",
-      "resource_type": "aws_vpc",
-      "provider": "aws",
-      "category": "network",
-      "properties": {
-        "id": "vpc-0d703e19b9b93243f",
-        "arn": "arn:aws:ec2:ap-southeast-1:783435133831:vpc/vpc-0d703e19b9b93243f",
-        "cidr_block": "172.31.0.0/16",
-        "state": "available"
-      },
-      "tags": {},
-      "metadata": {
-        "account_id": "783435133831",
-        "region": "ap-southeast-1",
-        "source_type": "aws_live",
-        "source_kind": "live_scan"
-      },
-      "position_hint": {
-        "tier": "api",
-        "weight": 3,
-        "account_id": "783435133831",
-        "region": "ap-southeast-1",
-        "source_type": "aws_live",
-        "source_kind": "live_scan"
-      }
-    },
-    {
-      "id": "aws:783435133831:ap-southeast-1:aws_subnet:subnet-0f58c6fe764af0dcf",
-      "name": "subnet-0f58c6fe764af0dcf",
-      "resource_type": "aws_subnet",
-      "provider": "aws",
-      "category": "network",
-      "properties": {
-        "id": "subnet-0f58c6fe764af0dcf",
-        "arn": "arn:aws:ec2:ap-southeast-1:783435133831:subnet/subnet-0f58c6fe764af0dcf",
-        "vpc_id": "vpc-0d703e19b9b93243f",
-        "cidr_block": "172.31.0.0/20",
-        "availability_zone": "ap-southeast-1c"
-      },
-      "tags": {},
-      "metadata": {
-        "account_id": "783435133831",
-        "region": "ap-southeast-1",
-        "source_type": "aws_live",
-        "source_kind": "live_scan"
-      },
-      "position_hint": {
-        "tier": "api",
-        "weight": 2,
-        "account_id": "783435133831",
-        "region": "ap-southeast-1",
-        "source_type": "aws_live",
-        "source_kind": "live_scan"
-      }
-    },
-    {
-      "id": "aws:783435133831:ap-southeast-1:aws_subnet:subnet-07f341a63c5ff19d2",
-      "name": "subnet-07f341a63c5ff19d2",
-      "resource_type": "aws_subnet",
-      "provider": "aws",
-      "category": "network",
-      "properties": {
-        "id": "subnet-07f341a63c5ff19d2",
-        "arn": "arn:aws:ec2:ap-southeast-1:783435133831:subnet/subnet-07f341a63c5ff19d2",
-        "vpc_id": "vpc-0d703e19b9b93243f",
-        "cidr_block": "172.31.32.0/20",
-        "availability_zone": "ap-southeast-1a"
-      },
-      "tags": {},
-      "metadata": {
-        "account_id": "783435133831",
-        "region": "ap-southeast-1",
-        "source_type": "aws_live",
-        "source_kind": "live_scan"
-      },
-      "position_hint": {
-        "tier": "api",
-        "weight": 2,
-        "account_id": "783435133831",
-        "region": "ap-southeast-1",
-        "source_type": "aws_live",
-        "source_kind": "live_scan"
-      }
-    },
-    {
-      "id": "aws:783435133831:ap-southeast-1:aws_subnet:subnet-0d8f0a74a9a53f7f2",
-      "name": "subnet-0d8f0a74a9a53f7f2",
-      "resource_type": "aws_subnet",
-      "provider": "aws",
-      "category": "network",
-      "properties": {
-        "id": "subnet-0d8f0a74a9a53f7f2",
-        "arn": "arn:aws:ec2:ap-southeast-1:783435133831:subnet/subnet-0d8f0a74a9a53f7f2",
-        "vpc_id": "vpc-0d703e19b9b93243f",
-        "cidr_block": "172.31.16.0/20",
-        "availability_zone": "ap-southeast-1b"
-      },
-      "tags": {},
-      "metadata": {
-        "account_id": "783435133831",
-        "region": "ap-southeast-1",
-        "source_type": "aws_live",
-        "source_kind": "live_scan"
-      },
-      "position_hint": {
-        "tier": "api",
-        "weight": 2,
-        "account_id": "783435133831",
-        "region": "ap-southeast-1",
-        "source_type": "aws_live",
-        "source_kind": "live_scan"
-      }
-    },
-    {
-      "id": "aws:783435133831:ap-southeast-1:aws_security_group:sg-024d9e2f4781f3f7c",
-      "name": "default",
-      "resource_type": "aws_security_group",
-      "provider": "aws",
-      "category": "network",
-      "properties": {
-        "id": "sg-024d9e2f4781f3f7c",
-        "arn": "arn:aws:ec2:ap-southeast-1:783435133831:security-group/sg-024d9e2f4781f3f7c",
-        "vpc_id": "vpc-0d703e19b9b93243f",
-        "description": "default VPC security group"
-      },
-      "tags": {},
-      "metadata": {
-        "account_id": "783435133831",
-        "region": "ap-southeast-1",
-        "source_type": "aws_live",
-        "source_kind": "live_scan"
-      },
-      "position_hint": {
-        "tier": "api",
-        "weight": 2,
-        "account_id": "783435133831",
-        "region": "ap-southeast-1",
+        "region": "us-east-2",
         "source_type": "aws_live",
         "source_kind": "live_scan"
       }
@@ -6878,6 +6878,34 @@
       "label": "in vpc"
     },
     {
+      "id": "aws:783435133831:ap-south-1:aws_subnet:subnet-0ee1bfd0cbb98411e->aws:783435133831:ap-south-1:aws_vpc:vpc-021b7858f4a83f3f8:references",
+      "source": "aws:783435133831:ap-south-1:aws_subnet:subnet-0ee1bfd0cbb98411e",
+      "target": "aws:783435133831:ap-south-1:aws_vpc:vpc-021b7858f4a83f3f8",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:783435133831:ap-south-1:aws_subnet:subnet-08f1e811ce001ca97->aws:783435133831:ap-south-1:aws_vpc:vpc-021b7858f4a83f3f8:references",
+      "source": "aws:783435133831:ap-south-1:aws_subnet:subnet-08f1e811ce001ca97",
+      "target": "aws:783435133831:ap-south-1:aws_vpc:vpc-021b7858f4a83f3f8",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:783435133831:ap-south-1:aws_subnet:subnet-00f4384b3d35d3857->aws:783435133831:ap-south-1:aws_vpc:vpc-021b7858f4a83f3f8:references",
+      "source": "aws:783435133831:ap-south-1:aws_subnet:subnet-00f4384b3d35d3857",
+      "target": "aws:783435133831:ap-south-1:aws_vpc:vpc-021b7858f4a83f3f8",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:783435133831:ap-south-1:aws_security_group:sg-068f620edfc381839->aws:783435133831:ap-south-1:aws_vpc:vpc-021b7858f4a83f3f8:references",
+      "source": "aws:783435133831:ap-south-1:aws_security_group:sg-068f620edfc381839",
+      "target": "aws:783435133831:ap-south-1:aws_vpc:vpc-021b7858f4a83f3f8",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
       "id": "aws:783435133831:global:aws_cloudfront_distribution:E3OLOFJDP0YW38->aws:783435133831:us-east-1:aws_s3_bucket:aegis-ziadelraggal-2026:reads_from",
       "source": "aws:783435133831:global:aws_cloudfront_distribution:E3OLOFJDP0YW38",
       "target": "aws:783435133831:us-east-1:aws_s3_bucket:aegis-ziadelraggal-2026",
@@ -6923,34 +6951,6 @@
       "id": "aws:783435133831:ap-northeast-1:aws_security_group:sg-0df6daf8bf89f0dee->aws:783435133831:ap-northeast-1:aws_vpc:vpc-07d9c420ac0e54996:references",
       "source": "aws:783435133831:ap-northeast-1:aws_security_group:sg-0df6daf8bf89f0dee",
       "target": "aws:783435133831:ap-northeast-1:aws_vpc:vpc-07d9c420ac0e54996",
-      "edge_type": "references",
-      "label": "in vpc"
-    },
-    {
-      "id": "aws:783435133831:ap-south-1:aws_subnet:subnet-0ee1bfd0cbb98411e->aws:783435133831:ap-south-1:aws_vpc:vpc-021b7858f4a83f3f8:references",
-      "source": "aws:783435133831:ap-south-1:aws_subnet:subnet-0ee1bfd0cbb98411e",
-      "target": "aws:783435133831:ap-south-1:aws_vpc:vpc-021b7858f4a83f3f8",
-      "edge_type": "references",
-      "label": "in vpc"
-    },
-    {
-      "id": "aws:783435133831:ap-south-1:aws_subnet:subnet-08f1e811ce001ca97->aws:783435133831:ap-south-1:aws_vpc:vpc-021b7858f4a83f3f8:references",
-      "source": "aws:783435133831:ap-south-1:aws_subnet:subnet-08f1e811ce001ca97",
-      "target": "aws:783435133831:ap-south-1:aws_vpc:vpc-021b7858f4a83f3f8",
-      "edge_type": "references",
-      "label": "in vpc"
-    },
-    {
-      "id": "aws:783435133831:ap-south-1:aws_subnet:subnet-00f4384b3d35d3857->aws:783435133831:ap-south-1:aws_vpc:vpc-021b7858f4a83f3f8:references",
-      "source": "aws:783435133831:ap-south-1:aws_subnet:subnet-00f4384b3d35d3857",
-      "target": "aws:783435133831:ap-south-1:aws_vpc:vpc-021b7858f4a83f3f8",
-      "edge_type": "references",
-      "label": "in vpc"
-    },
-    {
-      "id": "aws:783435133831:ap-south-1:aws_security_group:sg-068f620edfc381839->aws:783435133831:ap-south-1:aws_vpc:vpc-021b7858f4a83f3f8:references",
-      "source": "aws:783435133831:ap-south-1:aws_security_group:sg-068f620edfc381839",
-      "target": "aws:783435133831:ap-south-1:aws_vpc:vpc-021b7858f4a83f3f8",
       "edge_type": "references",
       "label": "in vpc"
     },
@@ -7035,6 +7035,34 @@
       "id": "aws:783435133831:ap-southeast-2:aws_security_group:sg-04e11707434e6dd68->aws:783435133831:ap-southeast-2:aws_vpc:vpc-0337ac5404749346a:references",
       "source": "aws:783435133831:ap-southeast-2:aws_security_group:sg-04e11707434e6dd68",
       "target": "aws:783435133831:ap-southeast-2:aws_vpc:vpc-0337ac5404749346a",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:783435133831:ap-southeast-1:aws_subnet:subnet-0f58c6fe764af0dcf->aws:783435133831:ap-southeast-1:aws_vpc:vpc-0d703e19b9b93243f:references",
+      "source": "aws:783435133831:ap-southeast-1:aws_subnet:subnet-0f58c6fe764af0dcf",
+      "target": "aws:783435133831:ap-southeast-1:aws_vpc:vpc-0d703e19b9b93243f",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:783435133831:ap-southeast-1:aws_subnet:subnet-07f341a63c5ff19d2->aws:783435133831:ap-southeast-1:aws_vpc:vpc-0d703e19b9b93243f:references",
+      "source": "aws:783435133831:ap-southeast-1:aws_subnet:subnet-07f341a63c5ff19d2",
+      "target": "aws:783435133831:ap-southeast-1:aws_vpc:vpc-0d703e19b9b93243f",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:783435133831:ap-southeast-1:aws_subnet:subnet-0d8f0a74a9a53f7f2->aws:783435133831:ap-southeast-1:aws_vpc:vpc-0d703e19b9b93243f:references",
+      "source": "aws:783435133831:ap-southeast-1:aws_subnet:subnet-0d8f0a74a9a53f7f2",
+      "target": "aws:783435133831:ap-southeast-1:aws_vpc:vpc-0d703e19b9b93243f",
+      "edge_type": "references",
+      "label": "in vpc"
+    },
+    {
+      "id": "aws:783435133831:ap-southeast-1:aws_security_group:sg-024d9e2f4781f3f7c->aws:783435133831:ap-southeast-1:aws_vpc:vpc-0d703e19b9b93243f:references",
+      "source": "aws:783435133831:ap-southeast-1:aws_security_group:sg-024d9e2f4781f3f7c",
+      "target": "aws:783435133831:ap-southeast-1:aws_vpc:vpc-0d703e19b9b93243f",
       "edge_type": "references",
       "label": "in vpc"
     },
@@ -7151,30 +7179,30 @@
       "label": "in vpc"
     },
     {
-      "id": "aws:783435133831:us-east-2:aws_subnet:subnet-0403a2bd2278caf6c->aws:783435133831:us-east-2:aws_vpc:vpc-0d1423d52bc9a53cc:references",
-      "source": "aws:783435133831:us-east-2:aws_subnet:subnet-0403a2bd2278caf6c",
-      "target": "aws:783435133831:us-east-2:aws_vpc:vpc-0d1423d52bc9a53cc",
+      "id": "aws:783435133831:sa-east-1:aws_subnet:subnet-0818fd5f1dce88be7->aws:783435133831:sa-east-1:aws_vpc:vpc-0bfd231f37093f997:references",
+      "source": "aws:783435133831:sa-east-1:aws_subnet:subnet-0818fd5f1dce88be7",
+      "target": "aws:783435133831:sa-east-1:aws_vpc:vpc-0bfd231f37093f997",
       "edge_type": "references",
       "label": "in vpc"
     },
     {
-      "id": "aws:783435133831:us-east-2:aws_subnet:subnet-08fe3e4f78d94cc8c->aws:783435133831:us-east-2:aws_vpc:vpc-0d1423d52bc9a53cc:references",
-      "source": "aws:783435133831:us-east-2:aws_subnet:subnet-08fe3e4f78d94cc8c",
-      "target": "aws:783435133831:us-east-2:aws_vpc:vpc-0d1423d52bc9a53cc",
+      "id": "aws:783435133831:sa-east-1:aws_subnet:subnet-052062b5832cb742d->aws:783435133831:sa-east-1:aws_vpc:vpc-0bfd231f37093f997:references",
+      "source": "aws:783435133831:sa-east-1:aws_subnet:subnet-052062b5832cb742d",
+      "target": "aws:783435133831:sa-east-1:aws_vpc:vpc-0bfd231f37093f997",
       "edge_type": "references",
       "label": "in vpc"
     },
     {
-      "id": "aws:783435133831:us-east-2:aws_subnet:subnet-0eb86f3df0d16c98b->aws:783435133831:us-east-2:aws_vpc:vpc-0d1423d52bc9a53cc:references",
-      "source": "aws:783435133831:us-east-2:aws_subnet:subnet-0eb86f3df0d16c98b",
-      "target": "aws:783435133831:us-east-2:aws_vpc:vpc-0d1423d52bc9a53cc",
+      "id": "aws:783435133831:sa-east-1:aws_subnet:subnet-0ff5812f594289b7e->aws:783435133831:sa-east-1:aws_vpc:vpc-0bfd231f37093f997:references",
+      "source": "aws:783435133831:sa-east-1:aws_subnet:subnet-0ff5812f594289b7e",
+      "target": "aws:783435133831:sa-east-1:aws_vpc:vpc-0bfd231f37093f997",
       "edge_type": "references",
       "label": "in vpc"
     },
     {
-      "id": "aws:783435133831:us-east-2:aws_security_group:sg-07568fbace5b785b0->aws:783435133831:us-east-2:aws_vpc:vpc-0d1423d52bc9a53cc:references",
-      "source": "aws:783435133831:us-east-2:aws_security_group:sg-07568fbace5b785b0",
-      "target": "aws:783435133831:us-east-2:aws_vpc:vpc-0d1423d52bc9a53cc",
+      "id": "aws:783435133831:sa-east-1:aws_security_group:sg-0b6903d03e3194155->aws:783435133831:sa-east-1:aws_vpc:vpc-0bfd231f37093f997:references",
+      "source": "aws:783435133831:sa-east-1:aws_security_group:sg-0b6903d03e3194155",
+      "target": "aws:783435133831:sa-east-1:aws_vpc:vpc-0bfd231f37093f997",
       "edge_type": "references",
       "label": "in vpc"
     },
@@ -7403,58 +7431,30 @@
       "label": "invokes"
     },
     {
-      "id": "aws:783435133831:sa-east-1:aws_subnet:subnet-0818fd5f1dce88be7->aws:783435133831:sa-east-1:aws_vpc:vpc-0bfd231f37093f997:references",
-      "source": "aws:783435133831:sa-east-1:aws_subnet:subnet-0818fd5f1dce88be7",
-      "target": "aws:783435133831:sa-east-1:aws_vpc:vpc-0bfd231f37093f997",
+      "id": "aws:783435133831:us-east-2:aws_subnet:subnet-0403a2bd2278caf6c->aws:783435133831:us-east-2:aws_vpc:vpc-0d1423d52bc9a53cc:references",
+      "source": "aws:783435133831:us-east-2:aws_subnet:subnet-0403a2bd2278caf6c",
+      "target": "aws:783435133831:us-east-2:aws_vpc:vpc-0d1423d52bc9a53cc",
       "edge_type": "references",
       "label": "in vpc"
     },
     {
-      "id": "aws:783435133831:sa-east-1:aws_subnet:subnet-052062b5832cb742d->aws:783435133831:sa-east-1:aws_vpc:vpc-0bfd231f37093f997:references",
-      "source": "aws:783435133831:sa-east-1:aws_subnet:subnet-052062b5832cb742d",
-      "target": "aws:783435133831:sa-east-1:aws_vpc:vpc-0bfd231f37093f997",
+      "id": "aws:783435133831:us-east-2:aws_subnet:subnet-08fe3e4f78d94cc8c->aws:783435133831:us-east-2:aws_vpc:vpc-0d1423d52bc9a53cc:references",
+      "source": "aws:783435133831:us-east-2:aws_subnet:subnet-08fe3e4f78d94cc8c",
+      "target": "aws:783435133831:us-east-2:aws_vpc:vpc-0d1423d52bc9a53cc",
       "edge_type": "references",
       "label": "in vpc"
     },
     {
-      "id": "aws:783435133831:sa-east-1:aws_subnet:subnet-0ff5812f594289b7e->aws:783435133831:sa-east-1:aws_vpc:vpc-0bfd231f37093f997:references",
-      "source": "aws:783435133831:sa-east-1:aws_subnet:subnet-0ff5812f594289b7e",
-      "target": "aws:783435133831:sa-east-1:aws_vpc:vpc-0bfd231f37093f997",
+      "id": "aws:783435133831:us-east-2:aws_subnet:subnet-0eb86f3df0d16c98b->aws:783435133831:us-east-2:aws_vpc:vpc-0d1423d52bc9a53cc:references",
+      "source": "aws:783435133831:us-east-2:aws_subnet:subnet-0eb86f3df0d16c98b",
+      "target": "aws:783435133831:us-east-2:aws_vpc:vpc-0d1423d52bc9a53cc",
       "edge_type": "references",
       "label": "in vpc"
     },
     {
-      "id": "aws:783435133831:sa-east-1:aws_security_group:sg-0b6903d03e3194155->aws:783435133831:sa-east-1:aws_vpc:vpc-0bfd231f37093f997:references",
-      "source": "aws:783435133831:sa-east-1:aws_security_group:sg-0b6903d03e3194155",
-      "target": "aws:783435133831:sa-east-1:aws_vpc:vpc-0bfd231f37093f997",
-      "edge_type": "references",
-      "label": "in vpc"
-    },
-    {
-      "id": "aws:783435133831:ap-southeast-1:aws_subnet:subnet-0f58c6fe764af0dcf->aws:783435133831:ap-southeast-1:aws_vpc:vpc-0d703e19b9b93243f:references",
-      "source": "aws:783435133831:ap-southeast-1:aws_subnet:subnet-0f58c6fe764af0dcf",
-      "target": "aws:783435133831:ap-southeast-1:aws_vpc:vpc-0d703e19b9b93243f",
-      "edge_type": "references",
-      "label": "in vpc"
-    },
-    {
-      "id": "aws:783435133831:ap-southeast-1:aws_subnet:subnet-07f341a63c5ff19d2->aws:783435133831:ap-southeast-1:aws_vpc:vpc-0d703e19b9b93243f:references",
-      "source": "aws:783435133831:ap-southeast-1:aws_subnet:subnet-07f341a63c5ff19d2",
-      "target": "aws:783435133831:ap-southeast-1:aws_vpc:vpc-0d703e19b9b93243f",
-      "edge_type": "references",
-      "label": "in vpc"
-    },
-    {
-      "id": "aws:783435133831:ap-southeast-1:aws_subnet:subnet-0d8f0a74a9a53f7f2->aws:783435133831:ap-southeast-1:aws_vpc:vpc-0d703e19b9b93243f:references",
-      "source": "aws:783435133831:ap-southeast-1:aws_subnet:subnet-0d8f0a74a9a53f7f2",
-      "target": "aws:783435133831:ap-southeast-1:aws_vpc:vpc-0d703e19b9b93243f",
-      "edge_type": "references",
-      "label": "in vpc"
-    },
-    {
-      "id": "aws:783435133831:ap-southeast-1:aws_security_group:sg-024d9e2f4781f3f7c->aws:783435133831:ap-southeast-1:aws_vpc:vpc-0d703e19b9b93243f:references",
-      "source": "aws:783435133831:ap-southeast-1:aws_security_group:sg-024d9e2f4781f3f7c",
-      "target": "aws:783435133831:ap-southeast-1:aws_vpc:vpc-0d703e19b9b93243f",
+      "id": "aws:783435133831:us-east-2:aws_security_group:sg-07568fbace5b785b0->aws:783435133831:us-east-2:aws_vpc:vpc-0d1423d52bc9a53cc:references",
+      "source": "aws:783435133831:us-east-2:aws_security_group:sg-07568fbace5b785b0",
+      "target": "aws:783435133831:us-east-2:aws_vpc:vpc-0d1423d52bc9a53cc",
       "edge_type": "references",
       "label": "in vpc"
     },

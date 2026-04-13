@@ -369,6 +369,26 @@
               <span class="knob" />
             </span>
           </button>
+          <button
+            v-if="store.logsAvailable"
+            class="filter-row"
+            @click="store.toggleLogs()"
+          >
+            <span class="text-gray-300">Live logs</span>
+            <span class="toggle" :class="{ on: store.showLogs }" style="--toggle-color: #60a5fa">
+              <span class="knob" />
+            </span>
+          </button>
+          <button
+            v-if="store.billingAvailable"
+            class="filter-row"
+            @click="fetchBilling"
+          >
+            <span class="text-gray-300">AWS billing</span>
+            <span class="toggle" :class="{ on: !!store.billingData }" style="--toggle-color: #c084fc">
+              <span class="knob" />
+            </span>
+          </button>
         </div>
       </section>
       <FindingsPanel />
@@ -511,6 +531,14 @@ function onSliderDown(e: MouseEvent) {
   }
   window.addEventListener('mousemove', onMove)
   window.addEventListener('mouseup', onUp)
+}
+
+async function fetchBilling() {
+  if (store.billingData) {
+    store.billingData = null
+  } else {
+    await store.fetchBillingData()
+  }
 }
 
 function resetFilters() {

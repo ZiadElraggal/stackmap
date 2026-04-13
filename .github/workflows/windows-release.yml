@@ -35,15 +35,27 @@ jobs:
           cd ..
           python -m stackmap.webapp.build_assets --clean
           test -f stackmap/webapp/static/index.html
+          echo "Frontend bundle built successfully"
 
       - name: Install packaging dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install . pyinstaller
 
+      - name: Verify package installation
+        run: |
+          python -c "from stackmap.cli.main import app; print('Package imports OK')"
+          python -c "import stackmap; print(f'Version: {stackmap.__version__}')"
+
       - name: Build standalone executable
         run: |
           pyinstaller --noconfirm --clean --onefile --name stackmap --collect-data stackmap --copy-metadata stackmap stackmap/cli/main.py
+
+      - name: Verify executable
+        shell: bash
+        run: |
+          ./dist/stackmap.exe version
+          echo "Executable verified successfully"
 
       - name: Package Windows release
         id: package
@@ -59,6 +71,7 @@ jobs:
           ASSET_NAME="stackmap-${VERSION}-windows-x64.zip"
           powershell -Command "Compress-Archive -Path 'dist/stackmap.exe' -DestinationPath '${ASSET_NAME}' -Force"
           echo "asset_name=${ASSET_NAME}" >> "$GITHUB_OUTPUT"
+          echo "Packaged as ${ASSET_NAME}"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4

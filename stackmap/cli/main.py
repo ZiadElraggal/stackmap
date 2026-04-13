@@ -16,7 +16,12 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from stackmap.aws_live import AWSLiveScanner, build_policy_document, build_stackmap_role_template
+from stackmap.aws_live import (
+    AWSLiveScanner,
+    build_addon_policy_document,
+    build_policy_document,
+    build_stackmap_role_template,
+)
 from stackmap.cli.mascot import mascot_status
 from stackmap.aws_live.org_setup import print_setup_instructions
 from stackmap.organizations import build_org_document_from_aws, load_organization_document
@@ -349,10 +354,16 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
         directory: str,
         state: _LiveGraphState,
         source_type: str,
+        aws_session: Any | None = None,
+        live_logs_enabled: bool = False,
+        live_billing_enabled: bool = False,
         **kwargs: Any,
     ) -> None:
         self._state = state
         self._source_type = source_type
+        self._aws_session = aws_session
+        self._live_logs_enabled = live_logs_enabled
+        self._live_billing_enabled = live_billing_enabled
         super().__init__(*args, directory=directory, **kwargs)
 
     def _send_json(self, payload: dict[str, Any], status: int = 200) -> None:
@@ -389,6 +400,12 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
         if path == "/api/health":
             self._send_json({"status": "ok", "source_type": self._source_type})
             return
+        if path == "/api/live-features":
+            self._send_json({
+                "logs": bool(self._aws_session and self._live_logs_enabled),
+                "billing": bool(self._aws_session and self._live_billing_enabled),
+            })
+            return
         if path == "/api/trace":
             self._handle_trace(parsed_url.query)
             return
@@ -400,6 +417,15 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
             return
         if path == "/api/drift":
             self._handle_drift()
+            return
+        if path == "/api/logs":
+            self._handle_logs(parsed_url.query)
+            return
+        if path == "/api/billing":
+            self._handle_billing()
+            return
+        if path == "/api/billing/usage":
+            self._handle_billing_usage(parsed_url.query)
             return
 
         if path not in {"/", ""}:
@@ -483,6 +509,165 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
     def _handle_drift(self) -> None:
         self._send_json({"error": "Drift requires both IaC and live sources. Use the CLI command instead."})
 
+    def _handle_logs(self, query: str) -> None:
+        from urllib.parse import parse_qs
+
+        if not self._live_logs_enabled:
+            self._send_json({"error": "Live logs are disabled. Use --live-logs when serving."}, status=403)
+            return
+
+        if not self._aws_session:
+            self._send_json({"error": "Logs require an AWS session. Use --aws-profile when serving."}, status=400)
+            return
+
+        params = parse_qs(query)
+        node_id = params.get("node", [None])[0]
+        node_ids = [
+            item
+            for raw in params.get("nodes", [])
+            for item in raw.split(",")
+            if item
+        ]
+        filter_pattern = params.get("filter", [""])[0]
+        minutes = int(params.get("minutes", ["60"])[0])
+        limit = min(int(params.get("limit", ["200"])[0]), 500)
+
+        try:
+            from stackmap.logs.viewer import fetch_resource_logs
+
+            ir = self._get_ir()
+
+            if node_id:
+                # Single node logs
+                node = next((n for n in ir.nodes if n.id == node_id), None)
+                if not node:
+                    self._send_json({"error": f"Node '{node_id}' not found"}, status=404)
+                    return
+                region = node.metadata.get("region", "us-east-1")
+                result = fetch_resource_logs(
+                    self._aws_session,
+                    node.resource_type,
+                    node.properties,
+                    node.name,
+                    region=region,
+                    minutes=minutes,
+                    limit=limit,
+                    filter_pattern=filter_pattern,
+                )
+                self._send_json(result.to_dict())
+            else:
+                # Aggregated logs from all supported resources, optionally
+                # restricted to the currently visible graph nodes.
+                from stackmap.logs.viewer import fetch_resource_logs as _fetch_logs
+
+                all_events: list[dict] = []
+                all_groups: list[str] = []
+                errors: list[str] = []
+                requested_ids = set(node_ids)
+                nodes_to_scan = [
+                    node for node in ir.nodes
+                    if not requested_ids or node.id in requested_ids
+                ]
+
+                for node in nodes_to_scan:
+                    region = node.metadata.get("region", "us-east-1")
+                    result = _fetch_logs(
+                        self._aws_session,
+                        node.resource_type,
+                        node.properties,
+                        node.name,
+                        region=region,
+                        minutes=minutes,
+                        limit=max(50, limit // max(len(nodes_to_scan), 1)),
+                        filter_pattern=filter_pattern,
+                    )
+                    if result.events:
+                        all_events.extend(e.to_dict() for e in result.events)
+                        all_groups.extend(result.log_groups)
+                    if result.error and "No log group pattern" not in result.error:
+                        errors.append(result.error)
+
+                all_events.sort(key=lambda e: e["timestamp"], reverse=True)
+                all_events = all_events[:limit]
+
+                self._send_json({
+                    "events": all_events,
+                    "log_groups": list(set(all_groups)),
+                    "truncated": len(all_events) >= limit,
+                    "error": "; ".join(errors) if errors else None,
+                    "count": len(all_events),
+                })
+
+        except Exception as exc:
+            self._send_json({"error": str(exc)}, status=500)
+
+    def _handle_billing(self) -> None:
+        if not self._live_billing_enabled:
+            self._send_json({"error": "Live billing is disabled. Use --live-billing when serving."}, status=403)
+            return
+
+        if not self._aws_session:
+            self._send_json({"error": "Billing requires an AWS session. Use --aws-profile when serving."}, status=400)
+            return
+
+        try:
+            from stackmap.cost.billing import fetch_billing_data
+
+            report = fetch_billing_data(self._aws_session)
+            self._send_json(report.to_dict())
+        except Exception as exc:
+            self._send_json({"error": str(exc)}, status=500)
+
+    def _handle_billing_usage(self, query: str) -> None:
+        from urllib.parse import parse_qs
+
+        if not self._live_billing_enabled:
+            self._send_json({"error": "Live billing is disabled. Use --live-billing when serving."}, status=403)
+            return
+
+        if not self._aws_session:
+            self._send_json({"error": "Usage metrics require an AWS session. Use --aws-profile when serving."}, status=400)
+            return
+
+        params = parse_qs(query)
+        node_id = params.get("node", [None])[0]
+
+        try:
+            from stackmap.cost.billing import fetch_usage_metrics
+
+            ir = self._get_ir()
+
+            if node_id:
+                node = next((n for n in ir.nodes if n.id == node_id), None)
+                if not node:
+                    self._send_json({"error": f"Node '{node_id}' not found"}, status=404)
+                    return
+
+                from stackmap.cost.billing import _USAGE_METRIC_MAP
+                metric_config = _USAGE_METRIC_MAP.get(node.resource_type)
+                if not metric_config:
+                    self._send_json({"error": f"No usage metrics available for {node.resource_type}"}, status=400)
+                    return
+
+                prop_key = metric_config["property_key"]
+                resource_name = node.properties.get(prop_key) or node.name
+                region = node.metadata.get("region", "us-east-1")
+
+                usage = fetch_usage_metrics(
+                    self._aws_session,
+                    node.resource_type,
+                    resource_name,
+                    region=region,
+                )
+                self._send_json({"node_id": node_id, "usage": usage})
+            else:
+                from stackmap.cost.billing import fetch_all_usage_metrics
+                overrides = fetch_all_usage_metrics(self._aws_session, ir)
+                self._send_json({"overrides": overrides})
+
+        except Exception as exc:
+            self._send_json({"error": str(exc)}, status=500)
+
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A003
         return
 
@@ -517,6 +702,10 @@ def scan(
         source_path = _resolve_source_with_remote_pull(source, terraform_dir, auto_pull_remote)
     except RuntimeError as exc:
         console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(1)
+
+    if (live_logs or live_billing) and not aws_profile:
+        console.print("[red]Error:[/red] --live-logs/--live-billing require --aws-profile.")
         raise typer.Exit(1)
 
     if not source_path.exists():
@@ -739,13 +928,37 @@ def aws_policy(
         "broad",
         help="Policy breadth: core or broad.",
     ),
+    addon: str | None = typer.Option(
+        None,
+        "--addon",
+        help="Print a standalone optional policy instead of the base scan policy. Supported: logs, billing.",
+    ),
+    extras: str = typer.Option(
+        "",
+        help="Deprecated: merge optional permissions into the base policy. Prefer --addon logs or --addon billing.",
+    ),
 ) -> None:
     """Print the least-privilege AWS read-only policy StackMap expects."""
+    if addon:
+        normalized_addon = addon.lower()
+        if normalized_addon not in {"billing", "logs"}:
+            console.print("[red]Error:[/red] --addon must be 'billing' or 'logs'.")
+            raise typer.Exit(1)
+        console.print_json(json.dumps(build_addon_policy_document(normalized_addon)))
+        return
+
     normalized = service_set.lower()
     if normalized not in {"core", "broad"}:
         console.print("[red]Error:[/red] --service-set must be 'core' or 'broad'.")
         raise typer.Exit(1)
-    console.print_json(json.dumps(build_policy_document(normalized)))
+    extra_list = [e.strip() for e in extras.split(",") if e.strip()] if extras else []
+    invalid = [e for e in extra_list if e not in {"billing", "logs"}]
+    if invalid:
+        console.print(f"[red]Error:[/red] Unknown extras: {', '.join(invalid)}. Supported: billing, logs")
+        raise typer.Exit(1)
+    if extra_list:
+        console.print(f"[dim]Including optional permissions: {', '.join(extra_list)}[/dim]")
+    console.print_json(json.dumps(build_policy_document(normalized, extras=extra_list)))
 
 
 @app.command("setup-org-role")
@@ -856,6 +1069,16 @@ def scan_aws(
     cache_dir: str | None = typer.Option(None, help="Cache directory for raw AWS API responses"),
     no_cache: bool = typer.Option(False, help="Disable response caching"),
     serve_after: bool = typer.Option(False, "--serve", help="Open the interactive viewer after scanning"),
+    live_logs: bool = typer.Option(
+        False,
+        "--live-logs",
+        help="When used with --serve, enable live CloudWatch logs in the viewer. Requires --profile and logs IAM permissions.",
+    ),
+    live_billing: bool = typer.Option(
+        False,
+        "--live-billing",
+        help="When used with --serve, enable AWS Cost Explorer and CloudWatch usage metrics in the viewer. Requires --profile and billing IAM permissions.",
+    ),
     accounts: str | None = typer.Option(None, help="Comma-separated account:role_arn pairs for multi-account scan (e.g. '123456789012:arn:aws:iam::123456789012:role/StackMapReadOnly,987654321098:arn:aws:iam::987654321098:role/StackMapReadOnly')"),
     account_profiles: str | None = typer.Option(None, help="Comma-separated AWS profile names for multi-account scan (e.g. 'dev,sandbox,prod')"),
 ) -> None:
@@ -897,6 +1120,22 @@ def scan_aws(
 
     if profile and account_profiles:
         console.print("[red]Error:[/red] Use either --profile or --account-profiles, not both.")
+        raise typer.Exit(1)
+
+    if (live_logs or live_billing) and not serve_after:
+        console.print("[red]Error:[/red] --live-logs/--live-billing only apply when --serve is also used.")
+        raise typer.Exit(1)
+
+    if (live_logs or live_billing) and not profile:
+        console.print("[red]Error:[/red] Live AWS UI features require --profile so the viewer can create a live AWS session.")
+        raise typer.Exit(1)
+
+    if (live_logs or live_billing) and (accounts or account_profiles or org_scan or role_arn):
+        console.print(
+            "[red]Error:[/red] Live AWS UI features currently support single-account profile scans only. "
+            "Run scan-aws with --profile and without --role-arn/--org-scan/--accounts, "
+            "then serve with --aws-profile for more advanced cases."
+        )
         raise typer.Exit(1)
 
     # Multi-account explicit scan (without organization)
@@ -975,6 +1214,9 @@ def scan_aws(
                 watch_interval=1.0,
                 open_browser=True,
                 auto_group=True,
+                aws_profile=profile if (live_logs or live_billing) else None,
+                live_logs=live_logs,
+                live_billing=live_billing,
             )
         return
 
@@ -1054,6 +1296,9 @@ def scan_aws(
                 watch_interval=1.0,
                 open_browser=True,
                 auto_group=True,
+                aws_profile=profile if (live_logs or live_billing) else None,
+                live_logs=live_logs,
+                live_billing=live_billing,
             )
         return
 
@@ -1210,6 +1455,9 @@ def scan_aws(
             watch_interval=1.0,
             open_browser=True,
             auto_group=True,
+            aws_profile=profile if (live_logs or live_billing) else None,
+            live_logs=live_logs,
+            live_billing=live_billing,
         )
 
 
@@ -1243,6 +1491,21 @@ def serve(
         "--auto-group/--no-auto-group",
         help="Automatically detect and apply smart groups (tag/prefix/VPC clustering)",
     ),
+    aws_profile: str | None = typer.Option(
+        None,
+        "--aws-profile",
+        help="AWS profile to use for optional live features.",
+    ),
+    live_logs: bool = typer.Option(
+        False,
+        "--live-logs",
+        help="Enable /api/logs and the CloudWatch log viewer. Requires --aws-profile and the live logs add-on policy.",
+    ),
+    live_billing: bool = typer.Option(
+        False,
+        "--live-billing",
+        help="Enable /api/billing and CloudWatch usage metric imports. Requires --aws-profile and the billing add-on policy.",
+    ),
 ) -> None:
     """Serve an interactive local StackMap viewer.
 
@@ -1253,6 +1516,10 @@ def serve(
     - Smart grouping (auto-applied when --auto-group is on)
     - Drift detection (when --drift-against is provided)
     """
+    if (live_logs or live_billing) and not aws_profile:
+        console.print("[red]Error:[/red] --live-logs/--live-billing require --aws-profile.")
+        raise typer.Exit(1)
+
     try:
         source_path = _resolve_source_with_remote_pull(source, terraform_dir, auto_pull_remote)
     except RuntimeError as exc:
@@ -1338,11 +1605,27 @@ def serve(
     _, snapshot = state.snapshot()
     _write_graph_json(public_dir / "sample-data.json", snapshot)
 
+    # Set up optional AWS session for explicitly enabled live features.
+    aws_session = None
+    if aws_profile and (live_logs or live_billing):
+        try:
+            import boto3
+            aws_session = boto3.Session(profile_name=aws_profile)
+            enabled = ", ".join(
+                name for name, is_enabled in (("logs", live_logs), ("billing", live_billing)) if is_enabled
+            )
+            console.print(f"[green]✓[/green] AWS session active (profile: {aws_profile}) — live {enabled} enabled")
+        except Exception as exc:
+            console.print(f"[yellow]Warning:[/yellow] Could not create AWS session: {exc}")
+
     handler_cls = partial(
         _StackMapRequestHandler,
         directory=str(public_dir),
         state=state,
         source_type=source_type,
+        aws_session=aws_session,
+        live_logs_enabled=live_logs,
+        live_billing_enabled=live_billing,
     )
     try:
         server = ThreadingHTTPServer((host, port), handler_cls)

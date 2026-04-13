@@ -110,14 +110,74 @@ POLICY_ACTIONS_BROAD = POLICY_ACTIONS_CORE + [
     "config:BatchGetResourceConfig",
 ]
 
+# Optional permissions for billing integration and live logs.
+# These are NOT included in the default scan policy. They are exposed as
+# standalone add-on policies so users can review and attach only what they need.
+POLICY_ACTIONS_BILLING = [
+    "ce:GetCostAndUsage",
+    "cloudwatch:GetMetricStatistics",
+]
+POLICY_ACTIONS_LOGS = [
+    "logs:DescribeLogGroups",
+    "logs:FilterLogEvents",
+    "logs:GetLogEvents",
+]
 
-def build_policy_document(service_set: str = "broad") -> dict[str, Any]:
-    actions = POLICY_ACTIONS_CORE if service_set == "core" else POLICY_ACTIONS_BROAD
+POLICY_ACTIONS_OPTIONAL = {
+    "billing": POLICY_ACTIONS_BILLING,
+    "logs": POLICY_ACTIONS_LOGS,
+}
+
+
+def build_policy_document(
+    service_set: str = "broad",
+    extras: list[str] | None = None,
+) -> dict[str, Any]:
+    """Build an IAM policy document for StackMap.
+
+    Args:
+        service_set: "core" or "broad" base permission set.
+        extras: Optional list of extra permission sets to include.
+            Supported: "billing" (Cost Explorer + CloudWatch metrics),
+                       "logs" (CloudWatch Logs viewer).
+    """
+    actions = list(POLICY_ACTIONS_CORE if service_set == "core" else POLICY_ACTIONS_BROAD)
+    extras = extras or []
+    for extra in extras:
+        if extra == "billing":
+            actions.extend(POLICY_ACTIONS_BILLING)
+        elif extra == "logs":
+            actions.extend(POLICY_ACTIONS_LOGS)
     return {
         "Version": "2012-10-17",
         "Statement": [
             {
                 "Sid": "StackMapReadOnly",
+                "Effect": "Allow",
+                "Action": actions,
+                "Resource": "*",
+            }
+        ],
+    }
+
+
+def build_addon_policy_document(addon: str) -> dict[str, Any]:
+    """Build a standalone IAM policy document for an optional live feature."""
+    normalized = addon.lower()
+    actions = POLICY_ACTIONS_OPTIONAL.get(normalized)
+    if actions is None:
+        raise ValueError(f"Unknown add-on policy: {addon}")
+
+    sid = {
+        "billing": "StackMapBillingReadOnly",
+        "logs": "StackMapLiveLogsReadOnly",
+    }[normalized]
+
+    return {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": sid,
                 "Effect": "Allow",
                 "Action": actions,
                 "Resource": "*",

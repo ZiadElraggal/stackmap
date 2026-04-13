@@ -43,6 +43,7 @@ include = ["stackmap*"]
 exclude = ["frontend*", "tests*"]
 
 [tool.setuptools.package-data]
+"stackmap.cli" = ["*.json"]
 "stackmap.webapp" = ["static/**/*", "static/.gitkeep"]
 
 [tool.ruff]

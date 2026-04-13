@@ -210,6 +210,18 @@ Single account / profile:
 stackmap scan-aws --profile dev --output aws-output.json --serve
 ```
 
+Enable live CloudWatch logs in the viewer for that profile:
+
+```bash
+stackmap scan-aws --profile dev --output aws-output.json --serve --live-logs
+```
+
+Enable AWS billing and usage metric imports in the viewer:
+
+```bash
+stackmap scan-aws --profile dev --output aws-output.json --serve --live-billing
+```
+
 Multi-account via named profiles:
 
 ```bash
@@ -288,7 +300,20 @@ Imports / overlays organization data for AWS organization-aware views.
 
 ### `stackmap aws-policy`
 
-Builds a read-only AWS policy document suitable for StackMap scanning.
+Builds AWS IAM policy documents for StackMap.
+
+By default it prints the base read-only scan policy:
+
+```bash
+stackmap aws-policy
+```
+
+Optional live features are separate add-on policies, not part of the default scan policy:
+
+```bash
+stackmap aws-policy --addon logs
+stackmap aws-policy --addon billing
+```
 
 ### `stackmap setup-org-role`
 
@@ -339,9 +364,46 @@ Current behavior:
 - the detail panel lets you add resource-level usage inputs such as Lambda memory, invocations, duration, storage GB, and transfer GB
 - when you add inputs, StackMap recomputes the estimate and shows the delta from the baseline forecast
 
-Current limitation:
+Optional live usage import:
 
-- AWS billing scans for actual-spend import are not wired yet, so the UI currently shows baseline vs adjusted forecast rather than current bill vs forecast-after-edits
+- With `--live-billing`, StackMap can pull AWS Cost Explorer totals and CloudWatch usage metrics for supported services, then recalculate the forecast from those usage inputs.
+- Without `--live-billing`, the UI stays on local heuristic forecasting and never calls AWS billing or CloudWatch metrics APIs.
+
+#### Live CloudWatch logs
+
+Live logs are optional and only run when you explicitly enable them:
+
+```bash
+stackmap scan-aws --profile dev --serve --live-logs
+```
+
+This keeps the default AWS scan on the minimal read-only policy. If your AWS profile also has the separate live logs policy attached, the UI shows a `Live logs` toggle in the Insights panel and a `View CloudWatch logs` button for supported resources in the detail panel.
+
+The log panel can fetch the last hour, 6 hours, 24 hours, or 7 days, and can aggregate logs from all currently visible resources in the graph.
+
+The live logs policy is separate from the normal scan policy so teams can review and attach it only when they want CloudWatch log access:
+
+```bash
+stackmap aws-policy --addon logs
+```
+
+The packaged policy file is also available for review at `stackmap/cli/aws_policy_live_logs.json`.
+
+#### AWS billing and usage imports
+
+AWS billing is also optional and separate from the default scan policy:
+
+```bash
+stackmap scan-aws --profile dev --serve --live-billing
+```
+
+When enabled, the Cost & Usage panel can fetch AWS usage metrics for all supported resources and recalculate the forecast. Individual resources can also fetch their own usage from the detail panel. CloudFront distributions use the CloudWatch `BytesDownloaded` metric to replace the default transfer estimate when available.
+
+The billing policy is separate from the normal scan policy:
+
+```bash
+stackmap aws-policy --addon billing
+```
 
 #### Drift detection
 
@@ -582,6 +644,19 @@ stackmap aws-policy
 ```
 
 to generate a read-only policy template for scanning.
+
+Optional live UI features use separate policies that can be reviewed and attached independently:
+
+```bash
+stackmap aws-policy --addon logs
+stackmap aws-policy --addon billing
+```
+
+The same reviewable JSON files are included in the package:
+
+- `stackmap/cli/aws_policy.json`
+- `stackmap/cli/aws_policy_live_logs.json`
+- `stackmap/cli/aws_policy_billing.json`
 
 ## License
 

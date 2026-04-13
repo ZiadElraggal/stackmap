@@ -418,6 +418,22 @@
                   Reset
                 </button>
               </div>
+
+              <button
+                v-if="store.billingAvailable && hasSupportedCostInputs"
+                class="w-full rounded-md border border-purple-400/20 bg-purple-500/10 px-3 py-1.5 text-[10px] font-mono text-purple-300 transition hover:bg-purple-500/15"
+                @click="fetchRealUsage"
+              >
+                Fetch real usage from AWS
+              </button>
+
+              <button
+                v-if="store.logsAvailable"
+                class="w-full rounded-md border border-blue-400/20 bg-blue-500/10 px-3 py-1.5 text-[10px] font-mono text-blue-300 transition hover:bg-blue-500/15"
+                @click="viewResourceLogs"
+              >
+                View CloudWatch logs
+              </button>
             </div>
           </Transition>
         </div>
@@ -1165,6 +1181,33 @@ async function resetCostOverrides() {
   syncCostInputs()
   costFeedbackTone.value = 'success'
   costFeedback.value = 'Usage inputs reset to the baseline estimate.'
+}
+
+async function fetchRealUsage() {
+  if (!node.value) return
+  costFeedbackTone.value = 'success'
+  costFeedback.value = 'Fetching real usage metrics from AWS...'
+  const result = await store.fetchUsageMetrics(node.value.id)
+  if (!result.ok) {
+    costFeedbackTone.value = 'warning'
+    costFeedback.value = `Could not fetch usage: ${result.error}`
+    return
+  }
+  if (Object.keys(result.usage || {}).length === 0) {
+    costFeedbackTone.value = 'warning'
+    costFeedback.value = 'No usage data available yet for this resource.'
+    return
+  }
+  syncCostInputs()
+  costFeedbackTone.value = 'success'
+  const keys = Object.keys(result.usage).join(', ')
+  costFeedback.value = `Real usage applied: ${keys}. Cost recalculated.`
+}
+
+async function viewResourceLogs() {
+  if (!node.value) return
+  store.showLogs = true
+  await store.fetchLogs(node.value.id)
 }
 
 function formatCurrency(amount: number): string {

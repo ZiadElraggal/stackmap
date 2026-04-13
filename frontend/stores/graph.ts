@@ -1033,6 +1033,24 @@ export const useGraphStore = defineStore('graph', {
     costOverrides: {} as Record<string, CostOverrideInput>,
     showCosts: false as boolean,
     costHeatmap: false as boolean,
+
+    // Feature: Live Logs
+    showLogs: false as boolean,
+    logEvents: [] as Array<{ timestamp: number; message: string; log_group: string; log_stream: string }>,
+    logGroups: [] as string[],
+    logLoading: false as boolean,
+    logError: null as string | null,
+    logNodeId: null as string | null, // null = aggregated, string = per-resource
+    logScope: 'visible' as 'visible' | 'all' | 'node',
+    logFilter: '' as string,
+    logMinutes: 60 as number,
+    logsAvailable: false as boolean,
+
+    // Feature: Billing
+    billingData: null as { total_monthly: number; by_service: Record<string, number>; period_start: string; period_end: string } | null,
+    billingAvailable: false as boolean,
+    billingLoading: false as boolean,
+    billingError: null as string | null,
   }),
 
   getters: {
@@ -1628,8 +1646,9 @@ export const useGraphStore = defineStore('graph', {
       this.editHistoryFuture = []
       this.loaded = true
 
-      // Auto-load findings and drift data from API (non-blocking)
+      // Auto-load findings, drift data, and check live features (non-blocking)
       this.loadFindings()
+      this.checkLogsAvailable()
       if (this.metadata?.drift_summary) {
         this.driftSummary = this.metadata.drift_summary
       }
@@ -2734,6 +2753,152 @@ export const useGraphStore = defineStore('graph', {
         this.collapsedGroups.delete(groupId)
       } else {
         this.collapsedGroups.add(groupId)
+      }
+    },
+
+    // --- Feature: Live Logs ---
+    async checkLogsAvailable() {
+      try {
+        const res = await fetch('/api/live-features')
+        if (res.ok) {
+          const data = await res.json()
+          this.logsAvailable = !!data.logs
+          this.billingAvailable = !!data.billing
+        }
+      } catch { /* ignore */ }
+    },
+
+    async toggleLogs() {
+      this.showLogs = !this.showLogs
+      if (this.showLogs && this.logEvents.length === 0) {
+        await this.fetchVisibleLogs()
+      }
+    },
+
+    async fetchLogs(nodeId?: string, options: { nodeIds?: string[]; scope?: 'visible' | 'all' | 'node' } = {}) {
+      this.logLoading = true
+      this.logError = null
+      this.logNodeId = nodeId || null
+      this.logScope = nodeId ? 'node' : (options.scope || (options.nodeIds?.length ? 'visible' : 'all'))
+
+      try {
+        const params = new URLSearchParams()
+        if (nodeId) params.set('node', nodeId)
+        if (!nodeId && options.nodeIds?.length) params.set('nodes', options.nodeIds.join(','))
+        if (this.logFilter) params.set('filter', this.logFilter)
+        params.set('minutes', String(this.logMinutes))
+        params.set('limit', '200')
+
+        const res = await fetch(`/api/logs?${params}`)
+        if (res.ok) {
+          const data = await res.json()
+          this.logEvents = data.events || []
+          this.logGroups = data.log_groups || []
+          this.logError = data.error || null
+        } else {
+          const body = await res.json().catch(() => ({}))
+          this.logError = body?.error || `Server returned ${res.status}`
+        }
+      } catch (err) {
+        this.logError = String(err)
+      } finally {
+        this.logLoading = false
+      }
+    },
+
+    async fetchVisibleLogs() {
+      const nodeIds = this.visibleNodes.map(node => node.id)
+      await this.fetchLogs(undefined, { nodeIds, scope: 'visible' })
+    },
+
+    async fetchAllLogs() {
+      await this.fetchLogs(undefined, { scope: 'all' })
+    },
+
+    async setLogMinutes(minutes: number) {
+      this.logMinutes = minutes
+      if (this.logNodeId) {
+        await this.fetchLogs(this.logNodeId)
+      } else if (this.logScope === 'visible') {
+        await this.fetchVisibleLogs()
+      } else {
+        await this.fetchAllLogs()
+      }
+    },
+
+    async setLogFilter(filter: string) {
+      this.logFilter = filter
+      if (this.logNodeId) {
+        await this.fetchLogs(this.logNodeId)
+      } else if (this.logScope === 'visible') {
+        await this.fetchVisibleLogs()
+      } else {
+        await this.fetchAllLogs()
+      }
+    },
+
+    // --- Feature: Billing ---
+    async fetchBillingData() {
+      this.billingLoading = true
+      this.billingError = null
+      try {
+        const res = await fetch('/api/billing')
+        if (res.ok) {
+          this.billingData = await res.json()
+        } else {
+          const body = await res.json().catch(() => ({}))
+          this.billingError = body?.error || `Server returned ${res.status}`
+        }
+      } catch (err) {
+        this.billingError = String(err)
+      } finally {
+        this.billingLoading = false
+      }
+    },
+
+    async fetchUsageMetrics(nodeId: string) {
+      try {
+        const res = await fetch(`/api/billing/usage?node=${encodeURIComponent(nodeId)}`)
+        if (res.ok) {
+          const data = await res.json()
+          if (data.usage && Object.keys(data.usage).length > 0) {
+            await this.setNodeCostOverrides(nodeId, data.usage)
+            return { ok: true, usage: data.usage }
+          }
+          return { ok: true, usage: {} }
+        }
+        const body = await res.json().catch(() => ({}))
+        return { ok: false, error: body?.error || `Server returned ${res.status}` }
+      } catch (err) {
+        return { ok: false, error: String(err) }
+      }
+    },
+
+    async fetchAllUsageMetrics(): Promise<{ ok: boolean; count?: number; error?: string }> {
+      this.billingLoading = true
+      this.billingError = null
+      try {
+        const res = await fetch('/api/billing/usage')
+        if (res.ok) {
+          const data = await res.json()
+          const overrides = this._sanitizeCostOverrides(data.overrides || {})
+          this.costOverrides = {
+            ...this.costOverrides,
+            ...overrides,
+          }
+          await this.refreshCostData()
+          return { ok: true, count: Object.keys(overrides).length }
+        }
+        const body = await res.json().catch(() => ({}))
+        const error = body?.error || `Server returned ${res.status}`
+        this.billingError = error
+        return { ok: false, error }
+      } catch (err) {
+        const error = String(err)
+        this.billingError = error
+        return { ok: false, error }
+      } finally {
+        this.billingLoading = false
       }
     },
   },

@@ -27,6 +27,7 @@
     <EditToolbar v-if="!store.presentationMode" />
     <DriftSummaryBar v-if="!store.presentationMode" />
     <CostOverlay v-if="!store.presentationMode" />
+    <LogViewer v-if="!store.presentationMode" />
 
     <!-- Empty state overlay -->
     <Transition name="fade">

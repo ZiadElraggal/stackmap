@@ -39,6 +39,19 @@
         {{ hasOverrides ? 'Forecast includes usage inputs from the detail panel.' : 'Estimate uses resource metadata and built-in heuristics.' }}
       </p>
 
+      <div v-if="store.billingAvailable" class="cost-live-card">
+        <div class="cost-live-title">AWS usage import</div>
+        <div class="cost-live-copy">
+          Pull CloudWatch usage metrics for supported resources and recalculate the forecast.
+        </div>
+        <button class="cost-live-btn" :disabled="store.billingLoading" @click="fetchAllAwsUsage">
+          {{ store.billingLoading ? 'Fetching...' : 'Fetch all AWS usage' }}
+        </button>
+        <div v-if="awsUsageFeedback" class="cost-live-feedback" :class="{ warning: awsUsageFeedbackTone === 'warning' }">
+          {{ awsUsageFeedback }}
+        </div>
+      </div>
+
       <!-- Per-resource breakdown (top items in scope) -->
       <div class="cost-section">
         <div class="cost-section__header">
@@ -117,6 +130,8 @@ const store = useGraphStore()
 
 type CostScope = 'all' | 'visible' | 'category'
 const scope = ref<CostScope>('all')
+const awsUsageFeedback = ref('')
+const awsUsageFeedbackTone = ref<'success' | 'warning'>('success')
 
 const scopeTabs = [
   { key: 'all' as CostScope, label: 'All' },
@@ -240,6 +255,24 @@ const topComponents = computed(() => {
 async function resetOverrides() {
   store.costOverrides = {}
   await store.refreshCostData()
+}
+
+async function fetchAllAwsUsage() {
+  awsUsageFeedback.value = 'Fetching AWS usage metrics...'
+  awsUsageFeedbackTone.value = 'success'
+  const result = await store.fetchAllUsageMetrics()
+  if (!result.ok) {
+    awsUsageFeedbackTone.value = 'warning'
+    awsUsageFeedback.value = `Could not fetch AWS usage: ${result.error}`
+    return
+  }
+  const count = result.count || 0
+  if (count === 0) {
+    awsUsageFeedbackTone.value = 'warning'
+    awsUsageFeedback.value = 'No supported AWS usage metrics were returned yet.'
+    return
+  }
+  awsUsageFeedback.value = `Applied AWS usage metrics to ${count} resource${count === 1 ? '' : 's'}.`
 }
 
 function formatCost(amount: number): string {
@@ -410,6 +443,55 @@ function formatCost(amount: number): string {
   margin: 8px 0 0;
   font-size: 12px;
   line-height: 1.5;
+}
+
+.cost-live-card {
+  margin-top: 12px;
+  border: 1px solid rgba(192, 132, 252, 0.18);
+  border-radius: 12px;
+  background: rgba(192, 132, 252, 0.08);
+  padding: 10px;
+}
+
+.cost-live-title {
+  color: #e9d5ff;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.cost-live-copy,
+.cost-live-feedback {
+  margin-top: 4px;
+  color: var(--sm-text-muted, rgba(245, 245, 247, 0.55));
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.cost-live-feedback.warning {
+  color: #fbbf24;
+}
+
+.cost-live-btn {
+  margin-top: 8px;
+  width: 100%;
+  border: 1px solid rgba(192, 132, 252, 0.25);
+  border-radius: 8px;
+  background: rgba(192, 132, 252, 0.12);
+  color: #e9d5ff;
+  cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  padding: 7px 10px;
+  transition: all 0.15s;
+}
+
+.cost-live-btn:hover:not(:disabled) {
+  background: rgba(192, 132, 252, 0.18);
+}
+
+.cost-live-btn:disabled {
+  cursor: wait;
+  opacity: 0.7;
 }
 
 .cost-section {
