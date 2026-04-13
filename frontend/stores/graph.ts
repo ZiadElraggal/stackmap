@@ -28,6 +28,14 @@ export interface StackMapNode {
     region?: string
     org_path?: string
     view_kind?: string
+    // Drift detection
+    drift_status?: 'in_sync' | 'missing' | 'extra' | 'drifted'
+    drift_fields?: Record<string, { iac: any; live: any }>
+    drift_severity?: 'info' | 'warning' | 'critical'
+    // Cost overlay
+    cost_monthly?: number
+    cost_confidence?: 'high' | 'medium' | 'low' | 'unknown'
+    cost_note?: string
   }
 }
 
@@ -38,6 +46,14 @@ export interface StackMapEdge {
   edge_type: string
   label: string
   color?: string
+  metadata?: {
+    source?: string
+    inference_rule?: string
+    confidence?: 'high' | 'medium' | 'low' | string
+    evidence?: string
+    api_calls?: string[]
+    [key: string]: any
+  }
 }
 
 export type EditSubmode = 'inspect' | 'structure' | 'connect'
@@ -79,6 +95,10 @@ export interface StackMapGroup {
     account_name?: string
     ou_id?: string
     org_path?: string
+    auto_strategy?: string
+    evidence?: string
+    confidence?: string
+    [key: string]: any
   }
 }
 
@@ -111,6 +131,35 @@ export interface ComponentSummary {
   helperRatio: number
   mostlyNetwork: boolean
   summary: string
+}
+
+export interface CostOverrideInput {
+  memory_mb?: number
+  invocations_per_month?: number
+  avg_duration_ms?: number
+  storage_gb?: number
+  data_transfer_gb?: number
+}
+
+export interface CostNodeEstimate {
+  resource_id: string
+  resource_name: string
+  resource_type: string
+  monthly_estimate: number
+  confidence: string
+  pricing_model: string
+  estimate_note: string
+  breakdown?: Record<string, unknown> | null
+}
+
+export interface CostReportData {
+  total_monthly: number
+  by_node: Record<string, CostNodeEstimate>
+  by_category: Record<string, number>
+  by_tier: Record<string, number>
+  by_group: Record<string, number>
+  expensive_paths: Array<Record<string, unknown>>
+  currency: string
 }
 
 interface EditHistorySnapshot {
@@ -931,6 +980,7 @@ export const useGraphStore = defineStore('graph', {
     showWeaklyLinkedComponents: false as boolean,
     collapseNetworkScaffolding: true as boolean,
     showCrossAccountEdges: true as boolean,
+    showLowConfidenceEdges: true as boolean,
 
     // Edit mode state
     editMode: false as boolean,
@@ -957,6 +1007,63 @@ export const useGraphStore = defineStore('graph', {
     editorPanelCollapsed: false as boolean,
     hasSeenEditWalkthrough: false as boolean,
     originalNodeSnapshots: {} as Record<string, OriginalNodeSnapshot>,
+
+    // Feature: Drift Detection
+    driftMode: false as boolean,
+    driftSummary: null as { in_sync: number; drifted: number; missing: number; extra: number } | null,
+
+    // Feature: Smart Groups
+    smartGroups: [] as StackMapGroup[],
+    collapsedGroups: new Set<string>() as Set<string>,
+
+    // Feature: Dependency Tracing
+    traceResult: null as {
+      origin_id: string
+      upstream: { node_id: string; depth: number; edge_type: string; edge_label: string; direction: string }[]
+      downstream: { node_id: string; depth: number; edge_type: string; edge_label: string; direction: string }[]
+      blast_radius: number
+      critical_path: string[]
+      critical_path_length: number
+    } | null,
+    traceOriginId: null as string | null,
+
+    // Feature: Suspicious Pattern Detection
+    findings: [] as {
+      id: string
+      pattern_id: string
+      title: string
+      description: string
+      severity: string
+      node_ids: string[]
+      recommendation: string
+      category: string
+    }[],
+    activeFindingFilter: null as string | null,
+
+    // Feature: Cost Overlay
+    costData: null as CostReportData | null,
+    baseCostData: null as CostReportData | null,
+    costOverrides: {} as Record<string, CostOverrideInput>,
+    showCosts: false as boolean,
+    costHeatmap: false as boolean,
+
+    // Feature: Live Logs
+    showLogs: false as boolean,
+    logEvents: [] as Array<{ timestamp: number; message: string; log_group: string; log_stream: string }>,
+    logGroups: [] as string[],
+    logLoading: false as boolean,
+    logError: null as string | null,
+    logNodeId: null as string | null, // null = aggregated, string = per-resource
+    logScope: 'visible' as 'visible' | 'all' | 'node',
+    logFilter: '' as string,
+    logMinutes: 60 as number,
+    logsAvailable: false as boolean,
+
+    // Feature: Billing
+    billingData: null as { total_monthly: number; by_service: Record<string, number>; period_start: string; period_end: string } | null,
+    billingAvailable: false as boolean,
+    billingLoading: false as boolean,
+    billingError: null as string | null,
   }),
 
   getters: {
@@ -973,6 +1080,10 @@ export const useGraphStore = defineStore('graph', {
       return state.userEdges.find(edge => edge.id === state.selectedEdgeId)
         ?? this.graphEdges.find(edge => edge.id === state.selectedEdgeId)
         ?? null
+    },
+
+    hasCostOverrides(state): boolean {
+      return Object.keys(state.costOverrides).length > 0
     },
 
     hasOrganizationData(state): boolean {
@@ -1061,6 +1172,9 @@ export const useGraphStore = defineStore('graph', {
       if (!state.showCrossAccountEdges) {
         baseEdges = baseEdges.filter(edge => edge.edge_type !== 'cross_account_reference')
       }
+      if (!state.showLowConfidenceEdges) {
+        baseEdges = baseEdges.filter(edge => edge.metadata?.confidence !== 'low')
+      }
 
       const parentMap = this.helperParentMap
       const dedup = new Set<string>()
@@ -1108,6 +1222,9 @@ export const useGraphStore = defineStore('graph', {
       let baseEdges = state.edges
       if (!state.showCrossAccountEdges) {
         baseEdges = baseEdges.filter(edge => edge.edge_type !== 'cross_account_reference')
+      }
+      if (!state.showLowConfidenceEdges) {
+        baseEdges = baseEdges.filter(edge => edge.metadata?.confidence !== 'low')
       }
       if (!state.activeAccountId) return baseEdges
       const visibleIds = new Set(this.rawSourceNodes.map(node => node.id))
@@ -1547,6 +1664,13 @@ export const useGraphStore = defineStore('graph', {
       this.editHistoryPast = []
       this.editHistoryFuture = []
       this.loaded = true
+
+      // Auto-load findings, drift data, and check live features (non-blocking)
+      this.loadFindings()
+      this.checkLogsAvailable()
+      if (this.metadata?.drift_summary) {
+        this.driftSummary = this.metadata.drift_summary
+      }
     },
 
     setDiffMode(enabled: boolean) {
@@ -1664,6 +1788,10 @@ export const useGraphStore = defineStore('graph', {
 
     setShowCrossAccountEdges(show: boolean) {
       this.showCrossAccountEdges = show
+    },
+
+    setShowLowConfidenceEdges(show: boolean) {
+      this.showLowConfidenceEdges = show
     },
 
     openComponent(componentId: string) {
@@ -2429,6 +2557,371 @@ export const useGraphStore = defineStore('graph', {
       this.requestRelayout()
       if (typeof window !== 'undefined') {
         localStorage.removeItem('stackmap-edits')
+      }
+    },
+
+    // --- Feature: Dependency Tracing ---
+    async traceNode(nodeId: string) {
+      this.traceOriginId = nodeId
+      try {
+        const res = await fetch(`/api/trace?node=${encodeURIComponent(nodeId)}&depth=5&direction=both`)
+        if (res.ok) {
+          this.traceResult = await res.json()
+        }
+      } catch {
+        // Client-side BFS fallback
+        this.traceResult = this._clientSideTrace(nodeId)
+      }
+    },
+
+    clearTrace() {
+      this.traceResult = null
+      this.traceOriginId = null
+    },
+
+    _clientSideTrace(originId: string) {
+      const forward: Record<string, { target: string; edge_type: string; label: string }[]> = {}
+      const reverse: Record<string, { source: string; edge_type: string; label: string }[]> = {}
+      for (const edge of this.edges) {
+        if (edge.edge_type === 'contains') continue
+        if (!forward[edge.source]) forward[edge.source] = []
+        forward[edge.source].push({ target: edge.target, edge_type: edge.edge_type, label: edge.label })
+        if (!reverse[edge.target]) reverse[edge.target] = []
+        reverse[edge.target].push({ source: edge.source, edge_type: edge.edge_type, label: edge.label })
+      }
+
+      const bfs = (adj: Record<string, any[]>, direction: string, keyField: string) => {
+        const visited = new Set([originId])
+        const queue = [{ id: originId, depth: 0 }]
+        const hops: any[] = []
+        while (queue.length > 0) {
+          const { id, depth } = queue.shift()!
+          if (depth >= 5) continue
+          for (const neighbor of (adj[id] || [])) {
+            const neighborId = neighbor[keyField]
+            if (visited.has(neighborId)) continue
+            visited.add(neighborId)
+            hops.push({ node_id: neighborId, depth: depth + 1, edge_type: neighbor.edge_type, edge_label: neighbor.label || '', direction })
+            queue.push({ id: neighborId, depth: depth + 1 })
+          }
+        }
+        return hops
+      }
+
+      const upstream = bfs(reverse, 'upstream', 'source')
+      const downstream = bfs(forward, 'downstream', 'target')
+
+      return {
+        origin_id: originId,
+        upstream,
+        downstream,
+        blast_radius: new Set(downstream.map((h: any) => h.node_id)).size,
+        critical_path: [originId],
+        critical_path_length: 0,
+      }
+    },
+
+    // --- Feature: Findings ---
+    async loadFindings() {
+      try {
+        const res = await fetch('/api/findings')
+        if (res.ok) {
+          this.findings = await res.json()
+        }
+      } catch { /* ignore */ }
+    },
+
+    setFindingFilter(patternId: string | null) {
+      this.activeFindingFilter = patternId
+    },
+
+    // --- Feature: Cost ---
+    _sanitizeCostOverrides(overrides: Record<string, CostOverrideInput>): Record<string, CostOverrideInput> {
+      const cleanedEntries = Object.entries(overrides)
+        .map(([nodeId, values]) => {
+          const cleanedValues = Object.fromEntries(
+            Object.entries(values).filter(([, raw]) => typeof raw === 'number' && Number.isFinite(raw) && raw >= 0)
+          ) as CostOverrideInput
+          return [nodeId, cleanedValues] as const
+        })
+        .filter(([, values]) => Object.keys(values).length > 0)
+      return Object.fromEntries(cleanedEntries)
+    },
+
+    _applyCostDataToNodes(report: CostReportData | null) {
+      const byNode = report?.by_node || {}
+      for (const node of this.nodes) {
+        if (!node.position_hint) node.position_hint = { tier: 'compute', weight: 2 }
+        const estimate = byNode[node.id]
+        if (estimate) {
+          node.position_hint.cost_monthly = estimate.monthly_estimate
+          node.position_hint.cost_confidence = estimate.confidence as StackMapNode['position_hint']['cost_confidence']
+          node.position_hint.cost_note = estimate.estimate_note
+        } else {
+          delete node.position_hint.cost_monthly
+          delete node.position_hint.cost_confidence
+          delete node.position_hint.cost_note
+        }
+      }
+    },
+
+    async ensureBaseCostData() {
+      try {
+        const res = await fetch('/api/cost')
+        if (res.ok) {
+          const report = await res.json() as CostReportData
+          this.baseCostData = report
+          if (!this.hasCostOverrides) {
+            this.costData = report
+            this._applyCostDataToNodes(report)
+          }
+        }
+      } catch { /* ignore */ }
+    },
+
+    async refreshCostData(): Promise<{ ok: boolean; error?: string }> {
+      if (!this.baseCostData) {
+        await this.ensureBaseCostData()
+      }
+
+      const overrides = this._sanitizeCostOverrides(this.costOverrides)
+      this.costOverrides = overrides
+
+      if (Object.keys(overrides).length === 0) {
+        this.costData = this.baseCostData
+        this._applyCostDataToNodes(this.costData)
+        return { ok: true }
+      }
+
+      try {
+        const res = await fetch('/api/cost', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ overrides }),
+        })
+        if (res.ok) {
+          const report = await res.json() as CostReportData
+          this.costData = report
+          this._applyCostDataToNodes(report)
+          return { ok: true }
+        }
+        const body = await res.json().catch(() => ({}))
+        return { ok: false, error: body?.error || `Server returned ${res.status}` }
+      } catch (err) {
+        return { ok: false, error: String(err) }
+      }
+    },
+
+    async setNodeCostOverrides(nodeId: string, overrides: CostOverrideInput): Promise<{ ok: boolean; error?: string }> {
+      const current = this.costOverrides[nodeId] || {}
+      // Only merge keys that are explicitly provided (not undefined)
+      const merged = { ...current }
+      for (const [key, value] of Object.entries(overrides)) {
+        if (value !== undefined) {
+          (merged as Record<string, unknown>)[key] = value
+        }
+      }
+      const cleaned = Object.fromEntries(
+        Object.entries(merged).filter(([, value]) => typeof value === 'number' && Number.isFinite(value) && value >= 0)
+      ) as CostOverrideInput
+
+      if (Object.keys(cleaned).length > 0) {
+        this.costOverrides = {
+          ...this.costOverrides,
+          [nodeId]: cleaned,
+        }
+      } else {
+        const { [nodeId]: _removed, ...rest } = this.costOverrides
+        this.costOverrides = rest
+      }
+
+      return this.refreshCostData()
+    },
+
+    async clearNodeCostOverrides(nodeId: string) {
+      if (!(nodeId in this.costOverrides)) return
+      const { [nodeId]: _removed, ...rest } = this.costOverrides
+      this.costOverrides = rest
+      await this.refreshCostData()
+    },
+
+    async loadCostData() {
+      await this.refreshCostData()
+    },
+
+    async toggleCosts() {
+      this.showCosts = !this.showCosts
+      if (this.showCosts) {
+        await this.refreshCostData()
+      }
+    },
+
+    toggleCostHeatmap() {
+      this.costHeatmap = !this.costHeatmap
+    },
+
+    // --- Feature: Drift ---
+    setDriftMode(enabled: boolean) {
+      this.driftMode = enabled
+      if (enabled && this.metadata?.drift_summary) {
+        this.driftSummary = this.metadata.drift_summary
+      }
+    },
+
+    // --- Feature: Smart Groups ---
+    toggleGroupCollapse(groupId: string) {
+      if (this.collapsedGroups.has(groupId)) {
+        this.collapsedGroups.delete(groupId)
+      } else {
+        this.collapsedGroups.add(groupId)
+      }
+    },
+
+    // --- Feature: Live Logs ---
+    async checkLogsAvailable() {
+      try {
+        const res = await fetch('/api/live-features')
+        if (res.ok) {
+          const data = await res.json()
+          this.logsAvailable = !!data.logs
+          this.billingAvailable = !!data.billing
+        }
+      } catch { /* ignore */ }
+    },
+
+    async toggleLogs() {
+      this.showLogs = !this.showLogs
+      if (this.showLogs && this.logEvents.length === 0) {
+        await this.fetchVisibleLogs()
+      }
+    },
+
+    async fetchLogs(nodeId?: string, options: { nodeIds?: string[]; scope?: 'visible' | 'all' | 'node' } = {}) {
+      this.logLoading = true
+      this.logError = null
+      this.logNodeId = nodeId || null
+      this.logScope = nodeId ? 'node' : (options.scope || (options.nodeIds?.length ? 'visible' : 'all'))
+
+      try {
+        const params = new URLSearchParams()
+        if (nodeId) params.set('node', nodeId)
+        if (!nodeId && options.nodeIds?.length) params.set('nodes', options.nodeIds.join(','))
+        if (this.logFilter) params.set('filter', this.logFilter)
+        params.set('minutes', String(this.logMinutes))
+        params.set('limit', '200')
+
+        const res = await fetch(`/api/logs?${params}`)
+        if (res.ok) {
+          const data = await res.json()
+          this.logEvents = data.events || []
+          this.logGroups = data.log_groups || []
+          this.logError = data.error || null
+        } else {
+          const body = await res.json().catch(() => ({}))
+          this.logError = body?.error || `Server returned ${res.status}`
+        }
+      } catch (err) {
+        this.logError = String(err)
+      } finally {
+        this.logLoading = false
+      }
+    },
+
+    async fetchVisibleLogs() {
+      const nodeIds = this.visibleNodes.map(node => node.id)
+      await this.fetchLogs(undefined, { nodeIds, scope: 'visible' })
+    },
+
+    async fetchAllLogs() {
+      await this.fetchLogs(undefined, { scope: 'all' })
+    },
+
+    async setLogMinutes(minutes: number) {
+      this.logMinutes = minutes
+      if (this.logNodeId) {
+        await this.fetchLogs(this.logNodeId)
+      } else if (this.logScope === 'visible') {
+        await this.fetchVisibleLogs()
+      } else {
+        await this.fetchAllLogs()
+      }
+    },
+
+    async setLogFilter(filter: string) {
+      this.logFilter = filter
+      if (this.logNodeId) {
+        await this.fetchLogs(this.logNodeId)
+      } else if (this.logScope === 'visible') {
+        await this.fetchVisibleLogs()
+      } else {
+        await this.fetchAllLogs()
+      }
+    },
+
+    // --- Feature: Billing ---
+    async fetchBillingData() {
+      this.billingLoading = true
+      this.billingError = null
+      try {
+        const res = await fetch('/api/billing')
+        if (res.ok) {
+          this.billingData = await res.json()
+        } else {
+          const body = await res.json().catch(() => ({}))
+          this.billingError = body?.error || `Server returned ${res.status}`
+        }
+      } catch (err) {
+        this.billingError = String(err)
+      } finally {
+        this.billingLoading = false
+      }
+    },
+
+    async fetchUsageMetrics(nodeId: string) {
+      try {
+        const res = await fetch(`/api/billing/usage?node=${encodeURIComponent(nodeId)}`)
+        if (res.ok) {
+          const data = await res.json()
+          if (data.usage && Object.keys(data.usage).length > 0) {
+            await this.setNodeCostOverrides(nodeId, data.usage)
+            return { ok: true, usage: data.usage }
+          }
+          return { ok: true, usage: {} }
+        }
+        const body = await res.json().catch(() => ({}))
+        return { ok: false, error: body?.error || `Server returned ${res.status}` }
+      } catch (err) {
+        return { ok: false, error: String(err) }
+      }
+    },
+
+    async fetchAllUsageMetrics(): Promise<{ ok: boolean; count?: number; error?: string }> {
+      this.billingLoading = true
+      this.billingError = null
+      try {
+        const res = await fetch('/api/billing/usage')
+        if (res.ok) {
+          const data = await res.json()
+          const overrides = this._sanitizeCostOverrides(data.overrides || {})
+          this.costOverrides = {
+            ...this.costOverrides,
+            ...overrides,
+          }
+          await this.refreshCostData()
+          return { ok: true, count: Object.keys(overrides).length }
+        }
+        const body = await res.json().catch(() => ({}))
+        const error = body?.error || `Server returned ${res.status}`
+        this.billingError = error
+        return { ok: false, error }
+      } catch (err) {
+        const error = String(err)
+        this.billingError = error
+        return { ok: false, error }
+      } finally {
+        this.billingLoading = false
       }
     },
   },

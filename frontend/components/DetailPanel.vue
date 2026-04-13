@@ -282,6 +282,10 @@
                   </button>
                 </div>
               </div>
+              <div v-if="smartGroupReason" class="mb-3 rounded-lg border border-blue-400/15 bg-blue-500/[0.05] px-3 py-2">
+                <div class="text-[10px] uppercase tracking-widest text-blue-300">Smart group reason</div>
+                <div class="mt-1 text-xs font-mono text-gray-300">{{ smartGroupReason }}</div>
+              </div>
               <dl>
                 <div
                   v-for="([key, val], idx) in topProperties"
@@ -295,6 +299,145 @@
                   </dd>
                 </div>
               </dl>
+            </div>
+          </Transition>
+        </div>
+
+        <div class="rounded-xl border border-white/[0.08] bg-white/[0.02]">
+          <button class="section-toggle" @click="toggleSection('cost')">
+            <span>Cost & Usage</span>
+            <span class="section-toggle__meta">{{ sectionOpen.cost ? 'Hide' : 'Show' }}</span>
+          </button>
+          <Transition name="expand">
+            <div v-if="sectionOpen.cost" class="section-body space-y-3">
+              <div v-if="selectedNodeCost" class="rounded-lg border border-emerald-400/15 bg-emerald-500/[0.06] px-3 py-3">
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <div class="text-[10px] font-mono uppercase tracking-wider text-emerald-300/80">Forecast</div>
+                    <div class="mt-1 text-lg font-semibold text-white">${{ formatCurrency(selectedNodeCost.monthly_estimate) }}/mo</div>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-[10px] font-mono uppercase tracking-wider text-gray-500">Confidence</div>
+                    <div class="mt-1 text-xs font-mono text-gray-200">{{ selectedNodeCost.confidence }}</div>
+                  </div>
+                </div>
+                <div v-if="baselineNodeCost && Math.abs(baselineNodeCost.monthly_estimate - selectedNodeCost.monthly_estimate) >= 0.01" class="mt-2 text-[11px] font-mono text-gray-300">
+                  Baseline: ${{ formatCurrency(baselineNodeCost.monthly_estimate) }}/mo
+                </div>
+                <div class="mt-2 text-xs leading-relaxed text-gray-400">
+                  {{ selectedNodeCost.estimate_note }}
+                </div>
+              </div>
+
+              <div class="rounded-lg border border-white/[0.06] bg-black/20 px-3 py-3 text-xs leading-relaxed text-gray-400">
+                Add usage assumptions for better per-resource forecasts. Current AWS billing import is not wired yet, so this compares built-in baseline estimates against your edits.
+              </div>
+
+              <div
+                v-if="costFeedback"
+                class="rounded-lg border px-3 py-2 text-xs font-mono"
+                :class="costFeedbackTone === 'success' ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-200' : 'border-amber-400/20 bg-amber-500/10 text-amber-100'"
+              >
+                {{ costFeedback }}
+              </div>
+
+              <div
+                v-if="!hasSupportedCostInputs"
+                class="rounded-lg border border-amber-400/20 bg-amber-500/10 px-3 py-3 text-xs leading-relaxed text-amber-100"
+              >
+                This resource currently uses a fixed or instance-based estimate. Per-resource usage inputs are only enabled where the estimator supports them today.
+              </div>
+
+              <label v-if="supportsMemoryInput" class="block">
+                <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Memory MB</span>
+                <input
+                  v-model="costInputs.memory_mb"
+                  type="number"
+                  min="0"
+                  step="1"
+                  class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+                  placeholder="256"
+                />
+              </label>
+
+              <label v-if="supportsInvocationInput" class="block">
+                <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Invocations / month</span>
+                <input
+                  v-model="costInputs.invocations_per_month"
+                  type="number"
+                  min="0"
+                  step="1"
+                  class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+                  placeholder="1000000"
+                />
+              </label>
+
+              <label v-if="supportsDurationInput" class="block">
+                <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Average duration ms</span>
+                <input
+                  v-model="costInputs.avg_duration_ms"
+                  type="number"
+                  min="0"
+                  step="1"
+                  class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+                  placeholder="200"
+                />
+              </label>
+
+              <label v-if="supportsStorageInput" class="block">
+                <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Storage GB</span>
+                <input
+                  v-model="costInputs.storage_gb"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+                  placeholder="100"
+                />
+              </label>
+
+              <label v-if="supportsTransferInput" class="block">
+                <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Transfer GB</span>
+                <input
+                  v-model="costInputs.data_transfer_gb"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+                  placeholder="100"
+                />
+              </label>
+
+              <div v-if="hasSupportedCostInputs" class="flex gap-2">
+                <button
+                  class="flex-1 rounded-md border border-emerald-400/20 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-mono text-emerald-300 transition hover:bg-emerald-500/15"
+                  @click="applyCostOverrides"
+                >
+                  Recalculate
+                </button>
+                <button
+                  class="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-mono text-gray-300 transition hover:bg-white/10"
+                  @click="resetCostOverrides"
+                >
+                  Reset
+                </button>
+              </div>
+
+              <button
+                v-if="store.billingAvailable && hasSupportedCostInputs"
+                class="w-full rounded-md border border-purple-400/20 bg-purple-500/10 px-3 py-1.5 text-[10px] font-mono text-purple-300 transition hover:bg-purple-500/15"
+                @click="fetchRealUsage"
+              >
+                Fetch real usage from AWS
+              </button>
+
+              <button
+                v-if="store.logsAvailable"
+                class="w-full rounded-md border border-blue-400/20 bg-blue-500/10 px-3 py-1.5 text-[10px] font-mono text-blue-300 transition hover:bg-blue-500/15"
+                @click="viewResourceLogs"
+              >
+                View CloudWatch logs
+              </button>
             </div>
           </Transition>
         </div>
@@ -422,6 +565,32 @@
             </div>
           </Transition>
         </div>
+
+        <div class="rounded-xl border border-white/[0.08] bg-white/[0.02]">
+          <button class="section-toggle" @click="toggleSection('trace')">
+            <span>Dependency Trace</span>
+            <span class="section-toggle__meta">{{ sectionOpen.trace ? 'Hide' : 'Show' }}</span>
+          </button>
+          <Transition name="expand">
+            <div v-if="sectionOpen.trace" class="section-body">
+              <button
+                v-if="!store.traceResult || store.traceOriginId !== node.id"
+                class="w-full rounded-md border border-blue-400/20 bg-blue-500/10 px-3 py-1.5 text-[10px] font-mono text-blue-300 transition hover:bg-blue-500/15"
+                @click="store.traceNode(node.id)"
+              >
+                Trace Dependencies
+              </button>
+              <button
+                v-else
+                class="w-full rounded-md border border-gray-400/20 bg-white/5 px-3 py-1.5 text-[10px] font-mono text-gray-300 transition hover:bg-white/10"
+                @click="store.clearTrace()"
+              >
+                Clear Trace
+              </button>
+              <TracePanel />
+            </div>
+          </Transition>
+        </div>
       </div>
 
       <div class="p-4">
@@ -467,6 +636,32 @@
           <div class="mt-3 flex items-center gap-1.5 flex-wrap">
             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium tracking-wide" :style="{ backgroundColor: `${edgeColor}20`, color: edgeColor }">{{ edge.edge_type }}</span>
             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] text-gray-500 bg-white/5">{{ edge.label }}</span>
+            <span
+              v-if="edgeConfidence"
+              class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium"
+              :class="edgeConfidenceClass"
+            >
+              {{ edgeConfidence }} confidence
+            </span>
+          </div>
+        </div>
+
+        <div v-if="edgeEvidence" class="p-4 border-b border-white/10">
+          <div class="rounded-xl border border-blue-400/15 bg-blue-500/[0.06] p-3">
+            <div class="mb-2 flex items-center justify-between gap-2">
+              <span class="text-[10px] font-mono uppercase tracking-wider text-blue-300">Inference Evidence</span>
+              <span v-if="edgeInferenceRule" class="text-[10px] font-mono text-blue-200/70">{{ edgeInferenceRule }}</span>
+            </div>
+            <p class="text-xs leading-relaxed text-gray-300">{{ edgeEvidence }}</p>
+            <div v-if="edgeApiCalls.length" class="mt-2 flex flex-wrap gap-1">
+              <span
+                v-for="call in edgeApiCalls"
+                :key="call"
+                class="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-mono text-gray-400"
+              >
+                {{ call }}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -638,7 +833,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useGraphStore } from '~/stores/graph'
 import { CATEGORY_COLORS, MANUAL_EDGE_TYPES, USER_NODE_TEMPLATES, buildLayerDefinitions, getNodeIconAsset, getNodeIconPath, getResourceIconAsset, getResourceIconPath } from '~/composables/useGraph'
 
@@ -650,17 +845,44 @@ const sectionOpen = ref<Record<string, boolean>>({
   nodeEditor: true,
   focusTools: false,
   properties: true,
+  cost: true,
   tags: false,
   connections: true,
   neighborhood: false,
   edgeEditor: true,
+  trace: false,
   emptyGuidance: true,
   emptyChanges: true,
   emptyStatus: false,
 })
+const costInputs = ref<Record<string, string>>({
+  memory_mb: '',
+  invocations_per_month: '',
+  avg_duration_ms: '',
+  storage_gb: '',
+  data_transfer_gb: '',
+})
+const costFeedback = ref('')
+const costFeedbackTone = ref<'success' | 'warning'>('success')
 
 const node = computed(() => store.selectedNode)
 const edge = computed(() => store.selectedEdge)
+const edgeEvidence = computed(() => edge.value?.metadata?.evidence || '')
+const edgeInferenceRule = computed(() => String(edge.value?.metadata?.inference_rule || '').replace(/_/g, ' '))
+const edgeConfidence = computed(() => edge.value?.metadata?.confidence || '')
+const edgeApiCalls = computed(() => Array.isArray(edge.value?.metadata?.api_calls) ? edge.value!.metadata!.api_calls! : [])
+const edgeConfidenceClass = computed(() => {
+  switch (edgeConfidence.value) {
+    case 'high':
+      return 'bg-emerald-500/15 text-emerald-300'
+    case 'medium':
+      return 'bg-amber-500/15 text-amber-300'
+    case 'low':
+      return 'bg-gray-500/15 text-gray-300'
+    default:
+      return 'bg-blue-500/15 text-blue-300'
+  }
+})
 const diffStatus = computed(() => node.value?.position_hint?.diff_status as string | undefined)
 const diffChanges = computed(() => node.value?.position_hint?.diff_changes as Record<string, unknown> | undefined)
 const diffStatusColor = computed(() => {
@@ -708,6 +930,52 @@ const componentLabel = computed(() => {
   const component = store.componentSummaries.find(summary => summary.nodeIds.includes(node.value!.id))
   return component ? component.name.replace(/-/g, ' ') : null
 })
+const smartGroupReason = computed(() => {
+  if (!node.value) return ''
+  const group = store.graphGroups.find(candidate =>
+    candidate.children.includes(node.value!.id)
+    && candidate.metadata?.auto_strategy
+  )
+  if (!group) return ''
+  return String(group.metadata?.evidence || `Grouped by ${String(group.metadata?.auto_strategy).replace(/_/g, ' ')}`)
+})
+const selectedNodeCost = computed(() => {
+  if (!node.value) return null
+  return store.costData?.by_node?.[node.value.id] || null
+})
+const baselineNodeCost = computed(() => {
+  if (!node.value) return null
+  return store.baseCostData?.by_node?.[node.value.id] || null
+})
+const STORAGE_OVERRIDE_TYPES = new Set([
+  'aws_s3_bucket',
+  'AWS::S3::Bucket',
+  'aws_ecr_repository',
+])
+const TRANSFER_OVERRIDE_TYPES = new Set([
+  'aws_cloudfront_distribution',
+  'AWS::CloudFront::Distribution',
+  'aws_nat_gateway',
+  'AWS::EC2::NatGateway',
+])
+const supportsLambdaInputs = computed(() => {
+  if (!node.value) return false
+  return node.value.resource_type.includes('lambda')
+})
+const supportsMemoryInput = computed(() => supportsLambdaInputs.value)
+const supportsInvocationInput = computed(() => supportsLambdaInputs.value)
+const supportsDurationInput = computed(() => supportsLambdaInputs.value)
+const supportsStorageInput = computed(() => {
+  if (!node.value) return false
+  return STORAGE_OVERRIDE_TYPES.has(node.value.resource_type)
+})
+const supportsTransferInput = computed(() => {
+  if (!node.value) return false
+  return TRANSFER_OVERRIDE_TYPES.has(node.value.resource_type)
+})
+const hasSupportedCostInputs = computed(() =>
+  supportsMemoryInput.value || supportsInvocationInput.value || supportsDurationInput.value || supportsStorageInput.value || supportsTransferInput.value
+)
 const emptyStateTitle = computed(() => {
   if (store.editSubmode === 'inspect') return 'Select a resource or link'
   if (store.editSubmode === 'structure') return 'Choose something to shape'
@@ -905,6 +1173,112 @@ function addLayerAndMove() {
 function toggleSection(section: string) {
   sectionOpen.value[section] = !sectionOpen.value[section]
 }
+
+function toInputValue(value: number | undefined): string {
+  return typeof value === 'number' && Number.isFinite(value) ? String(value) : ''
+}
+
+function syncCostInputs() {
+  const overrides = node.value ? store.costOverrides[node.value.id] || {} : {}
+  costFeedback.value = ''
+  costInputs.value = {
+    memory_mb: toInputValue(overrides.memory_mb),
+    invocations_per_month: toInputValue(overrides.invocations_per_month),
+    avg_duration_ms: toInputValue(overrides.avg_duration_ms),
+    storage_gb: toInputValue(overrides.storage_gb),
+    data_transfer_gb: toInputValue(overrides.data_transfer_gb),
+  }
+}
+
+function parseOptionalNumber(value: string | number): number | undefined {
+  if (typeof value === 'number') return Number.isFinite(value) && value >= 0 ? value : undefined
+  if (!String(value).trim()) return undefined
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < 0) return undefined
+  return parsed
+}
+
+async function applyCostOverrides() {
+  if (!node.value) return
+  if (!hasSupportedCostInputs.value) {
+    costFeedbackTone.value = 'warning'
+    costFeedback.value = 'No recalculation was applied because this resource does not support editable usage inputs yet.'
+    return
+  }
+
+  const before = selectedNodeCost.value?.monthly_estimate
+  const result = await store.setNodeCostOverrides(node.value.id, {
+    memory_mb: parseOptionalNumber(costInputs.value.memory_mb),
+    invocations_per_month: parseOptionalNumber(costInputs.value.invocations_per_month),
+    avg_duration_ms: parseOptionalNumber(costInputs.value.avg_duration_ms),
+    storage_gb: parseOptionalNumber(costInputs.value.storage_gb),
+    data_transfer_gb: parseOptionalNumber(costInputs.value.data_transfer_gb),
+  })
+  if (!result.ok) {
+    costFeedbackTone.value = 'warning'
+    costFeedback.value = `Recalculation failed: ${result.error || 'unknown error'}`
+    return
+  }
+  store.showCosts = true
+  const after = store.costData?.by_node?.[node.value.id]?.monthly_estimate
+  if (typeof before === 'number' && typeof after === 'number' && Math.abs(after - before) < 0.01) {
+    costFeedbackTone.value = 'warning'
+    costFeedback.value = `Recalculation completed, but the estimate stayed at $${formatCurrency(after)}/mo.`
+  } else {
+    costFeedbackTone.value = 'success'
+    costFeedback.value = `Recalculation applied: $${formatCurrency(before || 0)}/mo -> $${formatCurrency(after || 0)}/mo.`
+  }
+}
+
+async function resetCostOverrides() {
+  if (!node.value) return
+  await store.clearNodeCostOverrides(node.value.id)
+  syncCostInputs()
+  costFeedbackTone.value = 'success'
+  costFeedback.value = 'Usage inputs reset to the baseline estimate.'
+}
+
+async function fetchRealUsage() {
+  if (!node.value) return
+  costFeedbackTone.value = 'success'
+  costFeedback.value = 'Fetching real usage metrics from AWS...'
+  const result = await store.fetchUsageMetrics(node.value.id)
+  if (!result.ok) {
+    costFeedbackTone.value = 'warning'
+    costFeedback.value = `Could not fetch usage: ${result.error}`
+    return
+  }
+  if (Object.keys(result.usage || {}).length === 0) {
+    costFeedbackTone.value = 'warning'
+    costFeedback.value = 'No usage data available yet for this resource.'
+    return
+  }
+  syncCostInputs()
+  costFeedbackTone.value = 'success'
+  const keys = Object.keys(result.usage).join(', ')
+  costFeedback.value = `Real usage applied: ${keys}. Cost recalculated.`
+}
+
+async function viewResourceLogs() {
+  if (!node.value) return
+  store.showLogs = true
+  await store.fetchLogs(node.value.id)
+}
+
+function formatCurrency(amount: number): string {
+  return amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+watch(
+  () => node.value?.id,
+  () => {
+    syncCostInputs()
+    if (node.value && !store.baseCostData) {
+      void store.refreshCostData()
+    }
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped>

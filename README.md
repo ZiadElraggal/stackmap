@@ -1,8 +1,10 @@
 # StackMap
 
-Architecture diagrams that generate themselves from your infrastructure code.
+Architecture diagrams that generate themselves from your infrastructure code and live AWS accounts.
 
-StackMap is a CLI-first infrastructure visualization tool that scans real infrastructure inputs and produces interactive architecture maps. Instead of keeping diagrams up to date by hand, you point StackMap at what actually exists, then explore, refine, and present the result.
+StackMap is a CLI-first infrastructure visualization and architecture inference tool. It scans real infrastructure inputs, live AWS accounts, and repository sources, then produces interactive architecture maps with inferred relationships, smart grouping, cost forecasting, drift detection, live logs, billing-aware usage imports, and editable presentation workflows.
+
+Instead of keeping diagrams up to date by hand, you point StackMap at what actually exists, inspect the evidence behind the generated graph, refine anything inference cannot know, and share the result as JSON, HTML, or the local interactive viewer.
 
 ## What StackMap Does
 
@@ -10,8 +12,10 @@ StackMap turns infrastructure into:
 
 - interactive architecture diagrams
 - grouped system/component views for larger graphs
+- evidence-rich inferred service relationships
 - editable architecture maps when inference is incomplete
 - diffable snapshots of infrastructure over time
+- live AWS operational context when explicitly enabled
 - exportable HTML and JSON outputs
 
 It is designed for platform engineers, DevOps teams, cloud architects, and anyone who needs fast, trustworthy architecture visibility from real infrastructure.
@@ -37,6 +41,15 @@ The StackMap web UI supports:
 - search
 - category and relationship filtering
 - component landing views for large graphs
+- smart grouping overlays for large AWS graphs
+- edge confidence and evidence inspection for inferred live AWS relationships
+- low-confidence edge filtering
+- dependency tracing from the detail panel
+- findings and suspicious-pattern surfacing
+- forecasted cost overlays with per-resource usage inputs
+- optional AWS billing and CloudWatch usage import for current-vs-forecast cost comparisons
+- optional CloudWatch log viewer for selected resources or all visible resources
+- drift badges and summary bars when comparing IaC vs live state
 - minimap navigation
 - diff and timeline-oriented views
 - presentation mode
@@ -82,6 +95,25 @@ Supported multi-account patterns include:
 - explicit account / role assumption input
 - AWS named profile-based scanning
 - cross-account edge visualization when relevant
+
+### Live AWS relationship inference
+
+Live AWS scans now run a post-scan inference pass after resources are collected. The goal is to turn a raw inventory into a useful architecture graph.
+
+The inference engine can resolve relationships such as:
+
+- API Gateway REST/v2 routes invoking Lambda functions from integration URIs
+- API Gateway invoking Lambda functions from Lambda resource policies and execute-api `SourceArn`
+- Lambda and ECS workloads accessing DynamoDB, S3, SQS, SNS, Secrets Manager, Step Functions, and related services from IAM role policies
+- Lambda event source mappings from DynamoDB Streams, SQS, and Kinesis
+- CloudFront origins pointing at S3, ALB, API Gateway, or custom origins when resolvable
+- Route53 aliases and records pointing at CloudFront, ALB, API Gateway, and S3 endpoints when resolvable
+- ALB/NLB listener and target group paths into ECS services, EC2 instances, IP targets, or Lambda targets where AWS exposes that data
+- ECS services connected to task definitions, task roles, target groups, security groups, subnets, and downstream resources inferred from task role permissions
+
+Each inferred edge can include metadata such as rule name, confidence, human-readable evidence, and the AWS API calls that supplied the evidence. High confidence means direct AWS configuration points to the target, medium confidence usually means IAM policy or SourceArn evidence implies the relationship, and low confidence is reserved for heuristics or network reachability context.
+
+StackMap intentionally does not treat shared VPCs or shared security groups as application data flow by default. Network relationships are useful topology context, but functional data-flow edges require stronger evidence.
 
 ### Diff / timeline support
 
@@ -159,6 +191,35 @@ stackmap version
 stackmap --help
 ```
 
+### Windows release zip
+
+Windows releases are published as a standalone CLI executable named `stackmap.exe`.
+
+From the GitHub Releases page, download:
+
+```text
+stackmap-<version>-windows-x64.zip
+```
+
+Extract it, then run:
+
+```powershell
+.\stackmap.exe version
+.\stackmap.exe --help
+```
+
+You can also download it from PowerShell by replacing the version and repository URL:
+
+```powershell
+$version = "0.2.2"
+$url = "https://github.com/ziadelraggal/stackmap/releases/download/v$version/stackmap-$version-windows-x64.zip"
+Invoke-WebRequest $url -OutFile stackmap-windows-x64.zip
+Expand-Archive stackmap-windows-x64.zip -DestinationPath .\stackmap
+.\stackmap\stackmap.exe version
+```
+
+The Windows binary is still the same StackMap CLI experience. It can run commands such as `scan`, `scan-repo`, `scan-aws`, `serve`, `diff`, `aws-policy`, and `version`. The packaged executable includes the built frontend assets used by `stackmap serve`.
+
 ## Quick Start
 
 ### 1. Scan a Terraform state file
@@ -179,6 +240,12 @@ stackmap scan --source terraform.tfstate --format html --output stackmap-output.
 stackmap serve --source terraform.tfstate
 ```
 
+Serve with drift detection against a second source:
+
+```bash
+stackmap serve --source terraform.tfstate --drift-against aws-live.json
+```
+
 If `stackmap-output.json` already exists, you can also serve that:
 
 ```bash
@@ -197,6 +264,18 @@ Single account / profile:
 
 ```bash
 stackmap scan-aws --profile dev --output aws-output.json --serve
+```
+
+Enable live CloudWatch logs in the viewer for that profile:
+
+```bash
+stackmap scan-aws --profile dev --output aws-output.json --serve --live-logs
+```
+
+Enable AWS billing and usage metric imports in the viewer:
+
+```bash
+stackmap scan-aws --profile dev --output aws-output.json --serve --live-billing
 ```
 
 Multi-account via named profiles:
@@ -251,6 +330,8 @@ Use this for:
 - current-state architecture maps
 - multi-account visibility
 - environments that are not fully represented in code snippets alone
+- relationship inference from live AWS configuration
+- optional live logs and billing-aware usage imports when explicitly enabled
 
 ### `stackmap serve`
 
@@ -262,6 +343,13 @@ Use this when:
 - you want editing, filtering, or presentation workflows
 - you want to inspect large graphs interactively
 
+Useful options:
+
+- `--drift-against <file>` compares the served graph against another snapshot and enables drift badges in the UI
+- `--auto-group/--no-auto-group` controls smart grouping during serve
+- `--aws-profile <profile> --live-logs` enables the CloudWatch log viewer for locally served graphs when the profile has the separate logs policy
+- `--aws-profile <profile> --live-billing` enables AWS billing and CloudWatch usage metric imports when the profile has the separate billing policy
+
 ### `stackmap diff`
 
 Computes a diff between two infrastructure snapshots and outputs a graph with change metadata.
@@ -272,7 +360,20 @@ Imports / overlays organization data for AWS organization-aware views.
 
 ### `stackmap aws-policy`
 
-Builds a read-only AWS policy document suitable for StackMap scanning.
+Builds AWS IAM policy documents for StackMap.
+
+By default it prints the base read-only scan policy:
+
+```bash
+stackmap aws-policy
+```
+
+Optional live features are separate add-on policies, not part of the default scan policy:
+
+```bash
+stackmap aws-policy --addon logs
+stackmap aws-policy --addon billing
+```
 
 ### `stackmap setup-org-role`
 
@@ -296,6 +397,118 @@ When you open the StackMap UI, you get:
 - keyboard shortcuts
 - timeline / diff controls
 - edit mode
+
+### Advanced insight panels
+
+#### Smart grouping
+
+Smart grouping is currently applied automatically during `stackmap serve` unless you disable it with `--no-auto-group`.
+
+For live AWS scans, StackMap also applies a live-account grouping pass during scan assembly. That pass uses tags and inferred service relationships before falling back to network-level context.
+
+The grouping engine prioritizes:
+
+1. CloudFormation or SAM stack membership from tags such as `aws:cloudformation:stack-name`
+2. business tags such as `service`, `app`, `application`, `project`, `component`, and environment labels
+3. connected components formed by high/medium-confidence functional edges
+4. API entrypoint expansion from API Gateway, CloudFront, or ALB into downstream Lambda, ECS, and data stores
+5. naming-family fallback with normalized resource-name tokenization
+6. VPC or subnet grouping only as a fallback
+
+Earlier strategies win, so a CloudFormation/SAM or business-tagged application cluster is preferred over a lower-signal VPC bucket. This keeps the UI focused on business components first and infrastructure topology second.
+
+Auto-generated groups can include metadata such as grouping strategy, confidence, evidence, entrypoints, account IDs, regions, and resource counts by type. The detail panel shows a smart group reason when that metadata is available.
+
+#### Relationship evidence and architecture inference
+
+Live AWS scans attach evidence metadata to inferred relationships whenever possible.
+
+Example edge metadata:
+
+```json
+{
+  "source": "aws_live_inference",
+  "inference_rule": "apigateway_lambda_integration_uri",
+  "confidence": "high",
+  "evidence": "API Gateway integration URI references arn:aws:lambda:us-east-1:123456789012:function:orders-handler",
+  "api_calls": ["apigateway:get_integration"]
+}
+```
+
+The UI surfaces this in the edge detail panel so users can see why an edge exists instead of treating generated architecture as a black box.
+
+Default architecture views prioritize functional relationships such as `triggers`, `routes_to`, `reads_from`, `writes_to`, and `cross_account_reference`. Lower-signal relationship types such as generic references, IAM/auth edges, and network reachability context remain available for inspection and filtering without overwhelming the main architecture view.
+
+#### Cost forecasting
+
+The cost panel in the UI is a forecast overlay by default. It becomes billing-aware only when live billing is explicitly enabled.
+
+Current behavior:
+
+- StackMap computes a baseline monthly estimate from resource metadata and bundled pricing heuristics
+- the top-right cost panel shows total forecast plus top components and category totals
+- the detail panel lets you add resource-level usage inputs such as Lambda memory, invocations, duration, storage GB, and transfer GB
+- when you add inputs, StackMap recomputes the estimate and shows the delta from the baseline forecast
+
+Optional live usage import:
+
+- With `--live-billing`, StackMap can pull AWS Cost Explorer totals and CloudWatch usage metrics for supported services, then recalculate the forecast from those usage inputs.
+- Without `--live-billing`, the UI stays on local heuristic forecasting and never calls AWS billing or CloudWatch metrics APIs.
+- Supported usage imports include Lambda invocations/duration, S3 storage and transfer-related metrics where available, DynamoDB/SQS-style service metrics where mapped, and CloudFront `BytesDownloaded` for replacing the default 100 GB transfer assumption.
+
+#### Live CloudWatch logs
+
+Live logs are optional and only run when you explicitly enable them:
+
+```bash
+stackmap scan-aws --profile dev --serve --live-logs
+```
+
+This keeps the default AWS scan on the minimal read-only policy. If your AWS profile also has the separate live logs policy attached, the UI shows a `Live logs` toggle in the Insights panel and a `View CloudWatch logs` button for supported resources in the detail panel.
+
+The log panel can fetch the last hour, 6 hours, 24 hours, or 7 days, and can aggregate logs from all currently visible resources in the graph.
+
+The live logs policy is separate from the normal scan policy so teams can review and attach it only when they want CloudWatch log access:
+
+```bash
+stackmap aws-policy --addon logs
+```
+
+The packaged policy file is also available for review at `stackmap/cli/aws_policy_live_logs.json`.
+
+#### AWS billing and usage imports
+
+AWS billing is also optional and separate from the default scan policy:
+
+```bash
+stackmap scan-aws --profile dev --serve --live-billing
+```
+
+When enabled, the Cost & Usage panel can fetch AWS usage metrics for all supported resources and recalculate the forecast. Individual resources can also fetch their own usage from the detail panel. CloudFront distributions use the CloudWatch `BytesDownloaded` metric to replace the default transfer estimate when available.
+
+The billing policy is separate from the normal scan policy:
+
+```bash
+stackmap aws-policy --addon billing
+```
+
+#### Drift detection
+
+Drift detection is enabled by serving one graph against another:
+
+```bash
+stackmap serve --source desired.json --drift-against live.json
+```
+
+Current behavior:
+
+1. StackMap normalizes both graphs into a shared comparison model
+2. it matches resources across the two graphs
+3. it compares a curated set of important properties for known resource types
+4. it compares relationships to detect missing or extra connections
+5. it annotates the served IR so the UI can show resource badges and summary counts
+
+Unknown resource types fall back to a broader property comparison with unstable keys such as IDs, ARNs, and timestamps ignored.
 
 ### Edit mode details
 
@@ -433,6 +646,18 @@ On GitHub Release publish (`vX.Y.Z`), the `Homebrew Release` workflow:
 5. Uploads the formula as a workflow artifact.
 6. Pushes the formula update to the Homebrew tap if configured.
 
+### Windows release automation
+
+On GitHub Release publish (`vX.Y.Z`), the `Windows Release` workflow:
+
+1. Builds the frontend static app from the tagged source.
+2. Syncs generated assets into the Python package bundle.
+3. Installs StackMap plus PyInstaller on `windows-latest`.
+4. Builds a standalone `stackmap.exe`.
+5. Compresses the binary into a release zip and uploads it to the GitHub Release.
+
+You can also run the workflow manually from Actions to generate a Windows artifact before cutting a public release.
+
 ### Required GitHub configuration for automatic tap updates
 
 - repository variable: `HOMEBREW_TAP_REPO`
@@ -445,11 +670,17 @@ On GitHub Release publish (`vX.Y.Z`), the `Homebrew Release` workflow:
 1. Bump version in [pyproject.toml](/Users/ziadelraggal/Documents/GitHub/stackmap/pyproject.toml).
 2. Merge to `main`.
 3. Create and publish a GitHub Release tag in `vX.Y.Z` format.
-4. Wait for workflow `Homebrew Release` to complete.
-5. Users can then run:
+4. Wait for workflows `Homebrew Release` and `Windows Release` to complete.
+5. macOS users can then run:
 
 ```bash
 brew upgrade stackmap
+```
+
+6. Windows users can download the release zip, extract `stackmap.exe`, and run:
+
+```powershell
+.\stackmap.exe version
 ```
 
 ## Project Direction
@@ -500,6 +731,19 @@ stackmap aws-policy
 ```
 
 to generate a read-only policy template for scanning.
+
+Optional live UI features use separate policies that can be reviewed and attached independently:
+
+```bash
+stackmap aws-policy --addon logs
+stackmap aws-policy --addon billing
+```
+
+The same reviewable JSON files are included in the package:
+
+- `stackmap/cli/aws_policy.json`
+- `stackmap/cli/aws_policy_live_logs.json`
+- `stackmap/cli/aws_policy_billing.json`
 
 ## License
 

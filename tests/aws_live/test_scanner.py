@@ -118,6 +118,12 @@ def test_collect_lambda_with_stubber_creates_nodes_and_pending_edges(tmp_path: P
             ]
         },
     )
+    stubber.add_response("list_tags", {"Tags": {}}, {"Resource": "arn:aws:lambda:us-east-1:123456789012:function:orders-handler"})
+    stubber.add_client_error(
+        "get_policy",
+        service_error_code="ResourceNotFoundException",
+        expected_params={"FunctionName": "orders-handler"},
+    )
     stubber.add_response(
         "list_event_source_mappings",
         {
@@ -270,6 +276,319 @@ def test_build_ir_creates_explicit_edges_and_live_metadata() -> None:
     assert ir.metadata["source_kind"] == "live_scan"
     assert len(ir.edges) == 1
     assert ir.edges[0].target == role_node.id
+    assert ir.edges[0].metadata["source"] == "aws_live_inference"
+
+
+def test_build_ir_resolves_apigateway_lambda_integration_uri() -> None:
+    from stackmap.parsers.base import ResourceCategory, StackMapNode
+
+    scanner = AWSLiveScanner(regions=["us-east-1"], services={"apigateway", "lambda"})
+    context = AccountScanContext(
+        session=_FakeSession(),  # type: ignore[arg-type]
+        account_id="123456789012",
+        account_name=None,
+        auth_description="test",
+        role_arn=None,
+        services={"apigateway", "lambda"},
+        regions=["us-east-1"],
+        recorder=APIRecorder(),
+        cache_dir=None,
+        cache_ttl_seconds=3600,
+        dry_run=False,
+        verbose=False,
+    )
+    api = StackMapNode(
+        id="aws:123456789012:us-east-1:aws_api_gateway_rest_api:abc123",
+        name="orders-api",
+        resource_type="aws_api_gateway_rest_api",
+        provider="aws",
+        category=ResourceCategory.INTEGRATION,
+        properties={
+            "id": "abc123",
+            "arn": "arn:aws:execute-api:us-east-1:123456789012:abc123",
+            "integration_uris": [
+                "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:123456789012:function:orders-handler/invocations"
+            ],
+        },
+        metadata={"account_id": "123456789012", "region": "us-east-1"},
+        position_hint={"tier": "frontend"},
+    )
+    fn = StackMapNode(
+        id="aws:123456789012:us-east-1:aws_lambda_function:orders-handler",
+        name="orders-handler",
+        resource_type="aws_lambda_function",
+        provider="aws",
+        category=ResourceCategory.SERVERLESS,
+        properties={
+            "id": "orders-handler",
+            "function_name": "orders-handler",
+            "arn": "arn:aws:lambda:us-east-1:123456789012:function:orders-handler",
+        },
+        metadata={"account_id": "123456789012", "region": "us-east-1"},
+        position_hint={"tier": "backend"},
+    )
+
+    ir = scanner._build_ir(context, [api, fn], [], [])
+
+    edge = next(e for e in ir.edges if e.source == api.id and e.target == fn.id)
+    assert edge.edge_type == EdgeType.TRIGGERS
+    assert edge.metadata["confidence"] == "high"
+    assert edge.metadata["inference_rule"] == "apigateway_lambda_integration_uri"
+
+
+def test_lambda_policy_source_arn_resolves_api_gateway_trigger() -> None:
+    from stackmap.parsers.base import ResourceCategory, StackMapNode
+
+    scanner = AWSLiveScanner(regions=["us-east-1"], services={"apigateway", "lambda"})
+    context = AccountScanContext(
+        session=_FakeSession(),  # type: ignore[arg-type]
+        account_id="123456789012",
+        account_name=None,
+        auth_description="test",
+        role_arn=None,
+        services={"apigateway", "lambda"},
+        regions=["us-east-1"],
+        recorder=APIRecorder(),
+        cache_dir=None,
+        cache_ttl_seconds=3600,
+        dry_run=False,
+        verbose=False,
+    )
+    api = StackMapNode(
+        id="aws:123456789012:us-east-1:aws_api_gateway_rest_api:abc123",
+        name="orders-api",
+        resource_type="aws_api_gateway_rest_api",
+        provider="aws",
+        category=ResourceCategory.INTEGRATION,
+        properties={"id": "abc123", "arn": "arn:aws:execute-api:us-east-1:123456789012:abc123"},
+        metadata={"account_id": "123456789012", "region": "us-east-1"},
+        position_hint={"tier": "frontend"},
+    )
+    fn = StackMapNode(
+        id="aws:123456789012:us-east-1:aws_lambda_function:orders-handler",
+        name="orders-handler",
+        resource_type="aws_lambda_function",
+        provider="aws",
+        category=ResourceCategory.SERVERLESS,
+        properties={
+            "id": "orders-handler",
+            "arn": "arn:aws:lambda:us-east-1:123456789012:function:orders-handler",
+            "resource_policy": json.dumps({
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Principal": {"Service": "apigateway.amazonaws.com"},
+                    "Action": "lambda:InvokeFunction",
+                    "Condition": {"ArnLike": {"AWS:SourceArn": "arn:aws:execute-api:us-east-1:123456789012:abc123/*/*/*"}},
+                }]
+            }),
+        },
+        metadata={"account_id": "123456789012", "region": "us-east-1"},
+        position_hint={"tier": "backend"},
+    )
+
+    ir = scanner._build_ir(context, [api, fn], [], [])
+
+    edge = next(e for e in ir.edges if e.source == api.id and e.target == fn.id)
+    assert edge.edge_type == EdgeType.TRIGGERS
+    assert edge.metadata["confidence"] == "medium"
+
+
+def test_iam_role_policy_infers_lambda_dynamodb_dataflow_and_group() -> None:
+    from stackmap.parsers.base import ResourceCategory, StackMapNode
+
+    scanner = AWSLiveScanner(regions=["us-east-1"], services={"lambda", "iam", "dynamodb"})
+    context = AccountScanContext(
+        session=_FakeSession(),  # type: ignore[arg-type]
+        account_id="123456789012",
+        account_name=None,
+        auth_description="test",
+        role_arn=None,
+        services={"lambda", "iam", "dynamodb"},
+        regions=["us-east-1"],
+        recorder=APIRecorder(),
+        cache_dir=None,
+        cache_ttl_seconds=3600,
+        dry_run=False,
+        verbose=False,
+    )
+    fn = StackMapNode(
+        id="aws:123456789012:us-east-1:aws_lambda_function:orders-handler",
+        name="orders-handler",
+        resource_type="aws_lambda_function",
+        provider="aws",
+        category=ResourceCategory.SERVERLESS,
+        properties={
+            "id": "orders-handler",
+            "arn": "arn:aws:lambda:us-east-1:123456789012:function:orders-handler",
+            "role_arn": "arn:aws:iam::123456789012:role/orders-role",
+        },
+        tags={"aws:cloudformation:stack-name": "orders-stack"},
+        metadata={"account_id": "123456789012", "region": "us-east-1", "source_type": "aws_live"},
+        position_hint={"tier": "backend"},
+    )
+    role = StackMapNode(
+        id="aws:123456789012:global:aws_iam_role:orders-role",
+        name="orders-role",
+        resource_type="aws_iam_role",
+        provider="aws",
+        category=ResourceCategory.SECURITY,
+        properties={
+            "id": "orders-role",
+            "arn": "arn:aws:iam::123456789012:role/orders-role",
+            "policies": [{
+                "PolicyDocument": {
+                    "Statement": [{
+                        "Effect": "Allow",
+                        "Action": ["dynamodb:PutItem"],
+                        "Resource": "arn:aws:dynamodb:us-east-1:123456789012:table/orders",
+                    }]
+                }
+            }],
+        },
+        metadata={"account_id": "123456789012", "region": "global", "source_type": "aws_live"},
+        position_hint={"tier": "backend"},
+    )
+    table = StackMapNode(
+        id="aws:123456789012:us-east-1:aws_dynamodb_table:orders",
+        name="orders",
+        resource_type="aws_dynamodb_table",
+        provider="aws",
+        category=ResourceCategory.DATABASE,
+        properties={"id": "orders", "name": "orders", "arn": "arn:aws:dynamodb:us-east-1:123456789012:table/orders"},
+        tags={"aws:cloudformation:stack-name": "orders-stack"},
+        metadata={"account_id": "123456789012", "region": "us-east-1", "source_type": "aws_live"},
+        position_hint={"tier": "database"},
+    )
+
+    ir = scanner._build_ir(context, [fn, role, table], [], [])
+
+    edge = next(e for e in ir.edges if e.source == fn.id and e.target == table.id)
+    assert edge.edge_type == EdgeType.WRITES_TO
+    assert edge.metadata["inference_rule"] == "iam_role_policy_resource_access"
+    assert any(group.name == "orders-stack" for group in ir.groups)
+
+
+def test_ecs_service_inherits_task_role_policy_edges_and_target_group_route() -> None:
+    from stackmap.parsers.base import ResourceCategory, StackMapNode
+
+    scanner = AWSLiveScanner(regions=["us-east-1"], services={"ecs", "iam", "dynamodb", "elbv2"})
+    context = AccountScanContext(
+        session=_FakeSession(),  # type: ignore[arg-type]
+        account_id="123456789012",
+        account_name=None,
+        auth_description="test",
+        role_arn=None,
+        services={"ecs", "iam", "dynamodb", "elbv2"},
+        regions=["us-east-1"],
+        recorder=APIRecorder(),
+        cache_dir=None,
+        cache_ttl_seconds=3600,
+        dry_run=False,
+        verbose=False,
+    )
+    task_definition_arn = "arn:aws:ecs:us-east-1:123456789012:task-definition/orders:1"
+    role_arn = "arn:aws:iam::123456789012:role/orders-task-role"
+    target_group_arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/orders/abc123"
+    service = StackMapNode(
+        id="aws:123456789012:us-east-1:aws_ecs_service:orders",
+        name="orders",
+        resource_type="aws_ecs_service",
+        provider="aws",
+        category=ResourceCategory.CONTAINER,
+        properties={
+            "id": "orders",
+            "arn": "arn:aws:ecs:us-east-1:123456789012:service/app/orders",
+            "task_definition": task_definition_arn,
+            "target_group_arns": [target_group_arn],
+        },
+        metadata={"account_id": "123456789012", "region": "us-east-1", "source_type": "aws_live"},
+    )
+    task_definition = StackMapNode(
+        id="aws:123456789012:us-east-1:aws_ecs_task_definition:orders",
+        name="orders",
+        resource_type="aws_ecs_task_definition",
+        provider="aws",
+        category=ResourceCategory.CONTAINER,
+        properties={
+            "id": "orders",
+            "arn": task_definition_arn,
+            "task_role_arn": role_arn,
+        },
+        metadata={"account_id": "123456789012", "region": "us-east-1", "source_type": "aws_live"},
+    )
+    role = StackMapNode(
+        id="aws:123456789012:global:aws_iam_role:orders-task-role",
+        name="orders-task-role",
+        resource_type="aws_iam_role",
+        provider="aws",
+        category=ResourceCategory.SECURITY,
+        properties={
+            "id": "orders-task-role",
+            "arn": role_arn,
+            "policies": [{
+                "PolicyDocument": {
+                    "Statement": [{
+                        "Effect": "Allow",
+                        "Action": ["dynamodb:Query"],
+                        "Resource": "arn:aws:dynamodb:us-east-1:123456789012:table/orders",
+                    }]
+                }
+            }],
+        },
+        metadata={"account_id": "123456789012", "region": "global", "source_type": "aws_live"},
+    )
+    table = StackMapNode(
+        id="aws:123456789012:us-east-1:aws_dynamodb_table:orders",
+        name="orders",
+        resource_type="aws_dynamodb_table",
+        provider="aws",
+        category=ResourceCategory.DATABASE,
+        properties={"id": "orders", "arn": "arn:aws:dynamodb:us-east-1:123456789012:table/orders"},
+        metadata={"account_id": "123456789012", "region": "us-east-1", "source_type": "aws_live"},
+    )
+    target_group = StackMapNode(
+        id="aws:123456789012:us-east-1:aws_lb_target_group:orders",
+        name="orders",
+        resource_type="aws_lb_target_group",
+        provider="aws",
+        category=ResourceCategory.NETWORK,
+        properties={"id": "orders", "arn": target_group_arn},
+        metadata={"account_id": "123456789012", "region": "us-east-1", "source_type": "aws_live"},
+    )
+
+    ir = scanner._build_ir(context, [service, task_definition, role, table, target_group], [], [])
+
+    data_edge = next(e for e in ir.edges if e.source == service.id and e.target == table.id)
+    route_edge = next(e for e in ir.edges if e.source == target_group.id and e.target == service.id)
+    assert data_edge.edge_type == EdgeType.READS_FROM
+    assert data_edge.metadata["inference_rule"] == "iam_role_policy_resource_access"
+    assert route_edge.edge_type == EdgeType.ROUTES_TO
+    assert route_edge.metadata["confidence"] == "high"
+
+
+def test_edge_metadata_round_trips_for_live_inference() -> None:
+    from stackmap.parsers.base import ResourceCategory, StackMapEdge, StackMapIR, StackMapNode
+
+    ir = StackMapIR(
+        nodes=[
+            StackMapNode("a", "api", "aws_api_gateway_rest_api", "aws", ResourceCategory.INTEGRATION),
+            StackMapNode("b", "fn", "aws_lambda_function", "aws", ResourceCategory.SERVERLESS),
+        ],
+        edges=[
+            StackMapEdge(
+                id="a->b:triggers",
+                source="a",
+                target="b",
+                edge_type=EdgeType.TRIGGERS,
+                label="invokes",
+                metadata={"confidence": "high", "evidence": "integration URI"},
+            )
+        ],
+    )
+
+    restored = StackMapIR.from_json(ir.to_json())
+
+    assert restored.edges[0].metadata["confidence"] == "high"
 
 
 def test_build_ir_resolves_direct_node_id_references() -> None:

@@ -466,6 +466,75 @@
       class="connect-target-ring"
     />
 
+    <!-- Cost badge -->
+    <g v-if="store.showCosts && node.position_hint?.cost_monthly != null && node.position_hint.cost_monthly > 0">
+      <rect
+        :x="nodeWidth / 2 - 48"
+        :y="nodeHeight / 2 - 4"
+        width="44"
+        height="14"
+        rx="3" ry="3"
+        fill="rgba(74,222,128,0.15)"
+        stroke="rgba(74,222,128,0.3)"
+        stroke-width="1"
+      />
+      <text
+        :x="nodeWidth / 2 - 26"
+        :y="nodeHeight / 2 + 4"
+        text-anchor="middle"
+        dominant-baseline="central"
+        fill="#4ADE80"
+        font-size="8"
+        font-weight="600"
+        font-family="'JetBrains Mono', monospace"
+      >${{ formatCostBadge(node.position_hint.cost_monthly) }}/mo</text>
+    </g>
+
+    <!-- Drift status badge -->
+    <g v-if="store.driftMode && node.position_hint?.drift_status && node.position_hint.drift_status !== 'in_sync'">
+      <rect
+        :x="-nodeWidth / 2 - 2"
+        :y="nodeHeight / 2 - 4"
+        :width="driftBadgeText.length * 6 + 10"
+        height="14"
+        rx="3" ry="3"
+        :fill="driftBadgeColor + '25'"
+        :stroke="driftBadgeColor + '60'"
+        stroke-width="1"
+      />
+      <text
+        :x="-nodeWidth / 2 + (driftBadgeText.length * 6 + 10) / 2 - 2"
+        :y="nodeHeight / 2 + 4"
+        text-anchor="middle"
+        dominant-baseline="central"
+        :fill="driftBadgeColor"
+        font-size="8"
+        font-weight="600"
+        font-family="'JetBrains Mono', monospace"
+      >{{ driftBadgeText }}</text>
+    </g>
+
+    <!-- Finding warning indicator -->
+    <g v-if="hasFinding">
+      <circle
+        :cx="nodeWidth / 2 + 2"
+        :cy="-nodeHeight / 2 - 2"
+        r="5"
+        fill="#ef4444"
+        stroke="#0d0d14"
+        stroke-width="1.5"
+      />
+      <text
+        :x="nodeWidth / 2 + 2"
+        :y="-nodeHeight / 2 - 1"
+        text-anchor="middle"
+        dominant-baseline="central"
+        fill="white"
+        font-size="7"
+        font-weight="700"
+      >!</text>
+    </g>
+
     <title>{{ node.name }} ({{ node.resource_type }})</title>
   </g>
 </template>
@@ -560,6 +629,34 @@ const diffBadge = computed(() => {
   }
 })
 
+// Cost/drift/finding helpers
+function formatCostBadge(amount: number): string {
+  if (amount >= 1000) return Math.round(amount).toLocaleString()
+  if (amount >= 10) return Math.round(amount).toString()
+  return amount.toFixed(1)
+}
+
+const driftBadgeText = computed(() => {
+  const status = props.node.position_hint?.drift_status
+  if (status === 'drifted') return 'DRIFTED'
+  if (status === 'missing') return 'MISSING'
+  if (status === 'extra') return 'EXTRA'
+  return ''
+})
+
+const driftBadgeColor = computed(() => {
+  const status = props.node.position_hint?.drift_status
+  if (status === 'drifted') return '#f59e0b'
+  if (status === 'missing') return '#ef4444'
+  if (status === 'extra') return '#3b82f6'
+  return '#6b7280'
+})
+
+const hasFinding = computed(() => {
+  if (store.findings.length === 0) return false
+  return store.findings.some((f: any) => f.node_ids?.includes(props.node.id))
+})
+
 const nameFontSize = computed(() => {
   if (prominence.value === 'primary') return 13
   if (prominence.value === 'secondary') return 11
@@ -613,6 +710,14 @@ const isDimmed = computed(() => {
   return !connected.has(props.node.id)
 })
 
+const isTraceDimmed = computed(() => {
+  if (!store.traceResult) return false
+  const traced = new Set<string>([store.traceResult.origin_id])
+  for (const hop of store.traceResult.upstream || []) traced.add(hop.node_id)
+  for (const hop of store.traceResult.downstream || []) traced.add(hop.node_id)
+  return !traced.has(props.node.id)
+})
+
 const nodeOpacity = computed(() => {
   if (store.diffMode && diffStatus.value) {
     if (diffStatus.value === 'removed') {
@@ -627,6 +732,8 @@ const nodeOpacity = computed(() => {
       return isDimmed.value ? 0.06 : 0.2
     }
   }
+  // Trace dimming: dim nodes not in trace result
+  if (isTraceDimmed.value) return 0.15
   return isDimmed.value ? 0.12 : 1
 })
 
