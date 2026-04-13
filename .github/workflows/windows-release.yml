@@ -10,6 +10,9 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
+    outputs:
+      version: ${{ steps.package.outputs.version }}
+      exe_url: ${{ steps.package.outputs.exe_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -68,20 +71,49 @@ jobs:
           else
             VERSION="dev-${GITHUB_RUN_NUMBER}"
           fi
-          ASSET_NAME="stackmap-${VERSION}-windows-x64.zip"
-          powershell -Command "Compress-Archive -Path 'dist/stackmap.exe' -DestinationPath '${ASSET_NAME}' -Force"
-          echo "asset_name=${ASSET_NAME}" >> "$GITHUB_OUTPUT"
-          echo "Packaged as ${ASSET_NAME}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "exe_url=https://github.com/${{ github.repository }}/releases/download/v${VERSION}/stackmap-${VERSION}-windows-x64.exe" >> "$GITHUB_OUTPUT"
+
+          # Rename exe with version for release asset
+          cp dist/stackmap.exe "stackmap-${VERSION}-windows-x64.exe"
+          echo "Packaged as stackmap-${VERSION}-windows-x64.exe"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: stackmap-windows-x64
-          path: ${{ steps.package.outputs.asset_name }}
+          path: stackmap-${{ steps.package.outputs.version }}-windows-x64.exe
 
       - name: Upload release asset
         if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload "${{ github.event.release.tag_name }}" "${{ steps.package.outputs.asset_name }}" --clobber
+          gh release upload "${{ github.event.release.tag_name }}" "stackmap-${{ steps.package.outputs.version }}-windows-x64.exe" --clobber
+
+  publish-winget:
+    needs: build-windows-binary
+    if: github.event_name == 'release'
+    runs-on: windows-latest
+    steps:
+      - name: Install wingetcreate
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://aka.ms/wingetcreate/latest" -OutFile wingetcreate.exe
+
+      - name: Submit to winget-pkgs
+        shell: pwsh
+        env:
+          WINGET_PAT: ${{ secrets.WINGET_PAT }}
+        run: |
+          if (-not $env:WINGET_PAT) {
+            Write-Host "WINGET_PAT secret not set; skipping winget submission."
+            exit 0
+          }
+          $version = "${{ needs.build-windows-binary.outputs.version }}"
+          $url = "${{ needs.build-windows-binary.outputs.exe_url }}"
+          ./wingetcreate.exe update ZiadElraggal.StackMap `
+            --version $version `
+            --urls $url `
+            --submit `
+            --token $env:WINGET_PAT
