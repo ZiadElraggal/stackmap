@@ -26,6 +26,12 @@
             <div class="text-[10px] font-mono uppercase tracking-[0.24em] text-gray-600">Visible Scope</div>
             <div class="mt-2 text-sm font-medium text-white">{{ scopeLabel }}</div>
             <div class="mt-1 text-xs font-mono text-gray-500">{{ totalResources }} resources · {{ totalConnections }} connections</div>
+            <button
+              class="mt-3 rounded-lg border border-cyan-400/20 bg-cyan-500/10 px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.18em] text-cyan-200 transition hover:border-cyan-300/35 hover:bg-cyan-500/16"
+              @click="store.viewAllComponents()"
+            >
+              View all
+            </button>
           </div>
         </div>
 
@@ -45,8 +51,8 @@
       <section class="mb-10">
         <div class="mb-4 flex items-end justify-between gap-6">
           <div>
-            <p class="text-[10px] font-mono uppercase tracking-[0.24em] text-gray-600">Service Components</p>
-            <h3 class="mt-2 text-xl font-semibold text-white">Open the part of the map that matters</h3>
+            <p class="text-[10px] font-mono uppercase tracking-[0.24em] text-gray-600">Smart Components</p>
+            <h3 class="mt-2 text-xl font-semibold text-white">Open a group, or view everything together</h3>
           </div>
           <div class="text-right text-xs font-mono text-gray-500">
             {{ primarySummaries.length }} service island{{ primarySummaries.length === 1 ? '' : 's' }}
@@ -120,7 +126,7 @@
                   ? 'bg-indigo-500/10 text-indigo-300'
                   : 'bg-emerald-500/10 text-emerald-300'"
               >
-                {{ component.kind === 'weakly_linked' ? 'Weakly linked' : 'Service component' }}
+                {{ componentLabel(component) }}
               </span>
               <span class="text-[11px] font-mono text-gray-500">{{ component.resourceCount }} res</span>
             </div>
@@ -165,7 +171,7 @@
             <p class="text-[10px] font-mono uppercase tracking-[0.24em] text-gray-600">Unlinked Resources</p>
             <h3 class="mt-2 text-lg font-semibold text-white">Resources that still need stronger grouping</h3>
             <p class="mt-2 max-w-3xl text-sm leading-6 text-gray-400">
-              These resources were detected successfully, but they do not yet form a strong component or service boundary.
+              These resources were detected successfully, but no smart group claimed them yet.
             </p>
           </div>
           <div class="text-right text-xs font-mono text-gray-500">
@@ -307,6 +313,12 @@ function displayCategory(category: string): string {
 
 function metaLine(component: ComponentSummary): string {
   return `${component.accountIds.length} account${component.accountIds.length === 1 ? '' : 's'} · ${component.regions.length} region${component.regions.length === 1 ? '' : 's'} · ${component.edgeCount} connection${component.edgeCount === 1 ? '' : 's'}`
+}
+
+function componentLabel(component: ComponentSummary): string {
+  if (component.source === 'smart_group') return 'Smart group'
+  if (component.kind === 'weakly_linked') return 'Weakly linked'
+  return 'Service component'
 }
 
 function colorForCategory(category: string): string {

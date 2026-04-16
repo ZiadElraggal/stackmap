@@ -119,6 +119,8 @@ export interface ComponentSummary {
   id: string
   name: string
   kind: 'service_component' | 'weakly_linked' | 'unlinked' | 'unlinked_bucket'
+  source?: 'smart_group' | 'connectivity' | 'ungrouped'
+  groupId?: string
   nodeIds: string[]
   edgeIds: string[]
   resourceCount: number
@@ -776,7 +778,105 @@ function flattenOrganizationTree(groups: StackMapGroup[]): OrgTreeItem[] {
   return result
 }
 
-function buildComponentSummaries(nodes: StackMapNode[], edges: StackMapEdge[]): ComponentSummary[] {
+function componentSort(a: ComponentSummary, b: ComponentSummary): number {
+  if (a.kind === 'unlinked_bucket' && b.kind !== 'unlinked_bucket') return 1
+  if (b.kind === 'unlinked_bucket' && a.kind !== 'unlinked_bucket') return -1
+  if (b.usefulnessScore !== a.usefulnessScore) return b.usefulnessScore - a.usefulnessScore
+  if (b.resourceCount !== a.resourceCount) return b.resourceCount - a.resourceCount
+  return a.name.localeCompare(b.name)
+}
+
+function buildUnlinkedSummary(
+  nodeIds: Set<string>,
+  nodesById: Map<string, StackMapNode>,
+  edges: StackMapEdge[]
+): ComponentSummary | null {
+  if (nodeIds.size === 0) return null
+  const unlinkedNodes = [...nodeIds]
+    .map(id => nodesById.get(id))
+    .filter((value): value is StackMapNode => Boolean(value))
+  if (!unlinkedNodes.length) return null
+  const unlinkedIdSet = new Set(unlinkedNodes.map(node => node.id))
+  const unlinkedEdges = edges.filter(edge => unlinkedIdSet.has(edge.source) && unlinkedIdSet.has(edge.target))
+  const categories = topCategoriesForNodes(unlinkedNodes)
+  const accounts = [...new Set(unlinkedNodes.map(node => accountIdForNode(node)).filter((value): value is string => Boolean(value)))].sort()
+  const regions = [...new Set(unlinkedNodes.map(node => node.metadata?.region || node.position_hint?.region).filter((value): value is string => Boolean(value)))].sort()
+  return {
+    id: UNLINKED_COMPONENT_ID,
+    name: 'unlinked-resources',
+    kind: 'unlinked_bucket',
+    source: 'ungrouped',
+    nodeIds: unlinkedNodes.map(node => node.id),
+    edgeIds: unlinkedEdges.map(edge => edge.id),
+    resourceCount: unlinkedNodes.length,
+    edgeCount: unlinkedEdges.length,
+    dominantCategories: categories,
+    entrypoints: [],
+    accountIds: accounts,
+    regions,
+    usefulnessScore: 0,
+    helperRatio: unlinkedNodes.length > 0 ? unlinkedNodes.filter(isHelperNode).length / unlinkedNodes.length : 0,
+    mostlyNetwork: unlinkedNodes.length > 0 && unlinkedNodes.every(node => node.category === 'network' || NETWORK_HEAVY_RESOURCE_TYPES.has(node.resource_type)),
+    summary: `${categories.slice(0, 2).join(' + ') || 'mixed'} · ${accounts.length || 1} account${accounts.length === 1 ? '' : 's'}`,
+  }
+}
+
+function buildSmartGroupComponentSummaries(
+  nodes: StackMapNode[],
+  edges: StackMapEdge[],
+  groups: StackMapGroup[]
+): ComponentSummary[] {
+  const nodesById = new Map(nodes.map(node => [node.id, node]))
+  const visibleIds = new Set(nodes.map(node => node.id))
+  const adjacency = buildAdjacency(edges)
+  const summaries: ComponentSummary[] = []
+  const assigned = new Set<string>()
+  const smartGroups = groups
+    .filter(group => group.group_type === 'smart_group')
+    .map(group => ({
+      group,
+      children: group.children.filter(child => visibleIds.has(child)),
+    }))
+    .filter(entry => entry.children.length > 0)
+    .sort((a, b) => b.children.length - a.children.length || a.group.name.localeCompare(b.group.name))
+
+  if (!smartGroups.length) return []
+
+  for (const { group, children } of smartGroups) {
+    const groupNodeIds = children.filter(nodeId => !assigned.has(nodeId))
+    if (!groupNodeIds.length) continue
+    for (const nodeId of groupNodeIds) assigned.add(nodeId)
+    const groupIdSet = new Set(groupNodeIds)
+    const groupNodes = groupNodeIds
+      .map(id => nodesById.get(id))
+      .filter((value): value is StackMapNode => Boolean(value))
+    const groupEdges = edges.filter(edge => groupIdSet.has(edge.source) && groupIdSet.has(edge.target))
+    const described = describeComponent(groupNodes, groupEdges, adjacency)
+    summaries.push({
+      ...described,
+      id: `component:${group.id}`,
+      name: group.name || described.name,
+      kind: 'service_component',
+      source: 'smart_group',
+      groupId: group.id,
+      usefulnessScore: described.usefulnessScore + 12,
+      summary: group.metadata?.auto_strategy
+        ? `${described.summary} · grouped by ${String(group.metadata.auto_strategy).replace(/_/g, ' ')}`
+        : described.summary,
+    })
+  }
+
+  const ungroupedNodeIds = new Set(nodes.filter(node => !assigned.has(node.id)).map(node => node.id))
+  const unlinkedSummary = buildUnlinkedSummary(ungroupedNodeIds, nodesById, edges)
+  if (unlinkedSummary) summaries.push(unlinkedSummary)
+
+  return summaries.sort(componentSort)
+}
+
+function buildComponentSummaries(nodes: StackMapNode[], edges: StackMapEdge[], groups: StackMapGroup[] = []): ComponentSummary[] {
+  const groupSummaries = buildSmartGroupComponentSummaries(nodes, edges, groups)
+  if (groupSummaries.length > 0) return groupSummaries
+
   const nodeById = new Map(nodes.map(node => [node.id, node]))
   const adjacency = buildAdjacency(edges)
   const seen = new Set<string>()
@@ -916,7 +1016,6 @@ function buildComponentSummaries(nodes: StackMapNode[], edges: StackMapEdge[]): 
 
   const visibleSummaries: ComponentSummary[] = []
   const unlinkedNodeIds = new Set<string>()
-  const unlinkedEdgeIds = new Set<string>()
 
   for (const summary of summaries) {
     if (summary.kind === 'service_component' || summary.kind === 'weakly_linked') {
@@ -924,43 +1023,14 @@ function buildComponentSummaries(nodes: StackMapNode[], edges: StackMapEdge[]): 
       continue
     }
     for (const nodeId of summary.nodeIds) unlinkedNodeIds.add(nodeId)
-    for (const edgeId of summary.edgeIds) unlinkedEdgeIds.add(edgeId)
   }
 
   if (unlinkedNodeIds.size > 0) {
-    const unlinkedNodes = [...unlinkedNodeIds]
-      .map(id => nodeById.get(id))
-      .filter((value): value is StackMapNode => Boolean(value))
-    const unlinkedEdges = edges.filter(edge => unlinkedEdgeIds.has(edge.id))
-    const categories = topCategoriesForNodes(unlinkedNodes)
-    const accounts = [...new Set(unlinkedNodes.map(node => accountIdForNode(node)).filter((value): value is string => Boolean(value)))].sort()
-    const regions = [...new Set(unlinkedNodes.map(node => node.metadata?.region || node.position_hint?.region).filter((value): value is string => Boolean(value)))].sort()
-    visibleSummaries.push({
-      id: UNLINKED_COMPONENT_ID,
-      name: 'unlinked-resources',
-      kind: 'unlinked_bucket',
-      nodeIds: [...unlinkedNodeIds],
-      edgeIds: [...unlinkedEdgeIds],
-      resourceCount: unlinkedNodes.length,
-      edgeCount: unlinkedEdges.length,
-      dominantCategories: categories,
-      entrypoints: [],
-      accountIds: accounts,
-      regions,
-      usefulnessScore: 0,
-      helperRatio: unlinkedNodes.length > 0 ? unlinkedNodes.filter(isHelperNode).length / unlinkedNodes.length : 0,
-      mostlyNetwork: unlinkedNodes.length > 0 && unlinkedNodes.every(node => node.category === 'network' || NETWORK_HEAVY_RESOURCE_TYPES.has(node.resource_type)),
-      summary: `${categories.slice(0, 2).join(' + ') || 'mixed'} · ${accounts.length || 1} account${accounts.length === 1 ? '' : 's'}`,
-    })
+    const unlinkedSummary = buildUnlinkedSummary(unlinkedNodeIds, nodeById, edges)
+    if (unlinkedSummary) visibleSummaries.push(unlinkedSummary)
   }
 
-  return visibleSummaries.sort((a, b) => {
-    if (a.kind === 'unlinked_bucket' && b.kind !== 'unlinked_bucket') return 1
-    if (b.kind === 'unlinked_bucket' && a.kind !== 'unlinked_bucket') return -1
-    if (b.usefulnessScore !== a.usefulnessScore) return b.usefulnessScore - a.usefulnessScore
-    if (b.resourceCount !== a.resourceCount) return b.resourceCount - a.resourceCount
-    return a.name.localeCompare(b.name)
-  })
+  return visibleSummaries.sort(componentSort)
 }
 
 export const useGraphStore = defineStore('graph', {
@@ -985,6 +1055,7 @@ export const useGraphStore = defineStore('graph', {
     activeAccountId: null as string | null,
     activeOrgGroupId: null as string | null,
     activeComponentId: null as string | null,
+    componentViewBypassed: false as boolean,
     zoomScale: 1 as number,
     lockedZoomTier: null as null | 'overview' | 'mid' | 'detail',
     componentViewThreshold: COMPONENT_VIEW_THRESHOLD_DEFAULT,
@@ -1121,6 +1192,7 @@ export const useGraphStore = defineStore('graph', {
     },
 
     shouldUseComponentLanding(): boolean {
+      if (this.componentViewBypassed) return false
       if (!this.isLargeLiveScan) return false
       if (this.isOrganizationOverview) return false
       return true
@@ -1261,7 +1333,7 @@ export const useGraphStore = defineStore('graph', {
     },
 
     componentSummaries(state): ComponentSummary[] {
-      const summaries = buildComponentSummaries(this.architectureSourceNodes, this.architectureSourceEdges)
+      const summaries = buildComponentSummaries(this.architectureSourceNodes, this.architectureSourceEdges, state.groups)
       if (state.showWeaklyLinkedComponents) return summaries
       const explicit = summaries.filter(summary => summary.kind !== 'weakly_linked' && summary.kind !== 'unlinked_bucket')
       const hiddenWeakly = summaries.filter(summary => summary.kind === 'weakly_linked')
@@ -1322,7 +1394,7 @@ export const useGraphStore = defineStore('graph', {
       }
 
       let nodes = this.architectureSourceNodes
-      if (state.viewMode === 'architecture' && this.zoomTier === 'overview' && this.componentSummaries.length > 1 && !state.activeComponentId) {
+      if (state.viewMode === 'architecture' && this.zoomTier === 'overview' && this.componentSummaries.length > 1 && !state.activeComponentId && !state.componentViewBypassed) {
         return this.componentSummaries.map((component, index) => ({
           id: `aggregate:${component.id}`,
           name: component.name,
@@ -1714,6 +1786,7 @@ export const useGraphStore = defineStore('graph', {
       }
 
       this.activeComponentId = null
+      this.componentViewBypassed = false
       if (this.metadata?.source_type === 'aws_live' && this.metadata?.scan_mode === 'organization' && this.hasOrganizationData) {
         this.viewMode = 'organization'
       } else if (this.shouldUseComponentLanding) {
@@ -1929,6 +2002,7 @@ export const useGraphStore = defineStore('graph', {
 
     setViewMode(mode: 'architecture' | 'raw' | 'organization' | 'components') {
       this.viewMode = mode
+      if (mode === 'components') this.componentViewBypassed = false
       if (mode === 'architecture' && this.selectedNodeId) {
         const parent = this.helperParentMap.get(this.selectedNodeId)
         if (parent) this.selectedNodeId = parent
@@ -1946,6 +2020,7 @@ export const useGraphStore = defineStore('graph', {
       this.activeAccountId = accountId
       this.activeOrgGroupId = null
       this.activeComponentId = null
+      this.componentViewBypassed = false
       this.selectedNodeId = null
       this.hopLimit = 0
     },
@@ -1954,6 +2029,7 @@ export const useGraphStore = defineStore('graph', {
       this.activeAccountId = accountId
       this.activeOrgGroupId = null
       this.activeComponentId = null
+      this.componentViewBypassed = false
       this.viewMode = this.shouldUseComponentLanding ? 'components' : 'architecture'
       this.selectedNodeId = null
       this.hopLimit = 0
@@ -1974,13 +2050,25 @@ export const useGraphStore = defineStore('graph', {
 
     openComponent(componentId: string) {
       this.activeComponentId = componentId
+      this.componentViewBypassed = false
       this.viewMode = 'architecture'
       this.selectedNodeId = null
       this.hopLimit = 0
     },
 
+    viewAllComponents() {
+      this.activeComponentId = null
+      this.componentViewBypassed = true
+      this.showUnlinkedResources = true
+      this.viewMode = 'architecture'
+      this.selectedNodeId = null
+      this.selectedEdgeId = null
+      this.hopLimit = 0
+    },
+
     returnToComponents() {
       this.activeComponentId = null
+      this.componentViewBypassed = false
       this.selectedNodeId = null
       this.hopLimit = 0
       this.viewMode = 'components'

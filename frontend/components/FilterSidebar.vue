@@ -309,12 +309,20 @@
         </button>
       </section>
 
-      <section v-if="store.shouldUseComponentLanding || store.activeComponentId" class="sidebar-section">
+      <section v-if="store.shouldUseComponentLanding || store.activeComponentId || store.componentViewBypassed" class="sidebar-section">
         <div class="section-heading">
           <span>Components</span>
           <span class="section-heading__meta">Focus</span>
         </div>
         <div class="space-y-2">
+          <button
+            v-if="store.componentViewBypassed"
+            class="filter-row"
+            @click="store.returnToComponents()"
+          >
+            <span class="text-gray-300">Back to component overview</span>
+            <span class="text-[10px] font-mono uppercase tracking-[0.18em] text-cyan-300">Open</span>
+          </button>
           <button
             class="filter-row"
             @click="store.setShowUnlinkedResources(!store.showUnlinkedResources)"
