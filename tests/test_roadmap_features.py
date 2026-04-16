@@ -4,7 +4,10 @@ from stackmap.aws_live.profiles import discover_aws_profiles
 from stackmap.findings.security import detect_security_findings
 from stackmap.nl_query import query_ir
 from stackmap.parsers.base import ResourceCategory, StackMapIR, StackMapNode
+from stackmap.parsers.terraform import TerraformParser
 from stackmap.timeline import build_timeline_ir, write_snapshot
+from stackmap.grouping.engine import build_group_aggregates
+from stackmap.parsers.base import EdgeType, StackMapEdge, StackMapGroup
 
 
 def _node(node_id: str, resource_type: str, props: dict | None = None) -> StackMapNode:
@@ -41,6 +44,21 @@ def test_timeline_builder_records_snapshot_metadata(tmp_path: Path) -> None:
     assert timeline_ir.timeline["diffs"][0]["added"] == ["aws_s3_bucket.logs"]
 
 
+def test_timeline_fixture_pair_has_diff_data(tmp_path: Path) -> None:
+    before = StackMapIR.read_json("tests/fixtures/timeline-before.json")
+    after = StackMapIR.read_json("tests/fixtures/timeline-after.json")
+    before.metadata["scanned_at"] = "2026-04-15T10:00:00+00:00"
+    after.metadata["scanned_at"] = "2026-04-16T10:00:00+00:00"
+    write_snapshot(before, tmp_path)
+    write_snapshot(after, tmp_path)
+
+    timeline_ir = build_timeline_ir(tmp_path)
+
+    assert timeline_ir.timeline is not None
+    assert timeline_ir.timeline["diffs"][0]["summary"]["added"] >= 0
+    assert "node_diffs" in timeline_ir.timeline["diffs"][0]
+
+
 def test_security_findings_detect_wildcard_iam_and_open_sg() -> None:
     ir = StackMapIR(nodes=[
         _node("aws_iam_policy.admin", "aws_iam_policy", {
@@ -55,6 +73,18 @@ def test_security_findings_detect_wildcard_iam_and_open_sg() -> None:
 
     assert "iam.wildcard_admin" in pattern_ids
     assert "sg.open_sensitive_port" in pattern_ids
+
+
+def test_security_fixtures_detect_public_s3_and_open_sg() -> None:
+    parser = TerraformParser()
+    public_s3 = parser.parse("tests/fixtures/public-s3.tfstate")
+    open_sg = parser.parse("tests/fixtures/open-sg.tfstate")
+
+    s3_patterns = {finding.pattern_id for finding in detect_security_findings(public_s3)}
+    sg_patterns = {finding.pattern_id for finding in detect_security_findings(open_sg)}
+
+    assert "s3.public_bucket" in s3_patterns
+    assert "sg.open_sensitive_port" in sg_patterns
 
 
 def test_local_nl_query_matches_public_resources() -> None:
@@ -75,3 +105,23 @@ def test_profile_discovery_reads_config_and_credentials(tmp_path: Path) -> None:
     (aws_dir / "credentials").write_text("[sandbox]\naws_access_key_id=x\naws_secret_access_key=y\n")
 
     assert discover_aws_profiles(tmp_path) == ["default", "prod", "sandbox"]
+
+
+def test_group_aggregates_precompute_group_edges() -> None:
+    ir = StackMapIR(
+        nodes=[
+            _node("a.1", "aws_lambda_function"),
+            _node("b.1", "aws_dynamodb_table"),
+        ],
+        edges=[StackMapEdge(id="a-to-b", source="a.1", target="b.1", edge_type=EdgeType.READS_FROM)],
+        groups=[
+            StackMapGroup(id="group:a", name="A", group_type="smart_group", children=["a.1"]),
+            StackMapGroup(id="group:b", name="B", group_type="smart_group", children=["b.1"]),
+        ],
+    )
+
+    aggregates = build_group_aggregates(ir)
+
+    assert len(aggregates["groups"]) == 2
+    assert aggregates["edges_by_group"][0]["source"] == "group:a"
+    assert aggregates["edges_by_group"][0]["target"] == "group:b"

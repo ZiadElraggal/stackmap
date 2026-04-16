@@ -105,6 +105,29 @@
         </dl>
       </div>
 
+      <div v-if="selectedNodeFindings.length > 0" class="border-b border-red-500/20 bg-red-500/[0.025] p-4">
+        <h3 class="mb-2 flex items-center gap-1.5 text-xs uppercase tracking-wider text-red-300/80">
+          Security & findings
+        </h3>
+        <div class="space-y-2">
+          <div
+            v-for="finding in selectedNodeFindings"
+            :key="finding.id"
+            class="rounded-lg border border-white/10 bg-white/[0.03] p-3"
+          >
+            <div class="flex items-center justify-between gap-2">
+              <div class="text-xs font-semibold text-white">{{ finding.title }}</div>
+              <span class="rounded bg-red-500/15 px-2 py-0.5 text-[9px] font-mono uppercase text-red-200">{{ finding.severity }}</span>
+            </div>
+            <p class="mt-1 text-[11px] leading-5 text-gray-400">{{ finding.description }}</p>
+            <details v-if="finding.remediation || finding.recommendation" class="mt-2">
+              <summary class="cursor-pointer text-[10px] font-mono uppercase tracking-wider text-emerald-300">Remediation</summary>
+              <p class="mt-1 text-[11px] leading-5 text-gray-400">{{ finding.remediation || finding.recommendation }}</p>
+            </details>
+          </div>
+        </div>
+      </div>
+
       <div class="p-4 border-b border-white/10 space-y-3">
         <div v-if="store.editMode && node" class="rounded-xl border border-white/[0.08] bg-white/[0.02]">
           <button class="section-toggle" @click="toggleSection('nodeEditor')">
@@ -908,6 +931,10 @@ const diffBadgeLabel = computed(() => {
     default:
       return ''
   }
+})
+const selectedNodeFindings = computed(() => {
+  if (!node.value) return []
+  return store.findings.filter(finding => finding.node_ids.includes(node.value!.id))
 })
 const categoryColor = computed(() => CATEGORY_COLORS[node.value?.category || ''] || '#9ca3af')
 const edgeColor = computed(() => edge.value?.color || CATEGORY_COLORS.integration)

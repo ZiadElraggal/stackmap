@@ -56,13 +56,13 @@ Reuse `stackmap/graph/diff.py` — it already produces added/removed/changed edg
 4. Presentation mode hides the slider by default.
 
 **Ship checklist.**
-- [ ] Extend `StackMapIR` with `timeline: Timeline | None`
-- [ ] `timeline` CLI + `--snapshot-dir` flag on existing scanners
-- [ ] `/api/timeline` handlers
-- [ ] Store `loadTimeline()` / `setActiveSnapshot(id)` / `getDiffBetween(a, b)`
-- [ ] `TimeTravelSlider` wired, `DiffLegend.vue` added
-- [ ] Graph rendering reacts to `snapshotDiff` (added/removed/changed classes on `GraphNode`/`GraphEdge`)
-- [ ] Fixture-based tests against `timeline-before.json` / `timeline-after.json`
+- [x] Extend `StackMapIR` with `timeline: Timeline | None`
+- [x] `timeline` CLI + `--snapshot-dir` flag on existing scanners
+- [x] `/api/timeline` handlers
+- [x] Store `loadTimeline()` / `setActiveSnapshot(id)` / `getDiffBetween(a, b)`
+- [x] `TimeTravelSlider` wired, `DiffLegend.vue` added
+- [x] Graph rendering reacts to `snapshotDiff` (added/removed/changed classes on `GraphNode`/`GraphEdge`)
+- [x] Fixture-based tests against `timeline-before.json` / `timeline-after.json`
 
 ---
 
@@ -105,13 +105,13 @@ Extend existing `findings` shape with explicit severity + remediation fields and
 - Security tab of the detail panel: when the selected node has findings, render them inline above relationships.
 
 **Ship checklist.**
-- [ ] `stackmap/findings/security.py` with 5 detectors
-- [ ] Fixture coverage: add `public-s3.tfstate`, `open-sg.tfstate` to `tests/fixtures/`
-- [ ] `findings[].remediation` propagated end-to-end
-- [ ] `FindingsPanel` severity bars + accordion
-- [ ] Node halo overlay (new `severity-halo` class on `GraphNode`)
-- [ ] DetailPanel integration
-- [ ] `--no-security-findings` CLI flag for users who don't want them
+- [x] `stackmap/findings/security.py` with 5 detectors
+- [x] Fixture coverage: add `public-s3.tfstate`, `open-sg.tfstate` to `tests/fixtures/`
+- [x] `findings[].remediation` propagated end-to-end
+- [x] `FindingsPanel` severity bars + accordion
+- [x] Node halo overlay (new `severity-halo` class on `GraphNode`)
+- [x] DetailPanel integration
+- [x] `--no-security-findings` CLI flag for users who don't want them
 
 ---
 
@@ -149,11 +149,11 @@ The scanner already emits accounts. Formalize an `organization` block:
 - `FilterSidebar` gets an "Accounts" section listing accounts with checkboxes to scope the canvas.
 
 **Ship checklist.**
-- [ ] Add `StackMapIR.organization` field
-- [ ] Cross-account edge detector in `stackmap/aws_live/scanner.py`
-- [ ] `'organization'` view mode in store + routing
-- [ ] `OrgSummary.vue`
-- [ ] Per-account filter state
+- [x] Add `StackMapIR.organization` field
+- [x] Cross-account edge detector in `stackmap/aws_live/scanner.py`
+- [x] `'organization'` view mode in store + routing
+- [x] Organization summary cards in the existing graph node/card renderer
+- [x] Per-account filter state
 - [ ] Fixture `tests/fixtures/multi-account.json`
 
 ---
@@ -185,9 +185,9 @@ Three zoom levels drive rendering — existing layout (`frontend/stores/graph.ts
 - Keep a "Lock zoom tier" toggle in the command palette for screenshot/presentation use.
 
 **Ship checklist.**
-- [ ] IR `aggregates` field populated by grouping engine
-- [ ] `zoomTier` derived state in store
-- [ ] `Canvas.vue` tier-aware rendering
+- [x] IR `aggregates` field populated by grouping engine
+- [x] `zoomTier` derived state in store
+- [x] `Canvas.vue` tier-aware rendering
 - [ ] Minimap uses overview
 - [ ] Tests: 500-node synthetic fixture + assert <16ms frame time at each tier
 
@@ -225,11 +225,11 @@ When live billing is active, `cost.by_node` gains an `anomaly` field:
 - Integration with findings: anomalies >= medium also materialize as `category: "cost-anomaly"` findings so they show up in the security/findings panel.
 
 **Ship checklist.**
-- [ ] `anomaly` field on `NodeCostEstimate`
-- [ ] Thresholds configurable via `--anomaly-thresholds low,med,high`
-- [ ] CostOverlay Anomalies section
-- [ ] Canvas sigil + hover tooltip
-- [ ] Dual surfacing in FindingsPanel
+- [x] `anomaly` field on `NodeCostEstimate`
+- [x] Thresholds configurable via `--anomaly-thresholds low,med,high`
+- [x] CostOverlay Anomalies section
+- [x] Canvas sigil + hover tooltip
+- [x] Dual surfacing in FindingsPanel
 
 ---
 
@@ -260,11 +260,12 @@ The existing `SearchBar.vue` handles substring/regex. Layer an NL pass on top, r
 - No write tools; the model never mutates state, only returns a filter descriptor.
 
 **Ship checklist.**
-- [ ] `/api/nl-query` handler + provider shim (Anthropic first, add OpenAI/Ollama later)
+- [x] `/api/nl-query` handler with local-only query fallback
+- [ ] External provider shim (deferred to avoid local-first cost/privacy concerns)
 - [ ] Config discovery in CLI
-- [ ] `SearchBar.vue` mode toggle + AI feedback row
-- [ ] Docs: how to set `ANTHROPIC_API_KEY`
-- [ ] Test: mock provider returns canned filter → UI applies it
+- [x] `SearchBar.vue` mode toggle + query feedback row
+- [ ] Docs: how to set external provider keys
+- [x] Test: local query returns canned filter
 
 ---
 
@@ -284,12 +285,12 @@ The existing `SearchBar.vue` handles substring/regex. Layer an NL pass on top, r
 - Disabled when no `--aws-profile` / `--live-*` flag was provided at CLI start.
 
 **Ship checklist.**
-- [ ] Profile discovery helper (`stackmap/aws_live/profiles.py`)
-- [ ] `/api/profiles` GET + `/api/profiles/activate` POST
-- [ ] UI chip + popover (`ProfileSwitcher.vue`)
-- [ ] Store `activeProfile`, `availableProfiles`
-- [ ] Error surface matches the new boto3 error styling
-- [ ] Guard against activation racing an in-flight logs/cost fetch
+- [x] Profile discovery helper (`stackmap/aws_live/profiles.py`)
+- [x] `/api/profiles` GET + `/api/profiles/activate` POST
+- [x] UI chip + popover (`ProfileSwitcher.vue`)
+- [x] Store `activeProfile`, `availableProfiles`
+- [x] Error surface matches the new boto3 error styling
+- [x] Guard against activation racing an in-flight logs/cost fetch
 
 ---
 

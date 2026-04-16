@@ -182,6 +182,9 @@ def apply_smart_groups(ir: StackMapIR, configs: list[SmartGroupConfig]) -> Stack
         nodes=ir.nodes,
         edges=ir.edges,
         groups=new_groups,
+        timeline=ir.timeline,
+        organization=ir.organization,
+        aggregates=ir.aggregates,
     )
 
 
@@ -312,3 +315,45 @@ def auto_detect_groups(
             ))
 
     return groups
+
+
+def build_group_aggregates(ir: StackMapIR) -> dict:
+    """Precompute group-level aggregate nodes and edges for overview rendering."""
+    groups = [group for group in ir.groups if group.children]
+    node_to_group: dict[str, str] = {}
+    for group in groups:
+        for child in group.children:
+            node_to_group.setdefault(child, group.id)
+
+    aggregate_nodes = [
+        {
+            "id": group.id,
+            "name": group.name,
+            "group_type": group.group_type,
+            "resource_count": len(group.children),
+            "children": group.children,
+            "metadata": group.metadata or {},
+        }
+        for group in groups
+    ]
+
+    edge_counts: dict[tuple[str, str, str], int] = defaultdict(int)
+    for edge in ir.edges:
+        source_group = node_to_group.get(edge.source)
+        target_group = node_to_group.get(edge.target)
+        if not source_group or not target_group or source_group == target_group:
+            continue
+        edge_counts[(source_group, target_group, edge.edge_type.value)] += 1
+
+    aggregate_edges = [
+        {
+            "id": f"{source}->{target}:{edge_type}",
+            "source": source,
+            "target": target,
+            "edge_type": edge_type,
+            "count": count,
+        }
+        for (source, target, edge_type), count in sorted(edge_counts.items())
+    ]
+
+    return {"groups": aggregate_nodes, "edges_by_group": aggregate_edges}

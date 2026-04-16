@@ -150,6 +150,34 @@ def detect_unencrypted_storage(ir: StackMapIR) -> list[Finding]:
     findings: list[Finding] = []
     for node in ir.nodes:
         props = node.properties
+        if node.resource_type in {"aws_s3_bucket", "AWS::S3::Bucket"} and not (
+            props.get("server_side_encryption_configuration")
+            or props.get("BucketEncryption")
+            or props.get("bucket_encryption")
+        ):
+            findings.append(Finding(
+                id=_finding_id("storage.unencrypted_s3", node.id),
+                pattern_id="storage.unencrypted_s3",
+                title="S3 bucket encryption is not declared",
+                description=f"Bucket '{node.name}' does not expose server-side encryption configuration.",
+                severity=Severity.WARNING,
+                node_ids=[node.id],
+                recommendation="Enable SSE-S3 or SSE-KMS and make encryption the bucket default.",
+                category="security",
+            ))
+        if node.resource_type in {"aws_db_instance", "aws_rds_cluster", "AWS::RDS::DBInstance", "AWS::RDS::DBCluster"} and not (
+            props.get("storage_encrypted") is True or props.get("StorageEncrypted") is True
+        ):
+            findings.append(Finding(
+                id=_finding_id("storage.unencrypted_rds", node.id),
+                pattern_id="storage.unencrypted_rds",
+                title="Database storage is not encrypted",
+                description=f"Database '{node.name}' does not declare storage encryption.",
+                severity=Severity.WARNING,
+                node_ids=[node.id],
+                recommendation="Enable storage encryption on the database or migrate to an encrypted replacement.",
+                category="security",
+            ))
         if node.resource_type in {"aws_ebs_volume", "AWS::EC2::Volume"} and props.get("encrypted") is not True and props.get("Encrypted") is not True:
             findings.append(Finding(
                 id=_finding_id("storage.unencrypted_ebs", node.id),
@@ -168,6 +196,30 @@ def detect_missing_logs(ir: StackMapIR) -> list[Finding]:
     findings: list[Finding] = []
     for node in ir.nodes:
         props = node.properties
+        if node.resource_type in {"aws_cloudtrail", "AWS::CloudTrail::Trail"} and props.get("enable_logging") is False:
+            findings.append(Finding(
+                id=_finding_id("logs.cloudtrail_disabled", node.id),
+                pattern_id="logs.cloudtrail_disabled",
+                title="CloudTrail logging is disabled",
+                description=f"Trail '{node.name}' has logging disabled.",
+                severity=Severity.CRITICAL,
+                node_ids=[node.id],
+                recommendation="Enable CloudTrail logging and verify delivery to a protected destination.",
+                category="security",
+            ))
+        if node.resource_type in {"aws_lb", "aws_alb", "AWS::ElasticLoadBalancingV2::LoadBalancer"} and not (
+            props.get("access_logs") or props.get("LoadBalancerAttributes")
+        ):
+            findings.append(Finding(
+                id=_finding_id("logs.alb_missing", node.id),
+                pattern_id="logs.alb_missing",
+                title="Load balancer access logging is not declared",
+                description=f"Load balancer '{node.name}' does not expose access logging configuration.",
+                severity=Severity.INFO,
+                node_ids=[node.id],
+                recommendation="Enable access logs for audit and traffic investigation workflows.",
+                category="security",
+            ))
         if node.resource_type in {"aws_cloudfront_distribution", "AWS::CloudFront::Distribution"} and not props.get("logging_config") and not props.get("Logging"):
             findings.append(Finding(
                 id=_finding_id("logs.cloudfront_missing", node.id),

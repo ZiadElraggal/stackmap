@@ -63,16 +63,7 @@
 
     <Transition name="flyout">
       <div v-if="showProfiles && store.availableProfiles.length > 0" class="findings-flyout profile-flyout">
-        <button
-          v-for="profile in store.availableProfiles"
-          :key="profile"
-          class="profile-option"
-          :class="{ active: profile === store.activeProfile }"
-          @click="activate(profile)"
-        >
-          {{ profile }}
-        </button>
-        <div v-if="profileMessage" class="profile-message">{{ profileMessage }}</div>
+        <ProfileSwitcher />
       </div>
     </Transition>
   </div>
@@ -82,21 +73,16 @@
 import { computed, ref } from 'vue'
 import { useGraphStore } from '~/stores/graph'
 import FindingsPanel from './FindingsPanel.vue'
+import ProfileSwitcher from './ProfileSwitcher.vue'
 
 const store = useGraphStore()
 const showFindings = ref(false)
 const showProfiles = ref(false)
-const profileMessage = ref('')
 
 const panelOpen = computed(
   () => !store.editorPanelCollapsed && (!!store.selectedNode || !!store.selectedEdge || store.editMode)
 )
 
-async function activate(profile: string) {
-  profileMessage.value = 'Switching...'
-  const result = await store.activateProfile(profile)
-  profileMessage.value = result.ok ? 'Profile active' : (result.error || 'Switch failed')
-}
 </script>
 
 <style scoped>
@@ -189,38 +175,6 @@ async function activate(profile: string) {
   padding: 10px;
 }
 
-.profile-flyout {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.profile-option {
-  width: 100%;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--sm-text-muted, rgba(245,245,247,0.55));
-  cursor: pointer;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  padding: 6px 8px;
-  text-align: left;
-}
-
-.profile-option:hover,
-.profile-option.active {
-  background: rgba(74, 222, 128, 0.1);
-  border-color: rgba(74, 222, 128, 0.22);
-  color: #4ade80;
-}
-
-.profile-message {
-  color: rgba(245,245,247,0.55);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
-  padding: 4px 2px 0;
-}
 
 .flyout-enter-active,
 .flyout-leave-active {

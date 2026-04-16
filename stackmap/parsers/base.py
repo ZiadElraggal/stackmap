@@ -87,8 +87,9 @@ class StackMapIR:
         }
         if self.timeline is not None:
             payload["timeline"] = self.timeline
-        if self.organization is not None:
-            payload["organization"] = self.organization
+        organization = self.organization if self.organization is not None else self.metadata.get("organization")
+        if organization is not None:
+            payload["organization"] = organization
         if self.aggregates is not None:
             payload["aggregates"] = self.aggregates
         return payload

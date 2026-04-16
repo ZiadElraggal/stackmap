@@ -26,6 +26,7 @@
     <CommandPalette v-if="!store.presentationMode" ref="cmdRef" @pan-to="onPanTo" @fit-to-screen="onFit" />
     <EditToolbar v-if="!store.presentationMode" />
     <DriftSummaryBar v-if="!store.presentationMode" />
+    <DiffLegend v-if="!store.presentationMode" />
     <InsightsDock v-if="!store.presentationMode" />
     <CostOverlay v-if="!store.presentationMode" />
     <LogViewer v-if="!store.presentationMode" />

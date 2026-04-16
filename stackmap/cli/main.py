@@ -289,8 +289,25 @@ def _maybe_write_snapshot(ir: StackMapIR, snapshot_dir: str | None) -> Path | No
     return write_snapshot(ir, snapshot_dir)
 
 
-def _apply_cost_anomalies(report: Any, actuals: dict[str, Any]) -> None:
-    """Attach actual-vs-forecast anomaly metadata to a CostReport."""
+def _parse_anomaly_thresholds(value: str) -> tuple[float, float, float]:
+    parts = [part.strip() for part in value.split(",") if part.strip()]
+    if len(parts) != 3:
+        raise typer.BadParameter("Expected three comma-separated anomaly thresholds: low,medium,high")
+    try:
+        low, medium, high = (float(part) for part in parts)
+    except ValueError as exc:
+        raise typer.BadParameter("Anomaly thresholds must be numbers.") from exc
+    if not (1.0 <= low <= medium <= high):
+        raise typer.BadParameter("Expected thresholds where 1.0 <= low <= medium <= high.")
+    return low, medium, high
+
+
+def _apply_cost_anomalies_with_thresholds(
+    report: Any,
+    actuals: dict[str, Any],
+    thresholds: tuple[float, float, float],
+) -> None:
+    low, medium, high = thresholds
     for node_id, actual_value in actuals.items():
         estimate = report.by_node.get(node_id)
         if not estimate:
@@ -303,14 +320,9 @@ def _apply_cost_anomalies(report: Any, actuals: dict[str, Any]) -> None:
         if forecast <= 0:
             continue
         ratio = actual / forecast
-        if ratio < 1.3:
+        if ratio < low:
             continue
-        if ratio >= 2.0:
-            severity = "high"
-        elif ratio >= 1.6:
-            severity = "medium"
-        else:
-            severity = "low"
+        severity = "high" if ratio >= high else "medium" if ratio >= medium else "low"
         estimate.breakdown = {
             **(estimate.breakdown or {}),
             "monthly_actual": round(actual, 2),
@@ -320,6 +332,32 @@ def _apply_cost_anomalies(report: Any, actuals: dict[str, Any]) -> None:
                 "severity": severity,
             },
         }
+
+
+def _cost_anomaly_findings(report: Any) -> list[Any]:
+    """Represent medium/high cost anomalies as normal findings."""
+    from stackmap.analysis.patterns import Finding, Severity, _finding_id
+
+    findings: list[Finding] = []
+    for node_id, estimate in getattr(report, "by_node", {}).items():
+        anomaly = (estimate.breakdown or {}).get("anomaly") if estimate.breakdown else None
+        if not anomaly or anomaly.get("severity") not in {"medium", "high"}:
+            continue
+        severity = Severity.WARNING if anomaly["severity"] == "medium" else Severity.CRITICAL
+        findings.append(Finding(
+            id=_finding_id("cost.anomaly", node_id),
+            pattern_id="cost.anomaly",
+            title=f"Cost anomaly on {estimate.resource_name}",
+            description=(
+                f"Actual monthly cost is {anomaly.get('ratio')}x the forecast "
+                f"for {estimate.resource_name}."
+            ),
+            severity=severity,
+            node_ids=[node_id],
+            recommendation="Review usage metrics, autoscaling, and forecast assumptions for this resource.",
+            category="cost-anomaly",
+        ))
+    return findings
 
 
 def _parse_live_services(services: str) -> set[str]:
@@ -436,11 +474,15 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
         state: _LiveGraphState,
         source_type: str,
         aws_features: _LiveAWSFeatureState | None = None,
+        security_findings_enabled: bool = True,
+        anomaly_thresholds: tuple[float, float, float] = (1.3, 1.6, 2.0),
         **kwargs: Any,
     ) -> None:
         self._state = state
         self._source_type = source_type
         self._aws_features = aws_features or _LiveAWSFeatureState(None, None, False, False)
+        self._security_findings_enabled = security_findings_enabled
+        self._anomaly_thresholds = anomaly_thresholds
         super().__init__(*args, directory=directory, **kwargs)
 
     def _send_json(self, payload: dict[str, Any], status: int = 200) -> None:
@@ -554,7 +596,7 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
             ir = self._get_ir()
             report = estimate_costs(ir, overrides=overrides)
             if actuals:
-                _apply_cost_anomalies(report, actuals)
+                _apply_cost_anomalies_with_thresholds(report, actuals, self._anomaly_thresholds)
             self._send_json(report.to_dict())
         except Exception as exc:
             self._send_json({"error": str(exc)}, status=500)
@@ -633,10 +675,13 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
 
     def _handle_findings(self) -> None:
         from stackmap.analysis.patterns import analyze_patterns
+        from stackmap.cost.estimator import estimate_costs
 
         try:
             ir = self._get_ir()
-            findings = analyze_patterns(ir)
+            findings = analyze_patterns(ir, include_security=self._security_findings_enabled)
+            cost_report = estimate_costs(ir)
+            findings.extend(_cost_anomaly_findings(cost_report))
             self._send_json([f.to_dict() for f in findings])
         except Exception as exc:
             self._send_json({"error": str(exc)})
@@ -1731,6 +1776,16 @@ def serve(
         "--live-billing",
         help="Enable /api/billing and CloudWatch usage metric imports. Requires --aws-profile and the billing add-on policy.",
     ),
+    security_findings: bool = typer.Option(
+        True,
+        "--security-findings/--no-security-findings",
+        help="Enable security-specific findings in /api/findings.",
+    ),
+    anomaly_thresholds: str = typer.Option(
+        "1.3,1.6,2.0",
+        "--anomaly-thresholds",
+        help="Cost anomaly ratio thresholds as low,medium,high.",
+    ),
 ) -> None:
     """Serve an interactive local StackMap viewer.
 
@@ -1776,13 +1831,18 @@ def serve(
         # logical service groups in the UI without needing a config file.
         if auto_group:
             try:
-                from stackmap.grouping.engine import AutoDetectConfig, auto_detect_groups
+                from stackmap.grouping.engine import (
+                    AutoDetectConfig,
+                    auto_detect_groups,
+                    build_group_aggregates,
+                )
                 detected = auto_detect_groups(ir, AutoDetectConfig())
                 # Append (rather than replace) so any existing parser-supplied groups remain.
                 existing_ids = {g.id for g in ir.groups}
                 for g in detected:
                     if g.id not in existing_ids:
                         ir.groups.append(g)
+                ir.aggregates = build_group_aggregates(ir)
             except Exception:
                 # Smart grouping is best-effort; never block serving.
                 pass
@@ -1808,6 +1868,11 @@ def serve(
                 console.print(f"[yellow]Warning:[/yellow] Drift comparison failed: {exc}")
 
     state = _LiveGraphState(ir)
+    try:
+        parsed_anomaly_thresholds = _parse_anomaly_thresholds(anomaly_thresholds)
+    except typer.BadParameter as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(1)
     temp_dir: Path | None = None
     source_public_dir = get_preferred_public_dir()
     public_dir: Path
@@ -1874,6 +1939,8 @@ def serve(
         state=state,
         source_type=source_type,
         aws_features=aws_features,
+        security_findings_enabled=security_findings,
+        anomaly_thresholds=parsed_anomaly_thresholds,
     )
     try:
         server = ThreadingHTTPServer((host, port), handler_cls)

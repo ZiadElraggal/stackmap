@@ -9,8 +9,8 @@
       </svg>
       <button
         class="rounded border border-white/[0.08] px-1.5 py-0.5 text-[9px] font-mono uppercase text-gray-500 transition hover:text-gray-300"
-        :class="{ 'text-emerald-300 border-emerald-400/25': mode === 'ai' }"
-        title="Toggle AI-style query"
+        :class="{ 'text-emerald-300 border-emerald-400/25': mode === 'query' }"
+        title="Toggle local graph query"
         @click="toggleMode"
       >
         {{ mode }}
@@ -19,7 +19,7 @@
         ref="inputRef"
         v-model="query"
         type="text"
-        :placeholder="mode === 'ai' ? 'Ask about the graph...' : 'Search resources...'"
+        :placeholder="mode === 'query' ? 'Ask about the graph...' : 'Search resources...'"
         class="bg-transparent text-gray-300 placeholder-gray-600 outline-none flex-1 font-mono text-xs min-w-0"
         @focus="focused = true"
         @blur="onBlur"
@@ -73,7 +73,7 @@
       </div>
     </Transition>
 
-    <div v-if="store.nlQueryReason && mode === 'ai'" class="absolute top-full left-0 right-0 mt-1.5 rounded-lg border border-emerald-400/15 bg-[#101820]/95 px-3 py-2 text-[10px] font-mono text-emerald-200/80">
+    <div v-if="store.nlQueryReason && mode === 'query'" class="absolute top-full left-0 right-0 mt-1.5 rounded-lg border border-emerald-400/15 bg-[#101820]/95 px-3 py-2 text-[10px] font-mono text-emerald-200/80">
       {{ store.nlQueryReason }}
     </div>
   </div>
@@ -88,7 +88,7 @@ import { CATEGORY_COLORS, getNodeIconAsset, getNodeIconPath } from '~/composable
 const store = useGraphStore()
 const query = ref('')
 const focused = ref(false)
-const mode = ref<'text' | 'ai'>('text')
+const mode = ref<'text' | 'query'>('text')
 const selectedIndex = ref(0)
 const inputRef = ref<HTMLInputElement>()
 const searchRef = ref<HTMLDivElement>()
@@ -102,7 +102,7 @@ const fuse = computed(() => {
 })
 
 const results = computed(() => {
-  if (!query.value || mode.value === 'ai') return []
+  if (!query.value || mode.value === 'query') return []
   return fuse.value.search(query.value).slice(0, 10)
 })
 
@@ -112,13 +112,13 @@ function onSearch() {
 }
 
 function toggleMode() {
-  mode.value = mode.value === 'text' ? 'ai' : 'text'
+  mode.value = mode.value === 'text' ? 'query' : 'text'
   selectedIndex.value = 0
   store.setSearch(mode.value === 'text' ? query.value : '')
 }
 
 async function onEnter() {
-  if (mode.value === 'ai') {
+  if (mode.value === 'query') {
     await store.applyNaturalLanguageQuery(query.value)
     return
   }

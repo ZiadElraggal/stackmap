@@ -482,6 +482,27 @@
     />
 
     <!-- Cost badge -->
+    <g v-if="costAnomaly" @click.stop="store.toggleCosts()">
+      <circle
+        :cx="-nodeWidth / 2 + 12"
+        :cy="-nodeHeight / 2 - 2"
+        r="6"
+        fill="rgba(251,146,60,0.95)"
+        stroke="#0d0d14"
+        stroke-width="1.5"
+      />
+      <text
+        :x="-nodeWidth / 2 + 12"
+        :y="-nodeHeight / 2 - 1"
+        text-anchor="middle"
+        dominant-baseline="central"
+        fill="#111827"
+        font-size="10"
+        font-weight="800"
+      >~</text>
+      <title>Cost anomaly: {{ costAnomaly.ratio }}x forecast</title>
+    </g>
+
     <g v-if="store.showCosts && node.position_hint?.cost_monthly != null && node.position_hint.cost_monthly > 0">
       <rect
         :x="nodeWidth / 2 - 48"
@@ -637,6 +658,10 @@ const findingColor = computed(() => {
     default:
       return '#ef4444'
   }
+})
+const costAnomaly = computed(() => {
+  const estimate = store.costData?.by_node?.[props.node.id] as any
+  return estimate?.anomaly || estimate?.breakdown?.anomaly || null
 })
 
 const diffBorderColor = computed(() => {

@@ -1048,6 +1048,7 @@ export const useGraphStore = defineStore('graph', {
       severity: string
       node_ids: string[]
       recommendation: string
+      remediation?: string
       category: string
     }[],
     activeFindingFilter: null as string | null,
@@ -1084,6 +1085,7 @@ export const useGraphStore = defineStore('graph', {
     nlQueryReason: '' as string,
     availableProfiles: [] as string[],
     activeProfile: null as string | null,
+    profileSwitching: false as boolean,
   }),
 
   getters: {
@@ -1445,6 +1447,12 @@ export const useGraphStore = defineStore('graph', {
       return (state.metadata?.diff_summary as { added: number; removed: number; modified: number; unchanged: number }) ?? null
     },
 
+    activeTimelineDiff(state): Record<string, any> | null {
+      if (!state.timelineDiffs.length) return null
+      if (!state.activeSnapshotId) return state.timelineDiffs[state.timelineDiffs.length - 1]
+      return state.timelineDiffs.find(diff => diff.to === state.activeSnapshotId) || state.timelineDiffs[state.timelineDiffs.length - 1]
+    },
+
     nodeDiffStatus(): Record<string, string> {
       return Object.fromEntries(
         this.nodes
@@ -1786,6 +1794,20 @@ export const useGraphStore = defineStore('graph', {
       }
     },
 
+    getDiffBetween(fromId: string, toId: string): Record<string, any> | null {
+      return this.timelineDiffs.find(diff => diff.from === fromId && diff.to === toId) || null
+    },
+
+    jumpToNextTimelineChange() {
+      const diff = this.activeTimelineDiff
+      const changedIds = [...(diff?.changed || []), ...(diff?.added || []), ...(diff?.removed || [])]
+      if (changedIds.length === 0) return null
+      const currentIndex = this.selectedNodeId ? changedIds.indexOf(this.selectedNodeId) : -1
+      const nextId = changedIds[(currentIndex + 1) % changedIds.length]
+      this.selectNode(nextId)
+      return nextId
+    },
+
     async applyNaturalLanguageQuery(query: string): Promise<{ ok: boolean; error?: string }> {
       try {
         const res = await fetch('/api/nl-query', {
@@ -1822,6 +1844,10 @@ export const useGraphStore = defineStore('graph', {
     },
 
     async activateProfile(profile: string): Promise<{ ok: boolean; error?: string }> {
+      if (this.profileSwitching || this.logLoading || this.billingLoading) {
+        return { ok: false, error: 'Wait for the current logs, billing, or profile request to finish.' }
+      }
+      this.profileSwitching = true
       try {
         const res = await fetch('/api/profiles/activate', {
           method: 'POST',
@@ -1836,6 +1862,8 @@ export const useGraphStore = defineStore('graph', {
         return { ok: true }
       } catch (err) {
         return { ok: false, error: String(err) }
+      } finally {
+        this.profileSwitching = false
       }
     },
 
@@ -2812,6 +2840,27 @@ export const useGraphStore = defineStore('graph', {
           delete node.position_hint.cost_confidence
           delete node.position_hint.cost_note
         }
+      }
+      this._syncCostAnomalyFindings(report)
+    },
+
+    _syncCostAnomalyFindings(report: CostReportData | null) {
+      this.findings = this.findings.filter(finding => finding.category !== 'cost-anomaly')
+      if (!report?.by_node) return
+      for (const [nodeId, estimate] of Object.entries(report.by_node)) {
+        const anomaly = estimate.anomaly || (estimate.breakdown?.anomaly as any)
+        if (!anomaly || !['medium', 'high'].includes(String(anomaly.severity))) continue
+        this.findings.push({
+          id: `cost-anomaly:${nodeId}`,
+          pattern_id: 'cost.anomaly',
+          title: `Cost anomaly on ${estimate.resource_name}`,
+          description: `Actual usage is ${anomaly.ratio}x the forecast.`,
+          severity: anomaly.severity === 'high' ? 'critical' : 'warning',
+          node_ids: [nodeId],
+          recommendation: 'Review usage metrics, autoscaling, and forecast assumptions for this resource.',
+          remediation: 'Review usage metrics, autoscaling, and forecast assumptions for this resource.',
+          category: 'cost-anomaly',
+        })
       }
     },
 
