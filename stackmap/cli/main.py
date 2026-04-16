@@ -1481,6 +1481,8 @@ def scan_aws(
                 aws_profile=profile if (live_logs or live_billing) else None,
                 live_logs=live_logs,
                 live_billing=live_billing,
+                security_findings=True,
+                anomaly_thresholds="1.3,1.6,2.0",
             )
         return
 
@@ -1566,6 +1568,8 @@ def scan_aws(
                 aws_profile=profile if (live_logs or live_billing) else None,
                 live_logs=live_logs,
                 live_billing=live_billing,
+                security_findings=True,
+                anomaly_thresholds="1.3,1.6,2.0",
             )
         return
 
@@ -1728,6 +1732,8 @@ def scan_aws(
             aws_profile=profile if (live_logs or live_billing) else None,
             live_logs=live_logs,
             live_billing=live_billing,
+            security_findings=True,
+            anomaly_thresholds="1.3,1.6,2.0",
         )
 
 

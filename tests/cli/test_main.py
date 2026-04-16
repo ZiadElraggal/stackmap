@@ -740,6 +740,8 @@ def test_scan_aws_serve_uses_serve_command(monkeypatch, tmp_path: Path) -> None:
     assert called["port"] == 3000
     assert called["watch"] is False
     assert called["watch_interval"] == 1.0
+    assert called["security_findings"] is True
+    assert called["anomaly_thresholds"] == "1.3,1.6,2.0"
 
 
 def test_scan_aws_account_profiles_json_writes_output(monkeypatch, tmp_path: Path) -> None:
