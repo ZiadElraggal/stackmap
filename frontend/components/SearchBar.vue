@@ -7,16 +7,24 @@
       <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" class="text-gray-500 flex-shrink-0">
         <circle cx="5.5" cy="5.5" r="4" /><path d="M8.5 8.5L12 12" />
       </svg>
+      <button
+        class="rounded border border-white/[0.08] px-1.5 py-0.5 text-[9px] font-mono uppercase text-gray-500 transition hover:text-gray-300"
+        :class="{ 'text-emerald-300 border-emerald-400/25': mode === 'ai' }"
+        title="Toggle AI-style query"
+        @click="toggleMode"
+      >
+        {{ mode }}
+      </button>
       <input
         ref="inputRef"
         v-model="query"
         type="text"
-        placeholder="Search resources..."
+        :placeholder="mode === 'ai' ? 'Ask about the graph...' : 'Search resources...'"
         class="bg-transparent text-gray-300 placeholder-gray-600 outline-none flex-1 font-mono text-xs min-w-0"
         @focus="focused = true"
         @blur="onBlur"
         @input="onSearch"
-        @keydown.enter="selectTopResult"
+        @keydown.enter="onEnter"
         @keydown.escape="clearSearch"
         @keydown.down.prevent="moveSelection(1)"
         @keydown.up.prevent="moveSelection(-1)"
@@ -64,6 +72,10 @@
         </div>
       </div>
     </Transition>
+
+    <div v-if="store.nlQueryReason && mode === 'ai'" class="absolute top-full left-0 right-0 mt-1.5 rounded-lg border border-emerald-400/15 bg-[#101820]/95 px-3 py-2 text-[10px] font-mono text-emerald-200/80">
+      {{ store.nlQueryReason }}
+    </div>
   </div>
 </template>
 
@@ -76,6 +88,7 @@ import { CATEGORY_COLORS, getNodeIconAsset, getNodeIconPath } from '~/composable
 const store = useGraphStore()
 const query = ref('')
 const focused = ref(false)
+const mode = ref<'text' | 'ai'>('text')
 const selectedIndex = ref(0)
 const inputRef = ref<HTMLInputElement>()
 const searchRef = ref<HTMLDivElement>()
@@ -89,13 +102,27 @@ const fuse = computed(() => {
 })
 
 const results = computed(() => {
-  if (!query.value) return []
+  if (!query.value || mode.value === 'ai') return []
   return fuse.value.search(query.value).slice(0, 10)
 })
 
 function onSearch() {
   selectedIndex.value = 0
-  store.setSearch(query.value)
+  if (mode.value === 'text') store.setSearch(query.value)
+}
+
+function toggleMode() {
+  mode.value = mode.value === 'text' ? 'ai' : 'text'
+  selectedIndex.value = 0
+  store.setSearch(mode.value === 'text' ? query.value : '')
+}
+
+async function onEnter() {
+  if (mode.value === 'ai') {
+    await store.applyNaturalLanguageQuery(query.value)
+    return
+  }
+  selectTopResult()
 }
 
 function selectTopResult() {

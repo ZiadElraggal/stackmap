@@ -71,6 +71,22 @@
         </span>
       </div>
 
+      <select
+        v-if="store.timelineSnapshots.length > 0"
+        class="h-6 max-w-44 rounded-md border border-white/[0.08] bg-white/[0.04] px-2 text-[10px] font-mono text-gray-300 outline-none"
+        :value="store.activeSnapshotId || ''"
+        title="Jump to snapshot"
+        @change="onSnapshotChange"
+      >
+        <option
+          v-for="snapshot in store.timelineSnapshots"
+          :key="snapshot.id"
+          :value="snapshot.id"
+        >
+          {{ snapshot.label || snapshot.id }}
+        </option>
+      </select>
+
       <button
         class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.04] text-gray-500 transition-all hover:bg-white/[0.08] hover:text-gray-300"
         title="Exit diff mode"
@@ -135,6 +151,12 @@ function onSliderInput(event: Event) {
   stopPlay()
   const value = parseFloat((event.target as HTMLInputElement).value)
   store.setDiffSlider(value)
+}
+
+async function onSnapshotChange(event: Event) {
+  stopPlay()
+  const value = (event.target as HTMLSelectElement).value
+  if (value) await store.setActiveSnapshot(value)
 }
 
 function formatTimestamp(value: string): string {

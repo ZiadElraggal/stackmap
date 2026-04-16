@@ -53,7 +53,9 @@ class CostEstimate:
     breakdown: dict | None = None
 
     def to_dict(self) -> dict:
-        return {
+        anomaly = (self.breakdown or {}).get("anomaly") if isinstance(self.breakdown, dict) else None
+        monthly_actual = (self.breakdown or {}).get("monthly_actual") if isinstance(self.breakdown, dict) else None
+        payload = {
             "resource_id": self.resource_id,
             "resource_name": self.resource_name,
             "resource_type": self.resource_type,
@@ -63,6 +65,11 @@ class CostEstimate:
             "estimate_note": self.estimate_note,
             "breakdown": self.breakdown,
         }
+        if monthly_actual is not None:
+            payload["monthly_actual"] = monthly_actual
+        if anomaly is not None:
+            payload["anomaly"] = anomaly
+        return payload
 
 
 @dataclass

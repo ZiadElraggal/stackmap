@@ -52,6 +52,28 @@
         </div>
       </div>
 
+      <div v-if="costAnomalies.length > 0" class="cost-section">
+        <button
+          class="cost-section__header cost-section__header--toggle"
+          @click="expandedAnomalies = !expandedAnomalies"
+        >
+          <span>
+            <span class="cost-disclosure-chevron" :class="{ open: expandedAnomalies }">▸</span>
+            Anomalies
+          </span>
+          <span class="cost-section__meta">{{ costAnomalies.length }}</span>
+        </button>
+        <div v-if="expandedAnomalies" class="cost-component-list">
+          <div v-for="item in costAnomalies" :key="item.id" class="cost-component-row">
+            <div class="min-w-0">
+              <div class="cost-component-name">{{ item.name }}</div>
+              <div class="cost-component-meta">{{ item.severity }} · {{ item.ratio }}x forecast</div>
+            </div>
+            <div class="cost-component-amount">+${{ formatCost(item.delta) }}</div>
+          </div>
+        </div>
+      </div>
+
       <!-- Per-resource breakdown (top items in scope) -->
       <div class="cost-section">
         <div class="cost-section__header">
@@ -154,6 +176,7 @@ const awsUsageFeedbackTone = ref<'success' | 'warning'>('success')
 const expandedResources = ref(false)
 const expandedComponents = ref(false)
 const expandedCategories = ref(false)
+const expandedAnomalies = ref(false)
 
 const scopeTabs = [
   { key: 'all' as CostScope, label: 'All' },
@@ -226,6 +249,24 @@ const topResources = computed(() => {
     .sort((a, b) => b.cost - a.cost)
     .slice(0, 8)
   return entries
+})
+
+const costAnomalies = computed(() => {
+  if (!store.costData?.by_node) return []
+  return Object.entries(store.costData.by_node)
+    .map(([id, estimate]) => {
+      const anomaly = (estimate.anomaly || estimate.breakdown?.anomaly) as any
+      if (!anomaly) return null
+      return {
+        id,
+        name: estimate.resource_name,
+        delta: Number(anomaly.delta || 0),
+        ratio: Number(anomaly.ratio || 0),
+        severity: String(anomaly.severity || 'low'),
+      }
+    })
+    .filter((item): item is { id: string; name: string; delta: number; ratio: number; severity: string } => !!item)
+    .sort((a, b) => b.delta - a.delta)
 })
 
 // Show only the top 3 by default; user can expand to see the full list.

@@ -986,6 +986,7 @@ onMounted(async () => {
       .on('zoom', event => {
         g.attr('transform', event.transform.toString())
         zoomScale.value = event.transform.k
+        store.setZoomScale(event.transform.k)
         updateViewport(event.transform)
       })
 

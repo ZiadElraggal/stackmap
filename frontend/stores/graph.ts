@@ -150,6 +150,16 @@ export interface CostNodeEstimate {
   pricing_model: string
   estimate_note: string
   breakdown?: Record<string, unknown> | null
+  monthly_actual?: number
+  anomaly?: { delta: number; ratio: number; severity: string }
+}
+
+export interface TimelineSnapshotMeta {
+  id: string
+  label: string
+  source: string
+  node_count?: number
+  edge_count?: number
 }
 
 export interface CostReportData {
@@ -975,6 +985,8 @@ export const useGraphStore = defineStore('graph', {
     activeAccountId: null as string | null,
     activeOrgGroupId: null as string | null,
     activeComponentId: null as string | null,
+    zoomScale: 1 as number,
+    lockedZoomTier: null as null | 'overview' | 'mid' | 'detail',
     componentViewThreshold: COMPONENT_VIEW_THRESHOLD_DEFAULT,
     showUnlinkedResources: true as boolean,
     showWeaklyLinkedComponents: false as boolean,
@@ -1064,6 +1076,14 @@ export const useGraphStore = defineStore('graph', {
     billingAvailable: false as boolean,
     billingLoading: false as boolean,
     billingError: null as string | null,
+
+    // Feature: Timeline / profiles / NL query
+    timelineSnapshots: [] as TimelineSnapshotMeta[],
+    timelineDiffs: [] as Array<Record<string, any>>,
+    activeSnapshotId: null as string | null,
+    nlQueryReason: '' as string,
+    availableProfiles: [] as string[],
+    activeProfile: null as string | null,
   }),
 
   getters: {
@@ -1102,6 +1122,13 @@ export const useGraphStore = defineStore('graph', {
       if (!this.isLargeLiveScan) return false
       if (this.isOrganizationOverview) return false
       return true
+    },
+
+    zoomTier(state): 'overview' | 'mid' | 'detail' {
+      if (state.lockedZoomTier) return state.lockedZoomTier
+      if (state.zoomScale < 0.35) return 'overview'
+      if (state.zoomScale < 0.8) return 'mid'
+      return 'detail'
     },
 
     helperParentMap(state): Map<string, string> {
@@ -1293,6 +1320,19 @@ export const useGraphStore = defineStore('graph', {
       }
 
       let nodes = this.architectureSourceNodes
+      if (state.viewMode === 'architecture' && this.zoomTier === 'overview' && this.componentSummaries.length > 1 && !state.activeComponentId) {
+        return this.componentSummaries.map((component, index) => ({
+          id: `aggregate:${component.id}`,
+          name: component.name,
+          resource_type: 'stackmap_component',
+          provider: 'stackmap',
+          category: component.dominantCategories[0] || 'other',
+          properties: { resources: component.resourceCount, edges: component.edgeCount },
+          tags: {},
+          metadata: { view_kind: 'aggregate' },
+          position_hint: { tier: 'compute', weight: Math.min(8, Math.max(3, component.resourceCount)), manual_order: (index + 1) * 100 },
+        }))
+      }
       if (state.activeComponentId) {
         const activeIds = this.activeComponentNodeIds
         if (activeIds) nodes = nodes.filter(node => activeIds.has(node.id))
@@ -1456,6 +1496,10 @@ export const useGraphStore = defineStore('graph', {
         if (state.categoryFilters[node.category] === false) return false
         if (state.minWeight > 1 && (node.position_hint?.weight || 2) < state.minWeight) return false
         if (hopSet && !hopSet.has(node.id)) return false
+        if (state.activeFindingFilter) {
+          const finding = state.findings.find(item => item.pattern_id === state.activeFindingFilter)
+          if (finding && !finding.node_ids.includes(node.id)) return false
+        }
         if (state.diffMode) {
           const diffStatus = node.position_hint?.diff_status
           if (state.showOnlyChanges && diffStatus === 'unchanged') return false
@@ -1648,6 +1692,18 @@ export const useGraphStore = defineStore('graph', {
         this.diffMode = true
         this.diffSlider = 0.5
       }
+      if (data.timeline?.snapshots?.length) {
+        this.timelineSnapshots = data.timeline.snapshots.map((snapshot: any) => ({
+          id: snapshot.id,
+          label: snapshot.label,
+          source: snapshot.source,
+          node_count: snapshot.node_count,
+          edge_count: snapshot.edge_count,
+        }))
+        this.timelineDiffs = data.timeline.diffs || []
+        this.activeSnapshotId = this.metadata.active_snapshot_id || this.timelineSnapshots[this.timelineSnapshots.length - 1]?.id || null
+        this.diffMode = this.timelineDiffs.length > 0
+      }
 
       this.activeComponentId = null
       if (this.metadata?.source_type === 'aws_live' && this.metadata?.scan_mode === 'organization' && this.hasOrganizationData) {
@@ -1668,6 +1724,7 @@ export const useGraphStore = defineStore('graph', {
       // Auto-load findings, drift data, and check live features (non-blocking)
       this.loadFindings()
       this.checkLogsAvailable()
+      this.loadProfiles()
       if (this.metadata?.drift_summary) {
         this.driftSummary = this.metadata.drift_summary
       }
@@ -1687,6 +1744,99 @@ export const useGraphStore = defineStore('graph', {
 
     setShowOnlyChanges(show: boolean) {
       this.showOnlyChanges = show
+    },
+
+    setZoomScale(scale: number) {
+      this.zoomScale = Number.isFinite(scale) ? scale : 1
+    },
+
+    setLockedZoomTier(tier: null | 'overview' | 'mid' | 'detail') {
+      this.lockedZoomTier = tier
+    },
+
+    async loadTimeline() {
+      try {
+        const res = await fetch('/api/timeline')
+        if (!res.ok) return
+        const data = await res.json()
+        this.timelineSnapshots = data.snapshots || []
+        this.timelineDiffs = data.diffs || []
+      } catch {
+        // Timeline is optional.
+      }
+    },
+
+    async setActiveSnapshot(snapshotId: string) {
+      try {
+        const res = await fetch(`/api/timeline?id=${encodeURIComponent(snapshotId)}`)
+        if (!res.ok) return
+        const data = await res.json()
+        this.metadata = data.metadata || {}
+        this.nodes = data.nodes || []
+        this.edges = data.edges || []
+        this.groups = data.groups || []
+        this.activeSnapshotId = snapshotId
+        this.selectedNodeId = null
+        this.selectedEdgeId = null
+        this.requestRelayout()
+        await this.loadFindings()
+        await this.refreshCostData()
+      } catch {
+        // Keep current graph if snapshot fetch fails.
+      }
+    },
+
+    async applyNaturalLanguageQuery(query: string): Promise<{ ok: boolean; error?: string }> {
+      try {
+        const res = await fetch('/api/nl-query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query }),
+        })
+        const data = await res.json()
+        if (!res.ok || data.error) return { ok: false, error: data.error || `Server returned ${res.status}` }
+        const nodeIds: string[] = data.filter?.nodeIds || []
+        this.nlQueryReason = data.reason || ''
+        if (nodeIds.length > 0) {
+          this.isolateNodeSet(nodeIds, 'applied natural-language filter')
+          this.selectNode(nodeIds[0])
+        } else {
+          this.nlQueryReason = data.reason || 'No matching resources.'
+        }
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: String(err) }
+      }
+    },
+
+    async loadProfiles() {
+      try {
+        const res = await fetch('/api/profiles')
+        if (!res.ok) return
+        const data = await res.json()
+        this.availableProfiles = data.available || []
+        this.activeProfile = data.active || null
+      } catch {
+        // Profiles are optional outside live AWS serve mode.
+      }
+    },
+
+    async activateProfile(profile: string): Promise<{ ok: boolean; error?: string }> {
+      try {
+        const res = await fetch('/api/profiles/activate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ profile }),
+        })
+        const data = await res.json()
+        if (!res.ok || !data.ok) return { ok: false, error: data.error || `Server returned ${res.status}` }
+        this.activeProfile = data.active || profile
+        this.logsAvailable = !!data.logs
+        this.billingAvailable = !!data.billing
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: String(err) }
+      }
     },
 
     selectNode(nodeId: string | null) {

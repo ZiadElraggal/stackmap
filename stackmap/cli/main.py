@@ -65,6 +65,46 @@ class _LiveGraphState:
             return self._version
 
 
+class _LiveAWSFeatureState:
+    def __init__(
+        self,
+        session: Any | None,
+        active_profile: str | None,
+        live_logs_enabled: bool,
+        live_billing_enabled: bool,
+    ) -> None:
+        self._lock = threading.Lock()
+        self.session = session
+        self.active_profile = active_profile
+        self.live_logs_enabled = live_logs_enabled
+        self.live_billing_enabled = live_billing_enabled
+
+    def features(self) -> dict[str, bool]:
+        with self._lock:
+            return {
+                "logs": bool(self.session and self.live_logs_enabled),
+                "billing": bool(self.session and self.live_billing_enabled),
+            }
+
+    def snapshot(self) -> tuple[Any | None, str | None, bool, bool]:
+        with self._lock:
+            return (
+                self.session,
+                self.active_profile,
+                self.live_logs_enabled,
+                self.live_billing_enabled,
+            )
+
+    def activate_profile(self, profile: str) -> None:
+        import boto3
+
+        next_session = boto3.Session(profile_name=profile)
+        next_session.client("sts").get_caller_identity()
+        with self._lock:
+            self.session = next_session
+            self.active_profile = profile
+
+
 def _detect_source_type(source_path: str) -> str:
     """Auto-detect infrastructure source type from file extension or content."""
     return _registry_detect_source_type(source_path)
@@ -241,6 +281,47 @@ def _write_ir_output(ir: StackMapIR, output: str, output_format: str) -> None:
     export_ir_to_html(ir, output)
 
 
+def _maybe_write_snapshot(ir: StackMapIR, snapshot_dir: str | None) -> Path | None:
+    if not snapshot_dir:
+        return None
+    from stackmap.timeline import write_snapshot
+
+    return write_snapshot(ir, snapshot_dir)
+
+
+def _apply_cost_anomalies(report: Any, actuals: dict[str, Any]) -> None:
+    """Attach actual-vs-forecast anomaly metadata to a CostReport."""
+    for node_id, actual_value in actuals.items():
+        estimate = report.by_node.get(node_id)
+        if not estimate:
+            continue
+        try:
+            actual = float(actual_value)
+        except (TypeError, ValueError):
+            continue
+        forecast = float(estimate.monthly_estimate or 0)
+        if forecast <= 0:
+            continue
+        ratio = actual / forecast
+        if ratio < 1.3:
+            continue
+        if ratio >= 2.0:
+            severity = "high"
+        elif ratio >= 1.6:
+            severity = "medium"
+        else:
+            severity = "low"
+        estimate.breakdown = {
+            **(estimate.breakdown or {}),
+            "monthly_actual": round(actual, 2),
+            "anomaly": {
+                "delta": round(actual - forecast, 2),
+                "ratio": round(ratio, 2),
+                "severity": severity,
+            },
+        }
+
+
 def _parse_live_services(services: str) -> set[str]:
     normalized = {value.strip().lower() for value in services.split(",") if value.strip()}
     if not normalized or normalized == {"all"}:
@@ -354,16 +435,12 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
         directory: str,
         state: _LiveGraphState,
         source_type: str,
-        aws_session: Any | None = None,
-        live_logs_enabled: bool = False,
-        live_billing_enabled: bool = False,
+        aws_features: _LiveAWSFeatureState | None = None,
         **kwargs: Any,
     ) -> None:
         self._state = state
         self._source_type = source_type
-        self._aws_session = aws_session
-        self._live_logs_enabled = live_logs_enabled
-        self._live_billing_enabled = live_billing_enabled
+        self._aws_features = aws_features or _LiveAWSFeatureState(None, None, False, False)
         super().__init__(*args, directory=directory, **kwargs)
 
     def _send_json(self, payload: dict[str, Any], status: int = 200) -> None:
@@ -401,10 +478,14 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
             self._send_json({"status": "ok", "source_type": self._source_type})
             return
         if path == "/api/live-features":
-            self._send_json({
-                "logs": bool(self._aws_session and self._live_logs_enabled),
-                "billing": bool(self._aws_session and self._live_billing_enabled),
-            })
+            _, active_profile, _, _ = self._aws_features.snapshot()
+            self._send_json({**self._aws_features.features(), "active_profile": active_profile})
+            return
+        if path == "/api/timeline":
+            self._handle_timeline(parsed_url.query)
+            return
+        if path == "/api/profiles":
+            self._handle_profiles()
             return
         if path == "/api/trace":
             self._handle_trace(parsed_url.query)
@@ -440,6 +521,12 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
         if path == "/api/cost":
             self._handle_cost_post()
             return
+        if path == "/api/profiles/activate":
+            self._handle_profile_activate()
+            return
+        if path == "/api/nl-query":
+            self._handle_nl_query()
+            return
         self.send_response(404)
         self.end_headers()
 
@@ -459,11 +546,69 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
         try:
             body = self._read_json_body()
             overrides = body.get("overrides") or {}
+            actuals = body.get("actuals") or {}
             if not isinstance(overrides, dict):
                 overrides = {}
+            if not isinstance(actuals, dict):
+                actuals = {}
             ir = self._get_ir()
             report = estimate_costs(ir, overrides=overrides)
+            if actuals:
+                _apply_cost_anomalies(report, actuals)
             self._send_json(report.to_dict())
+        except Exception as exc:
+            self._send_json({"error": str(exc)}, status=500)
+
+    def _handle_timeline(self, query: str) -> None:
+        from urllib.parse import parse_qs
+
+        ir = self._get_ir()
+        timeline = ir.timeline or {}
+        params = parse_qs(query)
+        snapshot_id = params.get("id", [None])[0]
+        if snapshot_id:
+            for snapshot in timeline.get("snapshots", []):
+                if snapshot.get("id") == snapshot_id:
+                    self._send_json(snapshot.get("graph", {}))
+                    return
+            self._send_json({"error": f"Snapshot '{snapshot_id}' not found"}, status=404)
+            return
+        self._send_json({
+            "snapshots": [
+                {key: value for key, value in snapshot.items() if key != "graph"}
+                for snapshot in timeline.get("snapshots", [])
+            ],
+            "diffs": timeline.get("diffs", []),
+        })
+
+    def _handle_profiles(self) -> None:
+        try:
+            from stackmap.aws_live.profiles import discover_aws_profiles
+
+            _, active_profile, _, _ = self._aws_features.snapshot()
+            self._send_json({"available": discover_aws_profiles(), "active": active_profile})
+        except Exception as exc:
+            self._send_json({"error": str(exc)}, status=500)
+
+    def _handle_profile_activate(self) -> None:
+        body = self._read_json_body()
+        profile = str(body.get("profile") or "").strip()
+        if not profile:
+            self._send_json({"ok": False, "error": "Missing profile"}, status=400)
+            return
+        try:
+            self._aws_features.activate_profile(profile)
+            self._send_json({"ok": True, "active": profile, **self._aws_features.features()})
+        except Exception as exc:
+            self._send_json({"ok": False, "error": str(exc)}, status=400)
+
+    def _handle_nl_query(self) -> None:
+        body = self._read_json_body()
+        query = str(body.get("query") or "")
+        try:
+            from stackmap.nl_query import query_ir
+
+            self._send_json(query_ir(self._get_ir(), query))
         except Exception as exc:
             self._send_json({"error": str(exc)}, status=500)
 
@@ -512,11 +657,12 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
     def _handle_logs(self, query: str) -> None:
         from urllib.parse import parse_qs
 
-        if not self._live_logs_enabled:
+        aws_session, _, live_logs_enabled, _ = self._aws_features.snapshot()
+        if not live_logs_enabled:
             self._send_json({"error": "Live logs are disabled. Use --live-logs when serving."}, status=403)
             return
 
-        if not self._aws_session:
+        if not aws_session:
             self._send_json({"error": "Logs require an AWS session. Use --aws-profile when serving."}, status=400)
             return
 
@@ -545,7 +691,7 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
                     return
                 region = node.metadata.get("region", "us-east-1")
                 result = fetch_resource_logs(
-                    self._aws_session,
+                    aws_session,
                     node.resource_type,
                     node.properties,
                     node.name,
@@ -572,7 +718,7 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
                 for node in nodes_to_scan:
                     region = node.metadata.get("region", "us-east-1")
                     result = _fetch_logs(
-                        self._aws_session,
+                        aws_session,
                         node.resource_type,
                         node.properties,
                         node.name,
@@ -606,18 +752,19 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
             self._send_json({"error": str(exc)}, status=500)
 
     def _handle_billing(self) -> None:
-        if not self._live_billing_enabled:
+        aws_session, _, _, live_billing_enabled = self._aws_features.snapshot()
+        if not live_billing_enabled:
             self._send_json({"error": "Live billing is disabled. Use --live-billing when serving."}, status=403)
             return
 
-        if not self._aws_session:
+        if not aws_session:
             self._send_json({"error": "Billing requires an AWS session. Use --aws-profile when serving."}, status=400)
             return
 
         try:
             from stackmap.cost.billing import fetch_billing_data
 
-            report = fetch_billing_data(self._aws_session)
+            report = fetch_billing_data(aws_session)
             self._send_json(report.to_dict())
         except Exception as exc:
             self._send_json({"error": str(exc)}, status=500)
@@ -625,11 +772,12 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
     def _handle_billing_usage(self, query: str) -> None:
         from urllib.parse import parse_qs
 
-        if not self._live_billing_enabled:
+        aws_session, _, _, live_billing_enabled = self._aws_features.snapshot()
+        if not live_billing_enabled:
             self._send_json({"error": "Live billing is disabled. Use --live-billing when serving."}, status=403)
             return
 
-        if not self._aws_session:
+        if not aws_session:
             self._send_json({"error": "Usage metrics require an AWS session. Use --aws-profile when serving."}, status=400)
             return
 
@@ -658,7 +806,7 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
                 region = node.metadata.get("region", "us-east-1")
 
                 usage = fetch_usage_metrics(
-                    self._aws_session,
+                    aws_session,
                     node.resource_type,
                     resource_name,
                     region=region,
@@ -666,7 +814,7 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
                 self._send_json({"node_id": node_id, "usage": usage})
             else:
                 from stackmap.cost.billing import fetch_all_usage_metrics
-                overrides = fetch_all_usage_metrics(self._aws_session, ir)
+                overrides = fetch_all_usage_metrics(aws_session, ir)
                 self._send_json({"overrides": overrides})
 
         except Exception as exc:
@@ -693,6 +841,11 @@ def scan(
     ),
     output: str = typer.Option("stackmap-output.json", help="Output file path"),
     format: str = typer.Option("json", help="Output format: json or html"),
+    snapshot_dir: str | None = typer.Option(
+        None,
+        "--snapshot-dir",
+        help="Also write this scan as a dated JSON snapshot for `stackmap timeline`.",
+    ),
 ) -> None:
     """Scan infrastructure source and generate an architecture map."""
     output_format = format.lower()
@@ -725,6 +878,7 @@ def scan(
 
     try:
         _write_ir_output(ir, output, output_format)
+        snapshot_path = _maybe_write_snapshot(ir, snapshot_dir)
     except RuntimeError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(1)
@@ -738,6 +892,8 @@ def scan(
     table.add_row("Connections", str(len(ir.edges)))
     table.add_row("Groups", str(len(ir.groups)))
     table.add_row("Output", output)
+    if snapshot_path:
+        table.add_row("Snapshot", str(snapshot_path))
 
     if ir.metadata.get("terraform_version"):
         table.add_row("Terraform", ir.metadata["terraform_version"])
@@ -786,6 +942,11 @@ def scan_repo(
     ),
     output: str = typer.Option("stackmap-repo-output.json", help="Output file path"),
     format: str = typer.Option("json", help="Output format: json or html"),
+    snapshot_dir: str | None = typer.Option(
+        None,
+        "--snapshot-dir",
+        help="Also write this repository scan as a dated JSON snapshot for `stackmap timeline`.",
+    ),
 ) -> None:
     """Scan a repository for Terraform/CloudFormation/SAM sources and merge into one map."""
     output_format = format.lower()
@@ -833,6 +994,7 @@ def scan_repo(
 
     try:
         _write_ir_output(merged_ir, output, output_format)
+        snapshot_path = _maybe_write_snapshot(merged_ir, snapshot_dir)
     except RuntimeError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(1)
@@ -871,6 +1033,8 @@ def scan_repo(
         table.add_row("Cross-account", str(merged_ir.metadata.get("cross_account_edges", 0)))
     table.add_row("Link policy", "strict" if strict_linking else "loose")
     table.add_row("Output", output)
+    if snapshot_path:
+        table.add_row("Snapshot", str(snapshot_path))
     console.print()
     console.print(table)
 
@@ -920,6 +1084,53 @@ def org_import(
         f"\n[green]✓[/green] Exported organization hierarchy with "
         f"{len(org.ous)} OUs and {len(org.accounts)} accounts."
     )
+
+
+@app.command("timeline")
+def timeline(
+    history: str = typer.Option(..., "--history", help="Directory containing StackMap JSON snapshots"),
+    output: str = typer.Option("stackmap-timeline.json", help="Output file path"),
+    format: str = typer.Option("json", help="Output format: json or html"),
+) -> None:
+    """Merge dated scan snapshots into a time-travel StackMap IR."""
+    output_format = format.lower()
+    if output_format not in {"json", "html"}:
+        console.print(
+            f"[red]Error:[/red] Format '{format}' not supported. Use 'json' or 'html'."
+        )
+        raise typer.Exit(1)
+
+    history_path = Path(history)
+    if not history_path.exists() or not history_path.is_dir():
+        console.print(f"[red]Error:[/red] History directory not found: {history_path}")
+        raise typer.Exit(1)
+
+    with mascot_status(console, "[bold]Building timeline...[/bold]"):
+        try:
+            from stackmap.timeline import build_timeline_ir
+
+            ir = build_timeline_ir(history_path)
+        except Exception as exc:
+            console.print(f"[red]Error:[/red] {exc}")
+            raise typer.Exit(1)
+
+    try:
+        _write_ir_output(ir, output, output_format)
+    except RuntimeError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(1)
+
+    table = Table(title="StackMap Timeline", show_header=False)
+    table.add_column("Metric", style="bold")
+    table.add_column("Value", style="cyan")
+    table.add_row("History", str(history_path))
+    table.add_row("Snapshots", str(ir.metadata.get("timeline_snapshot_count", 0)))
+    table.add_row("Resources", str(len(ir.nodes)))
+    table.add_row("Connections", str(len(ir.edges)))
+    table.add_row("Output", output)
+    console.print()
+    console.print(table)
+    console.print(f"\n[green]✓[/green] Timeline written to [cyan]{output}[/cyan].")
 
 
 @app.command("aws-policy")
@@ -1081,6 +1292,11 @@ def scan_aws(
     ),
     accounts: str | None = typer.Option(None, help="Comma-separated account:role_arn pairs for multi-account scan (e.g. '123456789012:arn:aws:iam::123456789012:role/StackMapReadOnly,987654321098:arn:aws:iam::987654321098:role/StackMapReadOnly')"),
     account_profiles: str | None = typer.Option(None, help="Comma-separated AWS profile names for multi-account scan (e.g. 'dev,sandbox,prod')"),
+    snapshot_dir: str | None = typer.Option(
+        None,
+        "--snapshot-dir",
+        help="Also write this AWS scan as a dated JSON snapshot for `stackmap timeline`.",
+    ),
 ) -> None:
     """Scan live AWS infrastructure using read-only AWS APIs."""
     output_format = format.lower()
@@ -1171,6 +1387,7 @@ def scan_aws(
 
         try:
             _write_ir_output(ir, output, output_format)
+            snapshot_path = _maybe_write_snapshot(ir, snapshot_dir)
         except RuntimeError as exc:
             console.print(f"[red]Error:[/red] {exc}")
             raise typer.Exit(1)
@@ -1187,6 +1404,8 @@ def scan_aws(
         if ir.metadata.get("cross_account_edges") is not None:
             table.add_row("Cross-account", str(ir.metadata.get("cross_account_edges", 0)))
         table.add_row("Output", output)
+        if snapshot_path:
+            table.add_row("Snapshot", str(snapshot_path))
         console.print()
         console.print(table)
 
@@ -1252,6 +1471,7 @@ def scan_aws(
 
         try:
             _write_ir_output(ir, output, output_format)
+            snapshot_path = _maybe_write_snapshot(ir, snapshot_dir)
         except RuntimeError as exc:
             console.print(f"[red]Error:[/red] {exc}")
             raise typer.Exit(1)
@@ -1269,6 +1489,8 @@ def scan_aws(
         if ir.metadata.get("cross_account_edges") is not None:
             table.add_row("Cross-account", str(ir.metadata.get("cross_account_edges", 0)))
         table.add_row("Output", output)
+        if snapshot_path:
+            table.add_row("Snapshot", str(snapshot_path))
         console.print()
         console.print(table)
 
@@ -1332,6 +1554,7 @@ def scan_aws(
 
     try:
         _write_ir_output(ir, output, output_format)
+        snapshot_path = _maybe_write_snapshot(ir, snapshot_dir)
     except RuntimeError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(1)
@@ -1350,6 +1573,8 @@ def scan_aws(
     if ir.metadata.get("cross_account_edges") is not None:
         table.add_row("Cross-account", str(ir.metadata.get("cross_account_edges", 0)))
     table.add_row("Output", output)
+    if snapshot_path:
+        table.add_row("Snapshot", str(snapshot_path))
     console.print()
     console.print(table)
 
@@ -1532,8 +1757,14 @@ def serve(
 
     with mascot_status(console, "[bold]Preparing local viewer...[/bold]"):
         try:
-            source_type, ir = _parse_source(str(source_path))
-            _annotate_scan_metadata(ir, source_path)
+            if source_path.exists() and source_path.is_dir():
+                from stackmap.timeline import build_timeline_ir
+
+                source_type = "timeline"
+                ir = build_timeline_ir(source_path)
+            else:
+                source_type, ir = _parse_source(str(source_path))
+                _annotate_scan_metadata(ir, source_path)
         except typer.BadParameter as exc:
             console.print(f"[red]Error:[/red] {exc}")
             raise typer.Exit(1)
@@ -1630,15 +1861,19 @@ def serve(
                     f"[red]Error:[/red] AWS session failed for profile '{aws_profile}': {type(exc).__name__}: {exc}\n"
                     "        Live features will be disabled. Check your AWS credentials/profile."
                 )
+    aws_features = _LiveAWSFeatureState(
+        session=aws_session,
+        active_profile=aws_profile,
+        live_logs_enabled=live_logs,
+        live_billing_enabled=live_billing,
+    )
 
     handler_cls = partial(
         _StackMapRequestHandler,
         directory=str(public_dir),
         state=state,
         source_type=source_type,
-        aws_session=aws_session,
-        live_logs_enabled=live_logs,
-        live_billing_enabled=live_billing,
+        aws_features=aws_features,
     )
     try:
         server = ThreadingHTTPServer((host, port), handler_cls)

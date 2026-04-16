@@ -44,10 +44,35 @@
       <span class="dock-badge">{{ store.findings.length }}</span>
     </button>
 
+    <button
+      v-if="store.availableProfiles.length > 0"
+      class="dock-btn"
+      title="AWS profile"
+      @click="showProfiles = !showProfiles"
+    >
+      <span class="dock-icon">id</span>
+      <span class="dock-label">{{ store.activeProfile || 'Profile' }}</span>
+    </button>
+
     <!-- Findings flyout -->
     <Transition name="flyout">
       <div v-if="showFindings && store.findings.length > 0" class="findings-flyout">
         <FindingsPanel />
+      </div>
+    </Transition>
+
+    <Transition name="flyout">
+      <div v-if="showProfiles && store.availableProfiles.length > 0" class="findings-flyout profile-flyout">
+        <button
+          v-for="profile in store.availableProfiles"
+          :key="profile"
+          class="profile-option"
+          :class="{ active: profile === store.activeProfile }"
+          @click="activate(profile)"
+        >
+          {{ profile }}
+        </button>
+        <div v-if="profileMessage" class="profile-message">{{ profileMessage }}</div>
       </div>
     </Transition>
   </div>
@@ -60,10 +85,18 @@ import FindingsPanel from './FindingsPanel.vue'
 
 const store = useGraphStore()
 const showFindings = ref(false)
+const showProfiles = ref(false)
+const profileMessage = ref('')
 
 const panelOpen = computed(
   () => !store.editorPanelCollapsed && (!!store.selectedNode || !!store.selectedEdge || store.editMode)
 )
+
+async function activate(profile: string) {
+  profileMessage.value = 'Switching...'
+  const result = await store.activateProfile(profile)
+  profileMessage.value = result.ok ? 'Profile active' : (result.error || 'Switch failed')
+}
 </script>
 
 <style scoped>
@@ -154,6 +187,39 @@ const panelOpen = computed(
   -webkit-backdrop-filter: blur(14px);
   box-shadow: var(--sm-shadow-elevated, 0 8px 32px rgba(0,0,0,0.4));
   padding: 10px;
+}
+
+.profile-flyout {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profile-option {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sm-text-muted, rgba(245,245,247,0.55));
+  cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.profile-option:hover,
+.profile-option.active {
+  background: rgba(74, 222, 128, 0.1);
+  border-color: rgba(74, 222, 128, 0.22);
+  color: #4ade80;
+}
+
+.profile-message {
+  color: rgba(245,245,247,0.55);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  padding: 4px 2px 0;
 }
 
 .flyout-enter-active,

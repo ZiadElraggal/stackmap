@@ -74,14 +74,24 @@ class StackMapIR:
     nodes: list[StackMapNode] = field(default_factory=list)
     edges: list[StackMapEdge] = field(default_factory=list)
     groups: list[StackMapGroup] = field(default_factory=list)
+    timeline: dict | None = None
+    organization: dict | None = None
+    aggregates: dict | None = None
 
     def to_dict(self) -> dict:
-        return {
+        payload = {
             "metadata": self.metadata,
             "nodes": [_node_to_dict(n) for n in self.nodes],
             "edges": [_edge_to_dict(e) for e in self.edges],
             "groups": [_group_to_dict(g) for g in self.groups],
         }
+        if self.timeline is not None:
+            payload["timeline"] = self.timeline
+        if self.organization is not None:
+            payload["organization"] = self.organization
+        if self.aggregates is not None:
+            payload["aggregates"] = self.aggregates
+        return payload
 
     @classmethod
     def from_dict(cls, data: dict) -> "StackMapIR":
@@ -90,6 +100,9 @@ class StackMapIR:
             nodes=[_node_from_dict(n) for n in data.get("nodes", [])],
             edges=[_edge_from_dict(e) for e in data.get("edges", [])],
             groups=[_group_from_dict(g) for g in data.get("groups", [])],
+            timeline=data.get("timeline"),
+            organization=data.get("organization") or data.get("metadata", {}).get("organization"),
+            aggregates=data.get("aggregates"),
         )
 
     def to_json(self, indent: int = 2) -> str:

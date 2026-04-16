@@ -190,6 +190,21 @@
       class="diff-glow"
     />
     <rect
+      v-if="findingSeverity"
+      :width="nodeWidth + 20"
+      :height="nodeHeight + 20"
+      :x="-(nodeWidth + 20) / 2"
+      :y="-(nodeHeight + 20) / 2"
+      :rx="20"
+      :ry="20"
+      fill="none"
+      :stroke="findingColor"
+      stroke-width="1.6"
+      stroke-dasharray="5 4"
+      opacity="0.5"
+      class="severity-halo"
+    />
+    <rect
       :width="nodeWidth"
       :height="nodeHeight"
       :x="-nodeWidth / 2"
@@ -602,6 +617,27 @@ const prominence = computed(() => getNodeProminence(props.node))
 const nodeWidth = computed(() => getNodeWidth(props.node))
 const nodeHeight = computed(() => getNodeHeight(props.node))
 const diffStatus = computed(() => props.node.position_hint?.diff_status as string | undefined)
+const nodeFindings = computed(() => store.findings.filter(finding => finding.node_ids.includes(props.node.id)))
+const findingSeverity = computed(() => {
+  const order = ['critical', 'high', 'warning', 'medium', 'low', 'info']
+  return nodeFindings.value.sort((a, b) => order.indexOf(a.severity) - order.indexOf(b.severity))[0]?.severity
+})
+const findingColor = computed(() => {
+  switch (findingSeverity.value) {
+    case 'critical':
+    case 'high':
+      return '#ef4444'
+    case 'warning':
+    case 'medium':
+      return '#f59e0b'
+    case 'low':
+      return '#facc15'
+    case 'info':
+      return '#38bdf8'
+    default:
+      return '#ef4444'
+  }
+})
 
 const diffBorderColor = computed(() => {
   switch (diffStatus.value) {

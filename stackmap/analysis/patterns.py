@@ -82,6 +82,11 @@ def analyze_patterns(ir: StackMapIR) -> list[Finding]:
     findings.extend(_detect_unencrypted_storage(ir))
     findings.extend(_detect_oversized_resources(ir))
     findings.extend(_detect_missing_monitoring(ir))
+    try:
+        from stackmap.findings.security import detect_security_findings
+        findings.extend(detect_security_findings(ir))
+    except Exception:
+        pass
     return findings
 
 
