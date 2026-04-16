@@ -2754,6 +2754,8 @@ export const useGraphStore = defineStore('graph', {
     async toggleCosts() {
       this.showCosts = !this.showCosts
       if (this.showCosts) {
+        // Only one heavy right/bottom panel at a time — keeps the UI uncrowded.
+        this.showLogs = false
         await this.refreshCostData()
       }
     },
@@ -2793,8 +2795,12 @@ export const useGraphStore = defineStore('graph', {
 
     async toggleLogs() {
       this.showLogs = !this.showLogs
-      if (this.showLogs && this.logEvents.length === 0) {
-        await this.fetchVisibleLogs()
+      if (this.showLogs) {
+        // Only one heavy right/bottom panel at a time — keeps the UI uncrowded.
+        this.showCosts = false
+        if (this.logEvents.length === 0) {
+          await this.fetchVisibleLogs()
+        }
       }
     },
 
