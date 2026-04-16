@@ -1006,22 +1006,32 @@ onUnmounted(() => {
 })
 
 watch(
-  () => [
-    store.viewMode,
-    store.diffMode,
-    store.diffSlider,
-    store.visibleNodes.map(n => n.id).join('|'),
-    store.visibleEdges.map(e => e.id).join('|'),
-    store.graphGroups.map(g => g.id).join('|'),
-    store.activeAccountId,
-    store.activeComponentId,
-    store.layoutVersion,
-  ],
-  async () => {
+  () => ({
+    viewMode: store.viewMode,
+    diffMode: store.diffMode,
+    diffSlider: store.diffSlider,
+    zoomTier: store.zoomTier,
+    visibleNodeIds: store.visibleNodes.map(n => n.id).join('|'),
+    visibleEdgeIds: store.visibleEdges.map(e => e.id).join('|'),
+    groupIds: store.graphGroups.map(g => g.id).join('|'),
+    activeAccountId: store.activeAccountId,
+    activeComponentId: store.activeComponentId,
+    layoutVersion: store.layoutVersion,
+  }),
+  async (nextState, prevState) => {
     if (!store.loaded) return
     recomputeLayout()
     await nextTick()
-    fitToViewport()
+    const zoomTierOnly = Boolean(prevState)
+      && nextState.zoomTier !== prevState.zoomTier
+      && nextState.viewMode === prevState.viewMode
+      && nextState.diffMode === prevState.diffMode
+      && nextState.diffSlider === prevState.diffSlider
+      && nextState.groupIds === prevState.groupIds
+      && nextState.activeAccountId === prevState.activeAccountId
+      && nextState.activeComponentId === prevState.activeComponentId
+      && nextState.layoutVersion === prevState.layoutVersion
+    if (!zoomTierOnly) fitToViewport()
   }
 )
 

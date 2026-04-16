@@ -1,5 +1,6 @@
 <template>
   <div class="profile-switcher">
+    <div class="profile-note">Applies to live logs and billing. Rescan to change the graph.</div>
     <button
       v-for="profile in store.availableProfiles"
       :key="profile"
@@ -32,7 +33,15 @@ async function activate(profile: string) {
 .profile-switcher {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+}
+
+.profile-note {
+  color: rgba(245,245,247,0.45);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  line-height: 1.35;
+  padding: 0 2px 2px;
 }
 
 .profile-option {
