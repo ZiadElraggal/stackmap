@@ -52,7 +52,14 @@ jobs:
 
       - name: Build standalone executable
         run: |
-          pyinstaller --noconfirm --clean --onefile --name stackmap --collect-data stackmap --copy-metadata stackmap stackmap/cli/main.py
+          pyinstaller --noconfirm --clean --onefile --name stackmap `
+            --collect-data stackmap `
+            --copy-metadata stackmap `
+            --collect-all boto3 `
+            --collect-all botocore `
+            --collect-submodules boto3 `
+            --collect-submodules botocore `
+            stackmap/cli/main.py
 
       - name: Verify executable
         shell: bash
@@ -68,6 +75,13 @@ jobs:
           if [ "${{ github.event_name }}" = "release" ]; then
             TAG_NAME="${{ github.event.release.tag_name }}"
             VERSION="${TAG_NAME#v}"
+            # Enforce full semver (major.minor.patch) so winget manifest URLs
+            # match the release asset URLs. Tags like "v0.3" would silently
+            # break the wingetcreate submission.
+            if ! [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+              echo "::error::Release tag '${TAG_NAME}' is not full semver (expected vMAJOR.MINOR.PATCH). Aborting."
+              exit 1
+            fi
           else
             VERSION="dev-${GITHUB_RUN_NUMBER}"
           fi

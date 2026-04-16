@@ -1610,13 +1610,26 @@ def serve(
     if aws_profile and (live_logs or live_billing):
         try:
             import boto3
-            aws_session = boto3.Session(profile_name=aws_profile)
-            enabled = ", ".join(
-                name for name, is_enabled in (("logs", live_logs), ("billing", live_billing)) if is_enabled
+        except ImportError as exc:
+            console.print(
+                f"[red]Error:[/red] boto3 is required for --live-logs/--live-billing but could not be imported: {exc}\n"
+                "        Live features will be disabled. Reinstall stackmap or run `pip install boto3`."
             )
-            console.print(f"[green]✓[/green] AWS session active (profile: {aws_profile}) — live {enabled} enabled")
-        except Exception as exc:
-            console.print(f"[yellow]Warning:[/yellow] Could not create AWS session: {exc}")
+        else:
+            try:
+                aws_session = boto3.Session(profile_name=aws_profile)
+                # Force credential resolution now so we don't silently serve with a broken session.
+                aws_session.client("sts").get_caller_identity()
+                enabled = ", ".join(
+                    name for name, is_enabled in (("logs", live_logs), ("billing", live_billing)) if is_enabled
+                )
+                console.print(f"[green]✓[/green] AWS session active (profile: {aws_profile}) — live {enabled} enabled")
+            except Exception as exc:
+                aws_session = None
+                console.print(
+                    f"[red]Error:[/red] AWS session failed for profile '{aws_profile}': {type(exc).__name__}: {exc}\n"
+                    "        Live features will be disabled. Check your AWS credentials/profile."
+                )
 
     handler_cls = partial(
         _StackMapRequestHandler,
