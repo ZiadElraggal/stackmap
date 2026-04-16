@@ -28,6 +28,7 @@ Implemented on `bug-fixes-v2` after the 0.3.1 foundation work.
 
 - Formalized top-level optional IR fields for `organization`, `timeline`, and `aggregates` while preserving the existing `metadata.organization` compatibility path.
 - Existing organization scan/view behavior continues to work, with top-level organization data available to newer clients.
+- Added `tests/fixtures/multi-account.json` with organization, OU, account, and cross-account edge coverage.
 
 ## Semantic Zoom
 
@@ -36,6 +37,8 @@ Implemented on `bug-fixes-v2` after the 0.3.1 foundation work.
   - `mid` below 80%
   - `detail` at 80% and above
 - At overview zoom, architecture mode renders component aggregate nodes instead of every individual resource when component summaries are available.
+- The minimap now renders a stable overview from component centroids even when the main canvas is in mid/detail zoom.
+- Added a 500-node aggregate precompute performance guard for overview, mid, and detail tiers.
 - The canvas updates zoom scale in the store on every zoom event.
 
 ## Cost Anomalies
@@ -53,7 +56,7 @@ Implemented on `bug-fixes-v2` after the 0.3.1 foundation work.
   - `show databases`
   - `show lambda functions`
   - `show expensive resources`
-- SearchBar now has a `text` / `ai` toggle. In `ai` mode, Enter applies the server-returned transient graph filter.
+- SearchBar now has a `text` / `query` toggle. In query mode, Enter applies the local server-returned transient graph filter.
 
 ## AWS Profile Switcher
 
@@ -71,6 +74,8 @@ Implemented on `bug-fixes-v2` after the 0.3.1 foundation work.
 - Added backend coverage in `tests/test_roadmap_features.py` for:
   - timeline snapshot merging
   - security finding detectors
+  - multi-account organization fixtures
+  - semantic zoom aggregate performance
   - local NL query matching
   - AWS profile discovery
 - Verification commands run:
@@ -80,5 +85,5 @@ Implemented on `bug-fixes-v2` after the 0.3.1 foundation work.
 
 ## Notes
 
-- The NL query endpoint currently uses the safe local parser. It is ready for a provider-backed implementation later without changing the frontend contract.
-- Semantic zoom uses existing component summaries for overview aggregation. A future backend aggregate precompute can populate the optional `aggregates` field for richer group-level edge rendering.
+- The NL query endpoint currently uses the safe local parser. Provider-backed work remains deferred to avoid adding local-tool cost or privacy risk.
+- Semantic zoom uses existing component summaries for overview rendering, with backend aggregate precompute available for group-level summaries.

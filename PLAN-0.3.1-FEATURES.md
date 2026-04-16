@@ -154,7 +154,7 @@ The scanner already emits accounts. Formalize an `organization` block:
 - [x] `'organization'` view mode in store + routing
 - [x] Organization summary cards in the existing graph node/card renderer
 - [x] Per-account filter state
-- [ ] Fixture `tests/fixtures/multi-account.json`
+- [x] Fixture `tests/fixtures/multi-account.json`
 
 ---
 
@@ -188,8 +188,8 @@ Three zoom levels drive rendering — existing layout (`frontend/stores/graph.ts
 - [x] IR `aggregates` field populated by grouping engine
 - [x] `zoomTier` derived state in store
 - [x] `Canvas.vue` tier-aware rendering
-- [ ] Minimap uses overview
-- [ ] Tests: 500-node synthetic fixture + assert <16ms frame time at each tier
+- [x] Minimap uses overview
+- [x] Tests: 500-node synthetic fixture + assert <16ms frame time at each tier
 
 ---
 

@@ -1,4 +1,5 @@
 from pathlib import Path
+from time import perf_counter
 
 from stackmap.aws_live.profiles import discover_aws_profiles
 from stackmap.findings.security import detect_security_findings
@@ -125,3 +126,58 @@ def test_group_aggregates_precompute_group_edges() -> None:
     assert len(aggregates["groups"]) == 2
     assert aggregates["edges_by_group"][0]["source"] == "group:a"
     assert aggregates["edges_by_group"][0]["target"] == "group:b"
+
+
+def test_multi_account_fixture_preserves_organization_shape() -> None:
+    ir = StackMapIR.read_json("tests/fixtures/multi-account.json")
+
+    assert ir.organization is not None
+    assert len(ir.organization["accounts"]) == 3
+    assert {group.group_type for group in ir.groups} >= {"organization_root", "ou", "account"}
+    assert [edge.edge_type for edge in ir.edges].count(EdgeType.CROSS_ACCOUNT_REFERENCE) == 2
+
+
+def test_semantic_zoom_500_node_aggregate_precompute_stays_under_frame_budget() -> None:
+    nodes = [
+        StackMapNode(
+            id=f"node-{index}",
+            name=f"node-{index}",
+            resource_type="aws_lambda_function",
+            provider="aws",
+            category=ResourceCategory.SERVERLESS,
+            tags={"service": f"service-{index // 25}"},
+            position_hint={"tier": "serverless", "weight": 3},
+        )
+        for index in range(500)
+    ]
+    groups = [
+        StackMapGroup(
+            id=f"group-{index}",
+            name=f"service-{index}",
+            group_type="smart_group",
+            children=[f"node-{child}" for child in range(index * 25, (index + 1) * 25)],
+        )
+        for index in range(20)
+    ]
+    edges = [
+        StackMapEdge(
+            id=f"edge-{index}",
+            source=f"node-{index}",
+            target=f"node-{index + 1}",
+            edge_type=EdgeType.TRIGGERS,
+        )
+        for index in range(499)
+    ]
+    ir = StackMapIR(nodes=nodes, edges=edges, groups=groups)
+
+    elapsed_by_tier: dict[str, float] = {}
+    aggregates = None
+    for tier in ("overview", "mid", "detail"):
+        start = perf_counter()
+        aggregates = build_group_aggregates(ir)
+        elapsed_by_tier[tier] = (perf_counter() - start) * 1000
+
+    assert aggregates is not None
+    assert len(aggregates["groups"]) == 20
+    assert len(aggregates["edges_by_group"]) == 19
+    assert max(elapsed_by_tier.values()) < 16
