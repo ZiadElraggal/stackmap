@@ -69,6 +69,50 @@ Implemented on `bug-fixes-v2` after the 0.3.1 foundation work.
 
 - Rebuilt packaged static frontend assets under `stackmap/webapp/static` so installed builds receive the upgraded UI.
 
+## Smart Grouping v2
+
+- Expanded auto grouping beyond simple tag/network buckets:
+  - environment, region, and account parent scopes
+  - service/workload and team/owner tags
+  - Terraform module paths
+  - CloudFormation/SAM stack names
+  - shared IAM roles for compute resources
+  - naming prefix, VPC, subnet, and connectivity fallbacks
+- Added group scoring helpers and metadata:
+  - `confidence`
+  - `reason`
+  - `signals`
+  - `dominant_categories`
+  - hierarchy `parent` links
+- Updated suggested grouping rules to emit env/team/module suggestions with confidence metadata.
+- Component landing now treats smart groups as first-class components, with:
+  - View All option
+  - parent-scope filter chips
+  - confidence pips
+  - reason captions
+  - parent sections
+  - unlinked bucket only for resources no smart group claimed
+- Detail panel now shows smart-group reasons and signal chips for selected resources.
+- Added docs in `docs/smart-groups.md`.
+
+## Step Functions Viewer
+
+- Added `stackmap/parsers/asl.py` to parse Amazon States Language into a structured `asl_graph`.
+- Terraform, CloudFormation/SAM, and live AWS parsing now persist `asl_graph` on state-machine nodes when definitions are available.
+- Step Functions Task resources now emit kind-labeled edges such as `invokes`, `publishes`, `writes`, `queries`, `sends`, `emits`, and `starts`.
+- Live AWS Step Functions scanning now uses ASL parsing instead of raw ARN regex extraction for Task edges.
+- Added optional `scan-aws --sfn-executions` to include compact recent execution summaries without enabling extra calls by default.
+- Added typed frontend ASL contract and store getter for state-machine graphs.
+- Added state-machine detail rendering:
+  - all major ASL state types
+  - Choice, Parallel, classic Map, and Distributed Map structure
+  - Retry/Catch details
+  - warning banner and per-state warning markers
+  - raw ASL graph toggle
+  - full-screen modal
+  - resolved Task resource click-through to the main graph
+- Added docs in `docs/step-functions.md`.
+
 ## Validation
 
 - Added backend coverage in `tests/test_roadmap_features.py` for:
@@ -78,6 +122,8 @@ Implemented on `bug-fixes-v2` after the 0.3.1 foundation work.
   - semantic zoom aggregate performance
   - local NL query matching
   - AWS profile discovery
+- Added smart-group v2 coverage for hierarchy, confidence/reason helpers, module paths, shared roles, and multi-region/multi-account parent roots.
+- Added ASL parser coverage for Lambda Tasks, `.sync:2`, Choice, Parallel, classic and Distributed Map, Catch, unreachable states, and missing terminal states.
 - Verification commands run:
   - `./.venv/bin/python -m pytest`
   - `npm --prefix frontend run build`

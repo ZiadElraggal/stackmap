@@ -107,6 +107,7 @@ POLICY_ACTIONS_BROAD = POLICY_ACTIONS_CORE + [
     "cognito-identity:DescribeIdentityPool",
     "states:ListStateMachines",
     "states:DescribeStateMachine",
+    "states:ListExecutions",
     "ecr:DescribeRepositories",
     "ecr:ListTagsForResource",
     "appsync:ListGraphqlApis",
@@ -673,6 +674,7 @@ class AWSLiveScanner:
         cache_dir: str | None = None,
         no_cache: bool = False,
         partial_write_path: str | None = None,
+        sfn_executions: bool = False,
         session_factory: Callable[..., boto3.session.Session] | None = None,
     ) -> None:
         self.profile = profile
@@ -689,6 +691,7 @@ class AWSLiveScanner:
         self.try_current_creds = try_current_creds
         self.cache_dir = None if no_cache else Path(cache_dir or "~/.stackmap/cache").expanduser()
         self.partial_write_path = Path(partial_write_path) if partial_write_path else None
+        self.sfn_executions = sfn_executions
         self._session_factory = session_factory or boto3.session.Session
 
     def scan(self) -> StackMapIR:
@@ -2929,6 +2932,8 @@ class AWSLiveScanner:
         return nodes, pending, []
 
     def _collect_stepfunctions(self, region: str, executor: AWSAPIExecutor) -> tuple[list[StackMapNode], list[tuple[str, str | None, str, EdgeType]], list[StackMapGroup]]:
+        from stackmap.parsers.asl import classify_edge_label, parse_asl
+
         account_id = executor.context.account_id
         nodes: list[StackMapNode] = []
         pending: list[tuple[str, str | None, str, EdgeType]] = []
@@ -2945,6 +2950,9 @@ class AWSLiveScanner:
             name = detail.get("name") or sm.get("name", _resource_id_from_arn(arn))
             role_arn = detail.get("roleArn")
             definition = detail.get("definition", "")
+            asl_graph = parse_asl(definition) if definition else {"error": "empty"}
+            if self.sfn_executions and isinstance(asl_graph, dict) and "error" not in asl_graph:
+                asl_graph["recent_executions"] = self._collect_recent_sfn_executions(executor, region, arn)
             node = _build_live_node(
                 account_id=account_id,
                 region=region,
@@ -2959,17 +2967,60 @@ class AWSLiveScanner:
                     "status": detail.get("status"),
                     "role_arn": role_arn,
                     "creation_date": str(detail.get("creationDate")) if detail.get("creationDate") else None,
+                    "asl_graph": asl_graph,
                 },
             )
             nodes.append(node)
             if role_arn:
                 pending.append((node.id, role_arn, "assumes role", EdgeType.AUTHENTICATES))
-            # Extract ARN references from the state machine definition
-            if isinstance(definition, str):
-                import re
-                for arn_match in re.findall(r'arn:aws:[a-z0-9-]+:[a-z0-9-]*:\d{12}:[^\s"\\}]+', definition):
-                    pending.append((node.id, arn_match.rstrip('",'), "invokes", EdgeType.TRIGGERS))
+            # Emit TRIGGERS edges only for ARNs the ASL parser actually
+            # classified as Task targets. Previous regex scan produced
+            # false positives from ARNs embedded in Parameters/Credentials.
+            for resource in asl_graph.get("resources", []) or []:
+                target_arn = resource.get("arn")
+                if not target_arn:
+                    continue
+                label = classify_edge_label(
+                    resource.get("kind", "unknown"),
+                    resource.get("integration"),
+                )
+                pending.append((node.id, target_arn, label, EdgeType.TRIGGERS))
         return nodes, pending, []
+
+    def _collect_recent_sfn_executions(
+        self,
+        executor: AWSAPIExecutor,
+        region: str,
+        state_machine_arn: str,
+    ) -> list[dict[str, Any]]:
+        response = executor.call_optional(
+            "stepfunctions",
+            "list_executions",
+            region=region,
+            swallow_codes={"AccessDeniedException", "StateMachineDoesNotExist"},
+            stateMachineArn=state_machine_arn,
+            maxResults=25,
+        ) or {}
+        executions = response.get("executions", [])
+        if not isinstance(executions, list):
+            return []
+        summaries: list[dict[str, Any]] = []
+        for item in executions[:25]:
+            start = item.get("startDate")
+            stop = item.get("stopDate")
+            duration_ms = None
+            if start and stop:
+                try:
+                    duration_ms = int((stop - start).total_seconds() * 1000)
+                except Exception:
+                    duration_ms = None
+            summaries.append({
+                "status": item.get("status"),
+                "start": start.isoformat() if hasattr(start, "isoformat") else str(start) if start else None,
+                "duration_ms": duration_ms,
+                "failed_state": None,
+            })
+        return summaries
 
     def _collect_ecr(self, region: str, executor: AWSAPIExecutor) -> tuple[list[StackMapNode], list[tuple[str, str | None, str, EdgeType]], list[StackMapGroup]]:
         account_id = executor.context.account_id

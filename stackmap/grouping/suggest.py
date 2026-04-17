@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 
-from stackmap.grouping.engine import AutoDetectConfig, GroupingRule, SmartGroupConfig
+from stackmap.grouping.engine import GroupingRule, SmartGroupConfig
 from stackmap.parsers.base import StackMapIR
 
 
@@ -32,6 +32,7 @@ def suggest_groups(ir: StackMapIR) -> list[SmartGroupConfig]:
     """Analyze IR and suggest grouping rules the user can accept/modify."""
     suggestions: list[SmartGroupConfig] = []
     color_idx = 0
+    suggested_keys: set[tuple[str, str, str]] = set()
 
     def _next_color() -> str:
         nonlocal color_idx
@@ -39,8 +40,13 @@ def suggest_groups(ir: StackMapIR) -> list[SmartGroupConfig]:
         color_idx += 1
         return c
 
-    # Strategy 1: Tag-based suggestions
-    for tag_key in ("service", "project", "app", "team", "stack"):
+    def _append_tag_suggestions(
+        tag_key: str,
+        *,
+        signal: str,
+        icon: str | None = None,
+        min_size: int = 3,
+    ) -> None:
         tag_clusters: dict[str, list[str]] = defaultdict(list)
         for node in ir.nodes:
             val = node.tags.get(tag_key)
@@ -48,15 +54,60 @@ def suggest_groups(ir: StackMapIR) -> list[SmartGroupConfig]:
                 tag_clusters[val].append(node.id)
 
         for tag_val, node_ids in sorted(tag_clusters.items(), key=lambda x: -len(x[1])):
-            if len(node_ids) >= 3:
+            dedup_key = ("tag", tag_key, tag_val)
+            if len(node_ids) >= min_size and dedup_key not in suggested_keys:
+                suggested_keys.add(dedup_key)
                 suggestions.append(SmartGroupConfig(
                     name=tag_val.replace("-", " ").replace("_", " ").title(),
-                    icon=None,
+                    icon=icon,
                     color=_next_color(),
                     rules=[GroupingRule(match_type="tag", key=tag_key, value=tag_val)],
+                    metadata={
+                        "confidence": _confidence(len(node_ids), len(ir.nodes), base=0.72 if signal in {"service", "environment"} else 0.64),
+                        "signals": [signal, f"tag:{tag_key}"],
+                        "comment": f"confidence: {_confidence(len(node_ids), len(ir.nodes), base=0.72 if signal in {'service', 'environment'} else 0.64):.2f}",
+                    },
                 ))
 
-    # Strategy 2: Naming prefix suggestions
+    # Strategy 1: Tag-based suggestions. Business/service tags are emitted
+    # first, then environment/team scopes for humans who want hierarchy.
+    for tag_key in ("service", "project", "app", "component", "workload"):
+        _append_tag_suggestions(tag_key, signal="service")
+    for tag_key in ("env", "environment", "stage", "tier"):
+        _append_tag_suggestions(tag_key, signal="environment")
+    for tag_key in ("team", "owner", "squad", "department"):
+        _append_tag_suggestions(tag_key, signal="team")
+    _append_tag_suggestions("stack", signal="stack")
+
+    # Strategy 2: Terraform module path suggestions.
+    module_clusters: dict[str, list[str]] = defaultdict(list)
+    for node in ir.nodes:
+        module = (
+            node.metadata.get("source_module")
+            or node.metadata.get("module")
+            or node.properties.get("source_module")
+            or ""
+        )
+        if module:
+            module_clusters[str(module)].append(node.id)
+
+    for module, node_ids in sorted(module_clusters.items(), key=lambda x: -len(x[1])):
+        if len(node_ids) >= 3:
+            short = module.split(".")[-1].replace("_", " ").replace("-", " ").title()
+            suggestions.append(SmartGroupConfig(
+                name=short,
+                icon=None,
+                color=_next_color(),
+                rules=[GroupingRule(match_type="metadata", key="source_module", value=module)],
+                metadata={
+                    "confidence": _confidence(len(node_ids), len(ir.nodes), base=0.62),
+                    "signals": ["module_path", module],
+                    "comment": f"confidence: {_confidence(len(node_ids), len(ir.nodes), base=0.62):.2f}",
+                    "module": module,
+                },
+            ))
+
+    # Strategy 3: Naming prefix suggestions
     prefix_clusters: dict[str, list[str]] = defaultdict(list)
     for node in ir.nodes:
         parts = re.split(r"[-_.]", node.name)
@@ -74,9 +125,14 @@ def suggest_groups(ir: StackMapIR) -> list[SmartGroupConfig]:
                 icon=None,
                 color=_next_color(),
                 rules=[GroupingRule(match_type="name", pattern=f"{prefix}-*")],
+                metadata={
+                    "confidence": _confidence(len(ungrouped), len(ir.nodes), base=0.52),
+                    "signals": ["naming_prefix"],
+                    "comment": f"confidence: {_confidence(len(ungrouped), len(ir.nodes), base=0.52):.2f}",
+                },
             ))
 
-    # Strategy 3: VPC-based suggestions
+    # Strategy 4: VPC-based suggestions
     vpc_clusters: dict[str, list[str]] = defaultdict(list)
     for node in ir.nodes:
         vpc_id = node.properties.get("vpc_id") or node.metadata.get("vpc_id", "")
@@ -91,9 +147,21 @@ def suggest_groups(ir: StackMapIR) -> list[SmartGroupConfig]:
                 icon="network",
                 color=_next_color(),
                 rules=[GroupingRule(match_type="vpc", value=vpc_id)],
+                metadata={
+                    "confidence": _confidence(len(node_ids), len(ir.nodes), base=0.46),
+                    "signals": ["vpc"],
+                    "comment": f"confidence: {_confidence(len(node_ids), len(ir.nodes), base=0.46):.2f}",
+                },
             ))
 
     return suggestions
+
+
+def _confidence(cluster_size: int, total_size: int, *, base: float) -> float:
+    if total_size <= 0:
+        return round(base, 2)
+    coverage = min(cluster_size / max(total_size, 1), 1.0)
+    return round(min(0.95, base + 0.2 * coverage), 2)
 
 
 def _nodes_for_rule(ir: StackMapIR, rule: GroupingRule) -> set[str]:

@@ -1335,6 +1335,11 @@ def scan_aws(
         "--live-billing",
         help="When used with --serve, enable AWS Cost Explorer and CloudWatch usage metrics in the viewer. Requires --profile and billing IAM permissions.",
     ),
+    sfn_executions: bool = typer.Option(
+        False,
+        "--sfn-executions",
+        help="Include recent Step Functions execution summaries in state-machine nodes. Requires states:ListExecutions.",
+    ),
     accounts: str | None = typer.Option(None, help="Comma-separated account:role_arn pairs for multi-account scan (e.g. '123456789012:arn:aws:iam::123456789012:role/StackMapReadOnly,987654321098:arn:aws:iam::987654321098:role/StackMapReadOnly')"),
     account_profiles: str | None = typer.Option(None, help="Comma-separated AWS profile names for multi-account scan (e.g. 'dev,sandbox,prod')"),
     snapshot_dir: str | None = typer.Option(
@@ -1373,6 +1378,7 @@ def scan_aws(
         cache_dir=cache_dir,
         no_cache=no_cache,
         partial_write_path=output if output_format == "json" and not dry_run else None,
+        sfn_executions=sfn_executions,
     )
 
     if accounts and account_profiles:

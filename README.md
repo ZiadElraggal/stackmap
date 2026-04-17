@@ -42,6 +42,8 @@ The StackMap web UI supports:
 - category and relationship filtering
 - component landing views for large graphs
 - smart grouping overlays for large AWS graphs
+- smart component landing pages with grouping confidence, parent-scope filters, and an unlinked-resource bucket
+- Step Functions state-machine inspection from Terraform, CloudFormation/SAM, and live AWS scans
 - edge confidence and evidence inspection for inferred live AWS relationships
 - low-confidence edge filtering
 - dependency tracing from the detail panel
@@ -408,16 +410,31 @@ For live AWS scans, StackMap also applies a live-account grouping pass during sc
 
 The grouping engine prioritizes:
 
-1. CloudFormation or SAM stack membership from tags such as `aws:cloudformation:stack-name`
-2. business tags such as `service`, `app`, `application`, `project`, `component`, and environment labels
-3. connected components formed by high/medium-confidence functional edges
-4. API entrypoint expansion from API Gateway, CloudFront, or ALB into downstream Lambda, ECS, and data stores
+1. environment, account, and region scopes when a graph spans multiple boundaries
+2. business tags such as `service`, `app`, `project`, `component`, `workload`, and team/owner labels
+3. Terraform module paths and CloudFormation/SAM stack membership
+4. shared IAM roles for compute resources
 5. naming-family fallback with normalized resource-name tokenization
 6. VPC or subnet grouping only as a fallback
+7. connected components when no stronger grouping signal exists
 
 Earlier strategies win, so a CloudFormation/SAM or business-tagged application cluster is preferred over a lower-signal VPC bucket. This keeps the UI focused on business components first and infrastructure topology second.
 
-Auto-generated groups can include metadata such as grouping strategy, confidence, evidence, entrypoints, account IDs, regions, and resource counts by type. The detail panel shows a smart group reason when that metadata is available.
+Auto-generated groups include metadata such as grouping strategy, confidence, reason, signals, parent group, account IDs, regions, and resource counts by type. The component landing page shows reason captions, confidence pips, parent-scope filter chips, and a View All option. Resources that no smart group claims are collected in an unlinked bucket instead of being mixed into the main component list.
+
+See `docs/smart-groups.md` for grouping examples and tuning notes.
+
+#### Step Functions viewer
+
+State machine definitions are parsed into a structured ASL graph when StackMap sees them in Terraform, CloudFormation/SAM, or live AWS scans. The detail panel renders a state-machine section with Task, Choice, Parallel, Map, Wait, Pass, Succeed, and Fail states, warnings for unreachable or malformed flows, and a raw ASL graph toggle.
+
+Live scans can optionally include recent execution summaries:
+
+```bash
+stackmap scan-aws --profile dev --serve --sfn-executions
+```
+
+Clicking a resolved Task resource in the state-machine viewer selects and pans the main graph to that resource. See `docs/step-functions.md` for the ASL graph contract and manual review checklist.
 
 #### Relationship evidence and architecture inference
 

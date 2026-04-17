@@ -308,6 +308,15 @@
               <div v-if="smartGroupReason" class="mb-3 rounded-lg border border-blue-400/15 bg-blue-500/[0.05] px-3 py-2">
                 <div class="text-[10px] uppercase tracking-widest text-blue-300">Smart group reason</div>
                 <div class="mt-1 text-xs font-mono text-gray-300">{{ smartGroupReason }}</div>
+                <div v-if="smartGroupSignals.length" class="mt-2 flex flex-wrap gap-1.5">
+                  <span
+                    v-for="signal in smartGroupSignals"
+                    :key="signal"
+                    class="rounded-md border border-blue-300/10 bg-blue-400/10 px-2 py-0.5 text-[10px] font-mono uppercase tracking-[0.14em] text-blue-200"
+                  >
+                    {{ signal.replace(/_/g, ' ') }}
+                  </span>
+                </div>
               </div>
               <dl>
                 <div
@@ -322,6 +331,30 @@
                   </dd>
                 </div>
               </dl>
+            </div>
+          </Transition>
+        </div>
+
+        <div v-if="isStateMachine" class="rounded-xl border border-white/[0.08] bg-white/[0.02]">
+          <button class="section-toggle" @click="toggleSection('stateMachine')">
+            <span>State Machine</span>
+            <span class="section-toggle__meta">
+              <template v-if="stateMachineStateCount">{{ stateMachineStateCount }} states</template>
+              <template v-if="stateMachineWarningCount"> · {{ stateMachineWarningCount }} ⚠</template>
+              · {{ sectionOpen.stateMachine ? 'Hide' : 'Show' }}
+            </span>
+          </button>
+          <Transition name="expand">
+            <div v-if="sectionOpen.stateMachine" class="section-body">
+              <div class="mb-3 flex justify-end">
+                <button
+                  class="rounded-md border border-cyan-400/20 bg-cyan-500/10 px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.16em] text-cyan-200 transition hover:border-cyan-300/35 hover:bg-cyan-500/15"
+                  @click="showStateMachineModal = true"
+                >
+                  Full screen
+                </button>
+              </div>
+              <StateMachineViewer :node="node" />
             </div>
           </Transition>
         </div>
@@ -853,15 +886,43 @@
       </template>
     </div>
   </Transition>
+
+  <Teleport to="body">
+    <div
+      v-if="showStateMachineModal && node"
+      class="fixed inset-0 z-[90] bg-[#05070d]/92 p-4 backdrop-blur-md md:p-8"
+      @click.self="showStateMachineModal = false"
+    >
+      <div class="mx-auto flex h-full max-w-6xl flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0c1018] shadow-[0_30px_120px_rgba(0,0,0,0.45)]">
+        <div class="flex items-center justify-between gap-4 border-b border-white/10 px-4 py-3">
+          <div>
+            <div class="text-[10px] font-mono uppercase tracking-[0.18em] text-cyan-300">State Machine</div>
+            <div class="mt-1 text-sm font-semibold text-white">{{ node.name }}</div>
+          </div>
+          <button
+            class="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.16em] text-gray-300 transition hover:bg-white/10 hover:text-white"
+            @click="showStateMachineModal = false"
+          >
+            Close
+          </button>
+        </div>
+        <div class="min-h-0 flex-1 overflow-auto p-4">
+          <StateMachineViewer :node="node" />
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useGraphStore } from '~/stores/graph'
 import { CATEGORY_COLORS, MANUAL_EDGE_TYPES, USER_NODE_TEMPLATES, buildLayerDefinitions, getNodeIconAsset, getNodeIconPath, getResourceIconAsset, getResourceIconPath } from '~/composables/useGraph'
+import StateMachineViewer from '~/components/StateMachineViewer.vue'
 
 const store = useGraphStore()
 const showRaw = ref(false)
+const showStateMachineModal = ref(false)
 const newLayerName = ref('')
 const userLinkColors = ['#4ADE80', '#38BDF8', '#C084FC', '#FB923C', '#F87171']
 const sectionOpen = ref<Record<string, boolean>>({
@@ -874,6 +935,7 @@ const sectionOpen = ref<Record<string, boolean>>({
   neighborhood: false,
   edgeEditor: true,
   trace: false,
+  stateMachine: true,
   emptyGuidance: true,
   emptyChanges: true,
   emptyStatus: false,
@@ -890,6 +952,20 @@ const costFeedbackTone = ref<'success' | 'warning'>('success')
 
 const node = computed(() => store.selectedNode)
 const edge = computed(() => store.selectedEdge)
+const isStateMachine = computed(() => {
+  const rt = node.value?.resource_type || ''
+  return rt === 'aws_sfn_state_machine'
+    || rt === 'AWS::StepFunctions::StateMachine'
+    || rt === 'AWS::Serverless::StateMachine'
+})
+const stateMachineStateCount = computed(() => {
+  const asl = node.value?.properties?.asl_graph as { states?: unknown[] } | undefined
+  return Array.isArray(asl?.states) ? asl!.states!.length : 0
+})
+const stateMachineWarningCount = computed(() => {
+  const asl = node.value?.properties?.asl_graph as { warnings?: unknown[] } | undefined
+  return Array.isArray(asl?.warnings) ? asl!.warnings!.length : 0
+})
 const edgeEvidence = computed(() => edge.value?.metadata?.evidence || '')
 const edgeInferenceRule = computed(() => String(edge.value?.metadata?.inference_rule || '').replace(/_/g, ' '))
 const edgeConfidence = computed(() => edge.value?.metadata?.confidence || '')
@@ -964,7 +1040,15 @@ const smartGroupReason = computed(() => {
     && candidate.metadata?.auto_strategy
   )
   if (!group) return ''
-  return String(group.metadata?.evidence || `Grouped by ${String(group.metadata?.auto_strategy).replace(/_/g, ' ')}`)
+  return String(group.metadata?.reason || group.metadata?.evidence || `Grouped by ${String(group.metadata?.auto_strategy).replace(/_/g, ' ')}`)
+})
+const smartGroupSignals = computed(() => {
+  if (!node.value) return []
+  const group = store.graphGroups.find(candidate =>
+    candidate.children.includes(node.value!.id)
+    && candidate.metadata?.auto_strategy
+  )
+  return Array.isArray(group?.metadata?.signals) ? group!.metadata!.signals : []
 })
 const selectedNodeCost = computed(() => {
   if (!node.value) return null

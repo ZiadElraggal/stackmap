@@ -1090,35 +1090,52 @@ class TerraformParser(BaseParser):
         arn_index: dict[str, str],
         node_map: dict[str, StackMapNode],
     ) -> None:
-        """Extract Lambda invocations from Step Functions ASL definitions."""
+        """Parse Step Functions ASL and emit kind-labeled edges.
+
+        The structured ``asl_graph`` is stored on the node so the frontend
+        can render the extended state-machine viewer. Edges are emitted for
+        every Task whose target ARN is resolvable to another node in the
+        graph, with labels derived from the Step Functions integration
+        kind (Lambda invoke, SQS sendMessage, DynamoDB putItem, etc.).
+        """
+        from stackmap.parsers.asl import classify_edge_label, parse_asl
+
         for node in nodes:
             if node.resource_type != "aws_sfn_state_machine":
                 continue
-            defn_str = node.properties.get("definition", "")
-            if not defn_str or not isinstance(defn_str, str):
-                continue
-            try:
-                defn = json.loads(defn_str)
-            except (json.JSONDecodeError, TypeError):
+            defn = node.properties.get("definition", "")
+            if not defn:
                 continue
 
-            # Walk all states and extract Resource ARNs from Task states
-            lambda_arns = _extract_task_resources(defn)
-            for arn in lambda_arns:
-                target_id = arn_index.get(arn)
-                if target_id and target_id != node.id:
-                    edge_key = (node.id, target_id, EdgeType.TRIGGERS.value)
-                    if edge_key not in edge_set:
-                        edge_set.add(edge_key)
-                        edges.append(
-                            StackMapEdge(
-                                id=f"{node.id}->{target_id}",
-                                source=node.id,
-                                target=target_id,
-                                edge_type=EdgeType.TRIGGERS,
-                                label="invokes",
-                            )
-                        )
+            resolver = arn_index.get
+            asl_graph = parse_asl(defn, resolver=resolver)
+            node.properties["asl_graph"] = asl_graph
+
+            if asl_graph.get("error"):
+                continue
+
+            for resource in asl_graph.get("resources", []) or []:
+                target_id = resource.get("node_id")
+                if not target_id or target_id == node.id:
+                    continue
+                edge_key = (node.id, target_id, EdgeType.TRIGGERS.value)
+                if edge_key in edge_set:
+                    continue
+                edge_set.add(edge_key)
+                label = classify_edge_label(
+                    resource.get("kind", "unknown"),
+                    resource.get("integration"),
+                )
+                edges.append(
+                    StackMapEdge(
+                        id=f"{node.id}->{target_id}",
+                        source=node.id,
+                        target=target_id,
+                        edge_type=EdgeType.TRIGGERS,
+                        label=label,
+                        metadata={"via": "step_functions"},
+                    )
+                )
 
     def _parse_iam_policies(
         self,
@@ -1738,29 +1755,6 @@ def _lookup_origin_target(
                 if cf_domain == domain:
                     return node.id
     return None
-
-
-def _extract_task_resources(defn: dict) -> list[str]:
-    """Extract Lambda ARNs from Step Functions ASL definition."""
-    arns: list[str] = []
-    states = defn.get("States", {})
-    for state in states.values():
-        if not isinstance(state, dict):
-            continue
-        if state.get("Type") == "Task":
-            resource = state.get("Resource", "")
-            if isinstance(resource, str) and resource.startswith("arn:aws:lambda:"):
-                arns.append(resource)
-        # Handle Map and Parallel states (recursive)
-        for key in ("Branches", "Iterator"):
-            nested = state.get(key)
-            if isinstance(nested, dict):
-                arns.extend(_extract_task_resources(nested))
-            elif isinstance(nested, list):
-                for branch in nested:
-                    if isinstance(branch, dict):
-                        arns.extend(_extract_task_resources(branch))
-    return arns
 
 
 # Action classification for IAM policies

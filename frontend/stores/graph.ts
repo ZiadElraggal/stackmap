@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import type { AslGraph } from '~/types/asl'
 
 export interface StackMapNode {
   id: string
@@ -97,7 +98,21 @@ export interface StackMapGroup {
     org_path?: string
     auto_strategy?: string
     evidence?: string
-    confidence?: string
+    confidence?: string | number
+    reason?: string
+    signals?: string[]
+    dominant_categories?: string[]
+    resource_count?: number
+    cohesion?: number
+    tag_key?: string
+    tag_value?: string
+    module?: string
+    stack_name?: string
+    role?: string
+    prefix?: string
+    vpc_id?: string
+    subnet_id?: string
+    region?: string
     [key: string]: any
   }
 }
@@ -121,6 +136,11 @@ export interface ComponentSummary {
   kind: 'service_component' | 'weakly_linked' | 'unlinked' | 'unlinked_bucket'
   source?: 'smart_group' | 'connectivity' | 'ungrouped'
   groupId?: string
+  parentGroupId?: string | null
+  reason?: string
+  confidence?: number
+  signals?: string[]
+  autoStrategy?: string
   nodeIds: string[]
   edgeIds: string[]
   resourceCount: number
@@ -821,6 +841,8 @@ function buildUnlinkedSummary(
   }
 }
 
+const PARENT_TIER_STRATEGIES = new Set(['account', 'region', 'environment'])
+
 function buildSmartGroupComponentSummaries(
   nodes: StackMapNode[],
   edges: StackMapEdge[],
@@ -831,18 +853,30 @@ function buildSmartGroupComponentSummaries(
   const adjacency = buildAdjacency(edges)
   const summaries: ComponentSummary[] = []
   const assigned = new Set<string>()
-  const smartGroups = groups
+  // Parent-tier groups (account/region/environment) are scopes, not
+  // primary cards — they're used for hierarchy parent pointers and UI
+  // filter chips, but they don't become components themselves.
+  const smartGroupEntries = groups
     .filter(group => group.group_type === 'smart_group')
     .map(group => ({
       group,
       children: group.children.filter(child => visibleIds.has(child)),
     }))
     .filter(entry => entry.children.length > 0)
-    .sort((a, b) => b.children.length - a.children.length || a.group.name.localeCompare(b.group.name))
 
-  if (!smartGroups.length) return []
+  const primary = smartGroupEntries
+    .filter(({ group }) => !PARENT_TIER_STRATEGIES.has(String(group.metadata?.auto_strategy || '')))
+    .sort((a, b) => {
+      const cA = Number(a.group.metadata?.confidence ?? 0)
+      const cB = Number(b.group.metadata?.confidence ?? 0)
+      if (cB !== cA) return cB - cA
+      if (b.children.length !== a.children.length) return b.children.length - a.children.length
+      return a.group.name.localeCompare(b.group.name)
+    })
 
-  for (const { group, children } of smartGroups) {
+  if (!primary.length) return []
+
+  for (const { group, children } of primary) {
     const groupNodeIds = children.filter(nodeId => !assigned.has(nodeId))
     if (!groupNodeIds.length) continue
     for (const nodeId of groupNodeIds) assigned.add(nodeId)
@@ -852,6 +886,11 @@ function buildSmartGroupComponentSummaries(
       .filter((value): value is StackMapNode => Boolean(value))
     const groupEdges = edges.filter(edge => groupIdSet.has(edge.source) && groupIdSet.has(edge.target))
     const described = describeComponent(groupNodes, groupEdges, adjacency)
+    const meta = group.metadata || {}
+    const reason = typeof meta.reason === 'string' ? meta.reason : ''
+    const confidence = typeof meta.confidence === 'number' ? meta.confidence : undefined
+    const strategy = typeof meta.auto_strategy === 'string' ? meta.auto_strategy : undefined
+    const signals = Array.isArray(meta.signals) ? (meta.signals as string[]) : undefined
     summaries.push({
       ...described,
       id: `component:${group.id}`,
@@ -859,9 +898,14 @@ function buildSmartGroupComponentSummaries(
       kind: 'service_component',
       source: 'smart_group',
       groupId: group.id,
+      parentGroupId: group.parent ?? null,
+      reason,
+      confidence,
+      autoStrategy: strategy,
+      signals,
       usefulnessScore: described.usefulnessScore + 12,
-      summary: group.metadata?.auto_strategy
-        ? `${described.summary} · grouped by ${String(group.metadata.auto_strategy).replace(/_/g, ' ')}`
+      summary: strategy
+        ? `${described.summary} · grouped by ${strategy.replace(/_/g, ' ')}`
         : described.summary,
     })
   }
@@ -1173,6 +1217,15 @@ export const useGraphStore = defineStore('graph', {
       return state.userEdges.find(edge => edge.id === state.selectedEdgeId)
         ?? this.graphEdges.find(edge => edge.id === state.selectedEdgeId)
         ?? null
+    },
+
+    getAslGraph(state): (nodeId: string) => AslGraph | null {
+      return (nodeId: string) => {
+        const node = state.nodes.find(n => n.id === nodeId)
+          ?? state.userNodes.find(n => n.id === nodeId)
+        const graph = node?.properties?.asl_graph
+        return graph && typeof graph === 'object' ? graph as AslGraph : null
+      }
     },
 
     hasCostOverrides(state): boolean {

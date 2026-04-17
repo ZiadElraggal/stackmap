@@ -966,6 +966,11 @@ function edgeTargetPos(edge: StackMapEdge) {
   return { x: pos.x, y: pos.y + (dy > 0 ? h / 2 : -h / 2) }
 }
 
+function onPanToNodeEvent(event: Event) {
+  const nodeId = (event as CustomEvent<{ nodeId?: string }>).detail?.nodeId
+  if (nodeId) panToNode(nodeId)
+}
+
 onMounted(async () => {
   try {
     await store.loadFromJSON('/api/graph')
@@ -996,12 +1001,14 @@ onMounted(async () => {
 
   window.addEventListener('keydown', onKeydown)
   window.addEventListener('stackmap-fit-view', onFitViewEvent)
+  window.addEventListener('stackmap-pan-to-node', onPanToNodeEvent)
   initializeLayerRailPosition()
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('stackmap-fit-view', onFitViewEvent)
+  window.removeEventListener('stackmap-pan-to-node', onPanToNodeEvent)
   stopLayerRailDrag()
 })
 
