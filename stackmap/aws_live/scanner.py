@@ -107,7 +107,6 @@ POLICY_ACTIONS_BROAD = POLICY_ACTIONS_CORE + [
     "cognito-identity:DescribeIdentityPool",
     "states:ListStateMachines",
     "states:DescribeStateMachine",
-    "states:ListExecutions",
     "ecr:DescribeRepositories",
     "ecr:ListTagsForResource",
     "appsync:ListGraphqlApis",
@@ -129,10 +128,15 @@ POLICY_ACTIONS_LOGS = [
     "logs:FilterLogEvents",
     "logs:GetLogEvents",
 ]
+POLICY_ACTIONS_STEPFUNCTIONS = [
+    "states:ListExecutions",
+    "states:GetExecutionHistory",
+]
 
 POLICY_ACTIONS_OPTIONAL = {
     "billing": POLICY_ACTIONS_BILLING,
     "logs": POLICY_ACTIONS_LOGS,
+    "stepfunctions": POLICY_ACTIONS_STEPFUNCTIONS,
 }
 
 _LIVE_WRITE_ACTIONS = {
@@ -164,7 +168,8 @@ def build_policy_document(
         service_set: "core" or "broad" base permission set.
         extras: Optional list of extra permission sets to include.
             Supported: "billing" (Cost Explorer + CloudWatch metrics),
-                       "logs" (CloudWatch Logs viewer).
+                       "logs" (CloudWatch Logs viewer),
+                       "stepfunctions" (execution debugger).
     """
     actions = list(POLICY_ACTIONS_CORE if service_set == "core" else POLICY_ACTIONS_BROAD)
     extras = extras or []
@@ -173,6 +178,8 @@ def build_policy_document(
             actions.extend(POLICY_ACTIONS_BILLING)
         elif extra == "logs":
             actions.extend(POLICY_ACTIONS_LOGS)
+        elif extra == "stepfunctions":
+            actions.extend(POLICY_ACTIONS_STEPFUNCTIONS)
     return {
         "Version": "2012-10-17",
         "Statement": [
@@ -196,6 +203,7 @@ def build_addon_policy_document(addon: str) -> dict[str, Any]:
     sid = {
         "billing": "StackMapBillingReadOnly",
         "logs": "StackMapLiveLogsReadOnly",
+        "stepfunctions": "StackMapStepFunctionsDebuggerReadOnly",
     }[normalized]
 
     return {

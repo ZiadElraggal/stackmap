@@ -381,6 +381,7 @@ Optional live features are separate add-on policies, not part of the default sca
 ```bash
 stackmap aws-policy --addon logs
 stackmap aws-policy --addon billing
+stackmap aws-policy --addon stepfunctions
 ```
 
 ### `stackmap setup-org-role`
@@ -522,6 +523,23 @@ The billing policy is separate from the normal scan policy:
 
 ```bash
 stackmap aws-policy --addon billing
+```
+
+#### Step Functions workflow graph and execution debugging
+
+State machine definitions are parsed during normal Terraform, CloudFormation/SAM, and live AWS scans. Select a Step Functions node and click **Open workflow graph** to switch the main canvas into a StackMap-style workflow view with ASL states, labeled paths, warnings, and an optional **Show target resources** toggle for resolved Task targets.
+
+Workflow structure uses the normal scan permissions:
+
+- `states:ListStateMachines`
+- `states:DescribeStateMachine`
+
+Execution debugging is deliberately on demand. **Load recent executions** requires `states:ListExecutions`; selecting one execution and applying the per-state overlay requires `states:GetExecutionHistory`. StackMap does not fetch execution histories automatically.
+
+Attach the optional debugger policy only when you want execution overlays:
+
+```bash
+stackmap aws-policy --addon stepfunctions
 ```
 
 #### Drift detection
@@ -771,6 +789,7 @@ Optional live UI features use separate policies that can be reviewed and attache
 ```bash
 stackmap aws-policy --addon logs
 stackmap aws-policy --addon billing
+stackmap aws-policy --addon stepfunctions
 ```
 
 The same reviewable JSON files are included in the package:
@@ -778,6 +797,7 @@ The same reviewable JSON files are included in the package:
 - `stackmap/cli/aws_policy.json`
 - `stackmap/cli/aws_policy_live_logs.json`
 - `stackmap/cli/aws_policy_billing.json`
+- `stackmap/cli/aws_policy_stepfunctions.json`
 
 ## License
 

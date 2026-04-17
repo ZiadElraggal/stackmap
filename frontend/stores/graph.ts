@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import type { AslGraph } from '~/types/asl'
+import type { AslExecutionStateOverlay, AslGraph, AslState, AslTransition, AslWarning } from '~/types/asl'
 
 export interface StackMapNode {
   id: string
@@ -16,6 +16,7 @@ export interface StackMapNode {
     org_path?: string
     view_kind?: string
     scanned?: boolean
+    [key: string]: any
   }
   position_hint: {
     tier: string
@@ -58,6 +59,7 @@ export interface StackMapEdge {
 }
 
 export type EditSubmode = 'inspect' | 'structure' | 'connect'
+export type ViewMode = 'architecture' | 'raw' | 'organization' | 'components' | 'step_function'
 
 export interface CustomLayerConfig {
   id: string
@@ -205,6 +207,11 @@ interface EditHistorySnapshot {
   layoutLayers: string[]
 }
 
+interface WorkflowGraphBuildResult {
+  nodes: StackMapNode[]
+  edges: StackMapEdge[]
+}
+
 const HELPER_RESOURCE_TYPES = new Set([
   'aws_iam_role',
   'aws_iam_policy',
@@ -314,6 +321,196 @@ const NETWORK_HEAVY_RESOURCE_TYPES = new Set([
 const UNLINKED_COMPONENT_ID = '__unlinked_resources__'
 const COMPONENT_VIEW_THRESHOLD_DEFAULT = 35
 const DEFAULT_LAYOUT_LAYERS = ['frontend', 'api', 'serverless', 'compute', 'security', 'data']
+const STEP_FUNCTION_LAYERS = ['api', 'serverless', 'compute', 'data']
+
+function encodeWorkflowPart(value: string): string {
+  return encodeURIComponent(value).replace(/[!'()*]/g, char => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)
+}
+
+function workflowStateNodeId(machineNodeId: string, stateName: string): string {
+  return `sfn:${encodeWorkflowPart(machineNodeId)}:state:${encodeWorkflowPart(stateName)}`
+}
+
+function workflowTargetNodeId(machineNodeId: string, targetNodeId: string): string {
+  return `sfn:${encodeWorkflowPart(machineNodeId)}:target:${encodeWorkflowPart(targetNodeId)}`
+}
+
+function stateTier(state: AslState): string {
+  if (state.type === 'Choice') return 'api'
+  if (state.type === 'Succeed' || state.type === 'Fail') return 'data'
+  if (state.type === 'Task') return 'serverless'
+  return 'compute'
+}
+
+function stateCategory(state: AslState): string {
+  if (state.type === 'Task') {
+    if (state.resource_kind === 'dynamodb') return 'database'
+    if (state.resource_kind === 'sqs') return 'queue'
+    if (state.resource_kind === 'sns' || state.resource_kind === 'eventbridge') return 'integration'
+    return 'serverless'
+  }
+  if (state.type === 'Fail') return 'security'
+  if (state.type === 'Succeed') return 'monitoring'
+  return 'integration'
+}
+
+function stateResourceType(state: AslState): string {
+  return `aws_sfn_${state.type.toLowerCase()}_state`
+}
+
+function statusSeverity(status?: string): 'info' | 'warning' | 'critical' | undefined {
+  switch ((status || '').toLowerCase()) {
+    case 'failed':
+    case 'timed_out':
+    case 'aborted':
+      return 'critical'
+    case 'running':
+      return 'warning'
+    case 'succeeded':
+      return 'info'
+    default:
+      return undefined
+  }
+}
+
+function workflowEdgeLabel(transition: AslTransition): string {
+  const kind = transition.kind || 'next'
+  if (transition.error_equals?.length) return `${kind}: ${transition.error_equals.join(', ')}`
+  return transition.label || kind
+}
+
+function workflowEdgeType(transition: AslTransition): string {
+  if (transition.kind === 'catch') return 'routes_to'
+  if (transition.kind === 'choice' || transition.kind === 'default') return 'routes_to'
+  return 'triggers'
+}
+
+function buildWorkflowGraph(
+  machine: StackMapNode | null,
+  asl: AslGraph | null,
+  sourceNodes: StackMapNode[],
+  showTargets: boolean,
+  overlays: Record<string, AslExecutionStateOverlay>
+): WorkflowGraphBuildResult {
+  if (!machine || !asl || !Array.isArray(asl.states)) return { nodes: [], edges: [] }
+
+  const warningsByState = new Map<string, AslWarning[]>()
+  for (const warning of asl.warnings || []) {
+    if (!warning.state) continue
+    warningsByState.set(warning.state, [...(warningsByState.get(warning.state) || []), warning])
+  }
+
+  const realNodeById = new Map(sourceNodes.map(node => [node.id, node]))
+  const nodes: StackMapNode[] = asl.states.map((state, index) => {
+    const overlay = overlays[state.qualified_name] || overlays[state.name]
+    const warningCount = (warningsByState.get(state.qualified_name) || warningsByState.get(state.name) || []).length
+    const severity = warningCount > 0 ? 'warning' : statusSeverity(overlay?.status)
+    return {
+      id: workflowStateNodeId(machine.id, state.qualified_name),
+      name: state.name,
+      resource_type: stateResourceType(state),
+      provider: 'aws',
+      category: stateCategory(state),
+      properties: {
+        asl_state: state,
+        state_machine_node_id: machine.id,
+        execution_overlay: overlay || null,
+        warning_count: warningCount,
+      },
+      tags: {},
+      metadata: {
+        account_id: machine.metadata?.account_id,
+        account_name: machine.metadata?.account_name,
+        region: machine.metadata?.region || machine.position_hint?.region,
+        view_kind: 'sfn_state',
+        state_machine_node_id: machine.id,
+        asl_state_name: state.qualified_name,
+        asl_state_type: state.type,
+        execution_status: overlay?.status,
+      },
+      position_hint: {
+        tier: stateTier(state),
+        weight: state.type === 'Choice' || state.type === 'Parallel' || state.type === 'Map' ? 6 : 5,
+        manual_order: (index + 1) * 100,
+        account_id: machine.position_hint?.account_id || machine.metadata?.account_id,
+        region: machine.position_hint?.region || machine.metadata?.region,
+        view_kind: 'sfn_state',
+        drift_status: overlay?.status === 'succeeded' ? 'in_sync' : undefined,
+        drift_severity: severity,
+      },
+    }
+  })
+
+  const stateNames = new Set(asl.states.map(state => state.qualified_name))
+  const edges: StackMapEdge[] = (asl.transitions || [])
+    .filter(transition => stateNames.has(transition.from) && stateNames.has(transition.to))
+    .map((transition, index) => ({
+      id: `sfn:${encodeWorkflowPart(machine.id)}:edge:${index}:${encodeWorkflowPart(transition.from)}:${encodeWorkflowPart(transition.to)}:${transition.kind}`,
+      source: workflowStateNodeId(machine.id, transition.from),
+      target: workflowStateNodeId(machine.id, transition.to),
+      edge_type: workflowEdgeType(transition),
+      label: workflowEdgeLabel(transition),
+      metadata: {
+        source: 'sfn_workflow',
+        confidence: 'high',
+        inference_rule: `asl_${transition.kind || 'next'}`,
+        evidence: workflowEdgeLabel(transition),
+        asl_transition: transition,
+      },
+    }))
+
+  if (showTargets) {
+    const addedTargets = new Set<string>()
+    for (const state of asl.states) {
+      if (state.type !== 'Task' || !state.resource_node_id) continue
+      const realTarget = realNodeById.get(state.resource_node_id)
+      if (!realTarget) continue
+      const targetId = workflowTargetNodeId(machine.id, realTarget.id)
+      if (!addedTargets.has(targetId)) {
+        addedTargets.add(targetId)
+        nodes.push({
+          ...realTarget,
+          id: targetId,
+          name: realTarget.name,
+          properties: {
+            ...realTarget.properties,
+            mirrored_from_node_id: realTarget.id,
+            state_machine_node_id: machine.id,
+          },
+          metadata: {
+            ...realTarget.metadata,
+            view_kind: 'sfn_target',
+            mirrored_from_node_id: realTarget.id,
+            state_machine_node_id: machine.id,
+          },
+          position_hint: {
+            ...realTarget.position_hint,
+            tier: 'data',
+            weight: Math.max(3, realTarget.position_hint?.weight || 3),
+            manual_order: (nodes.length + 1) * 100,
+            view_kind: 'sfn_target',
+          },
+        })
+      }
+      edges.push({
+        id: `sfn:${encodeWorkflowPart(machine.id)}:target-edge:${encodeWorkflowPart(state.qualified_name)}:${encodeWorkflowPart(realTarget.id)}`,
+        source: workflowStateNodeId(machine.id, state.qualified_name),
+        target: targetId,
+        edge_type: state.resource_kind === 'dynamodb' || state.resource_kind === 's3' ? 'writes_to' : 'triggers',
+        label: state.resource_kind || 'target',
+        metadata: {
+          source: 'sfn_workflow_target',
+          confidence: 'high',
+          inference_rule: 'asl_task_resource',
+          evidence: state.resource_arn || realTarget.id,
+          real_node_id: realTarget.id,
+        },
+      })
+    }
+  }
+
+  return { nodes, edges }
+}
 
 function normalizeNodeTier(node: StackMapNode): string {
   const currentTier = node.position_hint?.tier
@@ -1091,7 +1288,7 @@ export const useGraphStore = defineStore('graph', {
     minWeight: 1,
     hopLimit: 0,
     searchQuery: '',
-    viewMode: 'architecture' as 'architecture' | 'raw' | 'organization' | 'components',
+    viewMode: 'architecture' as ViewMode,
     loaded: false,
     diffMode: false as boolean,
     diffSlider: 0.5 as number,
@@ -1108,6 +1305,10 @@ export const useGraphStore = defineStore('graph', {
     collapseNetworkScaffolding: true as boolean,
     showCrossAccountEdges: true as boolean,
     showLowConfidenceEdges: true as boolean,
+    activeStateMachineNodeId: null as string | null,
+    showStateMachineTargets: false as boolean,
+    selectedStateMachineExecutionArn: null as string | null,
+    stateMachineExecutionOverlays: {} as Record<string, Record<string, AslExecutionStateOverlay>>,
 
     // Edit mode state
     editMode: false as boolean,
@@ -1259,8 +1460,36 @@ export const useGraphStore = defineStore('graph', {
     },
 
     helperParentMap(state): Map<string, string> {
-      if (state.viewMode === 'raw' || state.viewMode === 'organization') return new Map()
+      if (state.viewMode === 'raw' || state.viewMode === 'organization' || state.viewMode === 'step_function') return new Map()
       return buildHelperParentMap(state.nodes, state.edges)
+    },
+
+    activeStateMachineNode(state): StackMapNode | null {
+      if (!state.activeStateMachineNodeId) return null
+      return state.nodes.find(node => node.id === state.activeStateMachineNodeId)
+        ?? state.userNodes.find(node => node.id === state.activeStateMachineNodeId)
+        ?? null
+    },
+
+    activeStateMachineAsl(): AslGraph | null {
+      const node = this.activeStateMachineNode
+      const graph = node?.properties?.asl_graph
+      return graph && typeof graph === 'object' ? graph as AslGraph : null
+    },
+
+    activeStateMachineExecutionOverlay(state): Record<string, AslExecutionStateOverlay> {
+      if (!state.activeStateMachineNodeId) return {}
+      return state.stateMachineExecutionOverlays[state.activeStateMachineNodeId] || {}
+    },
+
+    workflowGraph(): WorkflowGraphBuildResult {
+      return buildWorkflowGraph(
+        this.activeStateMachineNode,
+        this.activeStateMachineAsl,
+        this.nodes,
+        this.showStateMachineTargets,
+        this.activeStateMachineExecutionOverlay,
+      )
     },
 
     organizationNodes(state): StackMapNode[] {
@@ -1440,6 +1669,7 @@ export const useGraphStore = defineStore('graph', {
     },
 
     graphNodes(state): StackMapNode[] {
+      if (state.viewMode === 'step_function') return this.workflowGraph.nodes
       if (state.viewMode === 'organization') return this.organizationNodes
       if (state.viewMode === 'components') return []
       if (state.viewMode === 'raw') {
@@ -1474,6 +1704,7 @@ export const useGraphStore = defineStore('graph', {
     },
 
     graphEdges(state): StackMapEdge[] {
+      if (state.viewMode === 'step_function') return this.workflowGraph.edges
       if (state.viewMode === 'organization') return this.organizationEdges
       if (state.viewMode === 'components') return []
       if (state.viewMode === 'raw') return this.rawSourceEdges
@@ -1493,6 +1724,7 @@ export const useGraphStore = defineStore('graph', {
     },
 
     graphGroups(state): StackMapGroup[] {
+      if (state.viewMode === 'step_function') return []
       if (state.viewMode === 'organization') return this.organizationGroups
       const nodesById = new Map(state.nodes.map(node => [node.id, node]))
       const visibleNodeIds = new Set(this.graphNodes.map(node => node.id))
@@ -1592,6 +1824,10 @@ export const useGraphStore = defineStore('graph', {
     },
 
     activeBreadcrumb(state): string[] {
+      if (state.viewMode === 'step_function') {
+        const machine = this.activeStateMachineNode
+        return machine ? [machine.name, 'workflow graph'] : ['workflow graph']
+      }
       if (state.viewMode === 'organization' && state.activeOrgGroupId) {
         const groupById = new Map(this.organizationGroupsRaw.map(group => [group.id, group]))
         const path: string[] = []
@@ -1910,6 +2146,8 @@ export const useGraphStore = defineStore('graph', {
         this.edges = data.edges || []
         this.groups = data.groups || []
         this.activeSnapshotId = snapshotId
+        this.activeStateMachineNodeId = null
+        this.selectedStateMachineExecutionArn = null
         this.selectedNodeId = null
         this.selectedEdgeId = null
         this.requestRelayout()
@@ -2053,9 +2291,12 @@ export const useGraphStore = defineStore('graph', {
       this.searchQuery = query
     },
 
-    setViewMode(mode: 'architecture' | 'raw' | 'organization' | 'components') {
+    setViewMode(mode: ViewMode) {
       this.viewMode = mode
       if (mode === 'components') this.componentViewBypassed = false
+      if (mode !== 'step_function') {
+        this.activeStateMachineNodeId = null
+      }
       if (mode === 'architecture' && this.selectedNodeId) {
         const parent = this.helperParentMap.get(this.selectedNodeId)
         if (parent) this.selectedNodeId = parent
@@ -2067,6 +2308,81 @@ export const useGraphStore = defineStore('graph', {
       if (mode !== 'architecture') {
         this.activeComponentId = null
       }
+      this.requestRelayout()
+    },
+
+    openStateMachineGraph(nodeId: string) {
+      const asl = this.getAslGraph(nodeId)
+      if (!asl || !Array.isArray(asl.states) || asl.states.length === 0) return false
+      this.activeStateMachineNodeId = nodeId
+      this.viewMode = 'step_function'
+      this.showStateMachineTargets = false
+      this.activeComponentId = null
+      this.componentViewBypassed = true
+      this.selectedEdgeId = null
+      const firstState = asl.start_at
+        ? asl.states.find(state => state.qualified_name === asl.start_at || state.name === asl.start_at)
+        : asl.states[0]
+      this.selectedNodeId = firstState ? workflowStateNodeId(nodeId, firstState.qualified_name) : null
+      this.hopLimit = 0
+      for (const layer of STEP_FUNCTION_LAYERS) {
+        if (!this.layoutLayers.includes(layer)) this.layoutLayers.push(layer)
+      }
+      this.requestRelayout()
+      return true
+    },
+
+    returnToArchitectureFromStateMachine() {
+      const machineNodeId = this.activeStateMachineNodeId
+      this.viewMode = 'architecture'
+      this.activeStateMachineNodeId = null
+      this.showStateMachineTargets = false
+      this.selectedStateMachineExecutionArn = null
+      this.selectedEdgeId = null
+      this.selectedNodeId = machineNodeId
+      this.hopLimit = 0
+      this.requestRelayout()
+    },
+
+    setShowStateMachineTargets(show: boolean) {
+      this.showStateMachineTargets = show
+      this.requestRelayout()
+    },
+
+    jumpFromMirroredTarget(targetNodeId: string) {
+      const machineNodeId = this.activeStateMachineNodeId
+      this.viewMode = 'architecture'
+      this.activeStateMachineNodeId = null
+      this.showStateMachineTargets = false
+      this.selectedNodeId = targetNodeId
+      this.selectedEdgeId = null
+      this.hopLimit = 0
+      this.requestRelayout()
+      if (typeof window !== 'undefined') {
+        window.setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('stackmap-pan-to-node', { detail: { nodeId: targetNodeId, fromStateMachine: machineNodeId } }))
+        }, 50)
+      }
+    },
+
+    applyStateMachineExecutionHistory(
+      nodeId: string,
+      executionArn: string,
+      states: Record<string, AslExecutionStateOverlay>,
+      execution?: Record<string, any>
+    ) {
+      this.stateMachineExecutionOverlays[nodeId] = { ...states }
+      this.selectedStateMachineExecutionArn = executionArn
+      const node = this.nodes.find(candidate => candidate.id === nodeId)
+      const asl = node?.properties?.asl_graph as AslGraph | undefined
+      if (asl && typeof asl === 'object') {
+        asl.selected_execution = {
+          execution_arn: executionArn,
+          status: String(execution?.status || ''),
+          states: { ...states },
+        }
+      }
+      this.requestRelayout()
     },
 
     setActiveAccount(accountId: string | null) {

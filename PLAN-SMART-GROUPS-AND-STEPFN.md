@@ -346,6 +346,10 @@ New component `frontend/components/StateMachineViewer.vue`:
 - [x] `types/asl.ts` + store getter `getAslGraph`.
 - [x] `StateMachineViewer.vue` (new) renders all state types + warnings + raw ASL toggle.
 - [x] `DetailPanel.vue` conditional section + full-screen modal button.
+- [x] Main canvas workflow graph mode opens from **Open workflow graph** and renders ASL states/paths with StackMap nodes and edges.
+- [x] **Show target resources** toggle renders mirrored Task targets and jumps back to the real architecture node.
+- [x] `/api/sfn-execution-history` loads one selected execution and overlays per-state status.
+- [x] Permission warnings document `states:ListExecutions` and `states:GetExecutionHistory`; `stackmap aws-policy --addon stepfunctions` emits the optional policy.
 - [x] Clicking a resolved Task resource refocuses the main graph on that node.
 - [x] Fixture test: open sample `asl-order-saga.json` fixture → viewer renders 11 states, 2 parallel branches, 1 map, 2 choices, zero warnings.
 - [x] Fixture test: open sample `asl-broken.json` → viewer renders warnings banner and amber dots on 3 states.

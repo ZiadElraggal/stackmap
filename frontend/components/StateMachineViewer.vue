@@ -21,6 +21,9 @@
       <div v-if="recentExecutionSummary" class="mt-2 rounded-lg border border-emerald-400/15 bg-emerald-500/[0.06] px-2 py-1.5 text-[11px] font-mono text-emerald-100/85">
         {{ recentExecutionSummary }}
       </div>
+      <div class="mt-2 rounded-lg border border-amber-400/15 bg-amber-500/[0.05] px-2 py-1.5 text-[11px] font-mono leading-relaxed text-amber-100/80">
+        Workflow structure is available from the scan. Recent executions require states:ListExecutions; per-step debugging requires states:GetExecutionHistory in the workflow graph.
+      </div>
       <div class="mt-2 flex flex-wrap items-center gap-2">
         <button
           class="rounded-lg border border-cyan-400/20 bg-cyan-500/10 px-2.5 py-1.5 text-[10px] font-mono uppercase tracking-[0.16em] text-cyan-200 transition hover:border-cyan-300/35 hover:bg-cyan-500/15 disabled:cursor-not-allowed disabled:opacity-50"
@@ -144,7 +147,7 @@ export interface AslGraph {
   transitions?: AslTransition[]
   resources?: Array<{ arn: string; kind: string; integration?: string; pattern?: string; node_id?: string | null }>
   warnings?: AslWarning[]
-  recent_executions?: Array<{ status?: string; start?: string; duration_ms?: number | null; failed_state?: string | null }>
+  recent_executions?: Array<{ execution_arn?: string; name?: string; status?: string; start?: string; duration_ms?: number | null; failed_state?: string | null }>
   error?: string
 }
 
@@ -232,7 +235,9 @@ async function loadRecentExecutions() {
     }
     executionProfile.value = payload.active_profile ? `profile ${payload.active_profile}` : ''
   } catch (error) {
-    executionError.value = error instanceof Error ? error.message : 'Could not load recent executions.'
+    executionError.value = error instanceof Error
+      ? error.message
+      : 'Your AWS profile can view the state machine definition, but not execution history. Add states:ListExecutions and states:GetExecutionHistory to use debugging overlays.'
   } finally {
     executionLoading.value = false
   }

@@ -53,6 +53,28 @@ export interface AslGraph {
   transitions?: AslTransition[]
   resources?: Array<{ arn: string; kind: string; integration?: string; pattern?: string; node_id?: string | null }>
   warnings?: AslWarning[]
-  recent_executions?: Array<{ status?: string; start?: string; duration_ms?: number | null; failed_state?: string | null }>
+  recent_executions?: Array<{
+    execution_arn?: string
+    name?: string
+    status?: string
+    start?: string
+    stop?: string | null
+    duration_ms?: number | null
+    failed_state?: string | null
+  }>
+  selected_execution?: {
+    execution_arn?: string
+    status?: string
+    states?: Record<string, AslExecutionStateOverlay>
+  } | null
   error?: string
+}
+
+export interface AslExecutionStateOverlay {
+  status: 'running' | 'succeeded' | 'failed' | 'timed_out' | 'aborted' | string
+  entered_at?: string
+  exited_at?: string
+  duration_ms?: number | null
+  error?: string | null
+  cause?: string | null
 }

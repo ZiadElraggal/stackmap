@@ -101,7 +101,13 @@ Implemented on `bug-fixes-v2` for the 0.4.0 release.
 - Terraform, CloudFormation/SAM, and live AWS parsing now persist `asl_graph` on state-machine nodes when definitions are available.
 - Step Functions Task resources now emit kind-labeled edges such as `invokes`, `publishes`, `writes`, `queries`, `sends`, `emits`, and `starts`.
 - Live AWS Step Functions scanning now uses ASL parsing instead of raw ARN regex extraction for Task edges.
-- Added on-demand recent execution summaries from the State Machine panel. No scan flag is needed; the viewer calls `states:ListExecutions` only when the user clicks **Load recent executions**.
+- Added a dedicated main-canvas Step Functions workflow graph mode opened from **Open workflow graph** in the state-machine detail panel.
+- Workflow graph mode renders ASL states as normal StackMap graph nodes with labeled `next`, `choice`, `default`, `catch`, and retry/error paths.
+- Warning overlays now appear directly on affected ASL states.
+- Added **Show target resources** for mirrored Task targets, with click-through back to the real architecture resource.
+- Added on-demand recent execution summaries from the workflow graph. No scan flag is needed; the viewer calls `states:ListExecutions` only when the user clicks **Load recent executions**.
+- Added selected-execution debugging via `/api/sfn-execution-history`, calling `states:GetExecutionHistory` for one selected execution only and overlaying per-state status on the workflow graph.
+- Added `stackmap aws-policy --addon stepfunctions` for optional `states:ListExecutions` and `states:GetExecutionHistory` permissions without expanding the default scan policy.
 - Added typed frontend ASL contract and store getter for state-machine graphs.
 - Added state-machine detail rendering:
   - all major ASL state types

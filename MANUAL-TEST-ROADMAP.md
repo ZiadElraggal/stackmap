@@ -5,7 +5,6 @@ Use this when you want to visually verify the 0.3.1 roadmap work in the local br
 Assume commands run from the repo root:
 
 ```bash
-cd /Users/ziadelraggal/Documents/GitHub/stackmap
 ```
 
 If port `3000` is busy, change `--port` to another value and open that URL.

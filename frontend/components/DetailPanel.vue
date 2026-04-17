@@ -128,6 +128,49 @@
         </div>
       </div>
 
+      <div v-if="isWorkflowState" class="border-b border-cyan-500/20 bg-cyan-500/[0.025] p-4">
+        <h3 class="mb-2 text-xs uppercase tracking-wider text-cyan-300/80">Workflow State</h3>
+        <div class="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <div class="text-xs font-semibold text-white">{{ workflowState?.type || 'State' }}</div>
+              <div class="mt-1 text-[11px] font-mono text-gray-500">{{ workflowState?.qualified_name || workflowState?.name }}</div>
+            </div>
+            <span
+              v-if="workflowExecutionStatus"
+              class="rounded px-2 py-0.5 text-[9px] font-mono uppercase"
+              :class="workflowExecutionStatusClass"
+            >{{ workflowExecutionStatus }}</span>
+          </div>
+          <div v-if="workflowState?.comment" class="mt-2 text-xs leading-relaxed text-gray-400">{{ workflowState.comment }}</div>
+          <div class="mt-3 grid grid-cols-2 gap-2 text-[11px] font-mono">
+            <div v-if="workflowState?.next" class="rounded-md border border-white/8 bg-black/20 px-2 py-1.5 text-gray-400">next <span class="text-white">{{ workflowState.next }}</span></div>
+            <div v-if="workflowState?.end" class="rounded-md border border-white/8 bg-black/20 px-2 py-1.5 text-gray-400">terminal <span class="text-white">yes</span></div>
+            <div v-if="workflowState?.integration" class="rounded-md border border-white/8 bg-black/20 px-2 py-1.5 text-gray-400">integration <span class="text-white">{{ workflowState.integration }}</span></div>
+            <div v-if="workflowOverlay?.duration_ms != null" class="rounded-md border border-white/8 bg-black/20 px-2 py-1.5 text-gray-400">duration <span class="text-white">{{ workflowOverlay.duration_ms }}ms</span></div>
+          </div>
+          <div v-if="workflowState?.resource_arn" class="mt-3 rounded-md border border-white/8 bg-black/20 px-2 py-1.5 text-[10px] font-mono text-gray-400 break-all">
+            target {{ workflowState.resource_arn }}
+          </div>
+          <div v-if="workflowOverlay?.error || workflowOverlay?.cause" class="mt-3 rounded-md border border-red-400/20 bg-red-500/[0.06] px-2 py-1.5 text-[11px] text-red-100">
+            <div v-if="workflowOverlay.error" class="font-mono">{{ workflowOverlay.error }}</div>
+            <div v-if="workflowOverlay.cause" class="mt-1 leading-relaxed text-red-100/75">{{ workflowOverlay.cause }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="isWorkflowTarget" class="border-b border-emerald-500/20 bg-emerald-500/[0.025] p-4">
+        <h3 class="mb-2 text-xs uppercase tracking-wider text-emerald-300/80">Mirrored Target</h3>
+        <p class="text-xs leading-relaxed text-gray-400">This is the real infrastructure resource referenced by a Task state. Jump back to the architecture graph to inspect its normal relationships.</p>
+        <button
+          v-if="workflowTargetRealId"
+          class="mt-3 rounded-md border border-emerald-400/20 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.16em] text-emerald-200 transition hover:border-emerald-300/35 hover:bg-emerald-500/15"
+          @click="store.jumpFromMirroredTarget(workflowTargetRealId)"
+        >
+          Jump to architecture node
+        </button>
+      </div>
+
       <div class="p-4 border-b border-white/10 space-y-3">
         <div v-if="store.editMode && node" class="rounded-xl border border-white/[0.08] bg-white/[0.02]">
           <button class="section-toggle" @click="toggleSection('nodeEditor')">
@@ -346,6 +389,26 @@
           </button>
           <Transition name="expand">
             <div v-if="sectionOpen.stateMachine" class="section-body">
+              <div class="mb-3 rounded-lg border border-cyan-400/15 bg-cyan-500/[0.06] px-3 py-3">
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <div class="text-[10px] font-mono uppercase tracking-wider text-cyan-200/80">Workflow graph</div>
+                    <div class="mt-1 text-xs leading-relaxed text-gray-300">
+                      {{ stateMachineDefinitionStatus }}
+                    </div>
+                  </div>
+                  <button
+                    class="rounded-md border border-cyan-400/20 bg-cyan-500/10 px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.16em] text-cyan-200 transition hover:border-cyan-300/35 hover:bg-cyan-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="!stateMachineStateCount"
+                    @click="openWorkflowGraph"
+                  >
+                    Open workflow graph
+                  </button>
+                </div>
+                <div class="mt-2 text-[10px] font-mono leading-relaxed text-amber-100/75">
+                  Workflow structure is available from the scan. Recent executions require states:ListExecutions; per-step debugging requires states:GetExecutionHistory.
+                </div>
+              </div>
               <div class="mb-3 flex justify-end">
                 <button
                   class="rounded-md border border-cyan-400/20 bg-cyan-500/10 px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.16em] text-cyan-200 transition hover:border-cyan-300/35 hover:bg-cyan-500/15"
@@ -958,6 +1021,26 @@ const isStateMachine = computed(() => {
     || rt === 'AWS::StepFunctions::StateMachine'
     || rt === 'AWS::Serverless::StateMachine'
 })
+const isWorkflowState = computed(() => node.value?.metadata?.view_kind === 'sfn_state')
+const isWorkflowTarget = computed(() => node.value?.metadata?.view_kind === 'sfn_target')
+const workflowState = computed(() => node.value?.properties?.asl_state || null)
+const workflowOverlay = computed(() => node.value?.properties?.execution_overlay || null)
+const workflowExecutionStatus = computed(() => String(workflowOverlay.value?.status || node.value?.metadata?.execution_status || ''))
+const workflowExecutionStatusClass = computed(() => {
+  switch (workflowExecutionStatus.value.toLowerCase()) {
+    case 'succeeded':
+      return 'bg-emerald-500/15 text-emerald-200'
+    case 'failed':
+    case 'timed_out':
+    case 'aborted':
+      return 'bg-red-500/15 text-red-200'
+    case 'running':
+      return 'bg-amber-500/15 text-amber-200'
+    default:
+      return 'bg-cyan-500/15 text-cyan-200'
+  }
+})
+const workflowTargetRealId = computed(() => String(node.value?.metadata?.mirrored_from_node_id || node.value?.properties?.mirrored_from_node_id || ''))
 const stateMachineStateCount = computed(() => {
   const asl = node.value?.properties?.asl_graph as { states?: unknown[] } | undefined
   return Array.isArray(asl?.states) ? asl!.states!.length : 0
@@ -965,6 +1048,13 @@ const stateMachineStateCount = computed(() => {
 const stateMachineWarningCount = computed(() => {
   const asl = node.value?.properties?.asl_graph as { warnings?: unknown[] } | undefined
   return Array.isArray(asl?.warnings) ? asl!.warnings!.length : 0
+})
+const stateMachineDefinitionStatus = computed(() => {
+  if (!stateMachineStateCount.value) return 'No parsed ASL states are available for this state machine.'
+  const warningText = stateMachineWarningCount.value
+    ? `${stateMachineWarningCount.value} warning${stateMachineWarningCount.value === 1 ? '' : 's'}`
+    : 'no parser warnings'
+  return `${stateMachineStateCount.value} states parsed with ${warningText}.`
 })
 const edgeEvidence = computed(() => edge.value?.metadata?.evidence || '')
 const edgeInferenceRule = computed(() => String(edge.value?.metadata?.inference_rule || '').replace(/_/g, ' '))
@@ -1018,6 +1108,11 @@ const iconAsset = computed(() => node.value ? getNodeIconAsset(node.value) : get
 const iconPath = computed(() => node.value ? getNodeIconPath(node.value) : getResourceIconPath('user_defined', 'other'))
 const layerDefinitions = computed(() => buildLayerDefinitions(store.layoutLayers, store.customLayers))
 const userNodeTemplates = USER_NODE_TEMPLATES
+
+function openWorkflowGraph() {
+  if (!node.value) return
+  store.openStateMachineGraph(node.value.id)
+}
 
 const edges = computed(() => (node.value ? store.nodeEdges(node.value.id) : []))
 const outgoing = computed(() => edges.value.filter(e => e.source === node.value?.id))

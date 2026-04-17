@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -5,7 +6,7 @@ import pytest
 pytest.importorskip("typer")
 typer_testing = pytest.importorskip("typer.testing")
 CliRunner = typer_testing.CliRunner
-from stackmap.cli.main import app  # noqa: E402
+from stackmap.cli.main import _normalize_sfn_execution_history, _summarize_sfn_executions, app  # noqa: E402
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 runner = CliRunner()
@@ -586,6 +587,45 @@ def test_aws_policy_prints_json() -> None:
     assert result.exit_code == 0
     assert '"Version": "2012-10-17"' in result.output
     assert "ec2:Describe*" in result.output
+
+
+def test_aws_policy_prints_stepfunctions_addon_json() -> None:
+    result = runner.invoke(app, ["aws-policy", "--addon", "stepfunctions"])
+
+    assert result.exit_code == 0
+    assert "states:ListExecutions" in result.output
+    assert "states:GetExecutionHistory" in result.output
+
+
+def test_summarize_sfn_executions_includes_selectable_arn() -> None:
+    summaries = _summarize_sfn_executions([
+        {
+            "executionArn": "arn:aws:states:us-east-1:123:execution:Machine:run-1",
+            "name": "run-1",
+            "status": "SUCCEEDED",
+            "startDate": datetime(2026, 1, 1, tzinfo=UTC),
+            "stopDate": datetime(2026, 1, 1, 0, 0, 2, tzinfo=UTC),
+        }
+    ])
+
+    assert summaries[0]["execution_arn"].endswith(":run-1")
+    assert summaries[0]["name"] == "run-1"
+    assert summaries[0]["duration_ms"] == 2000
+
+
+def test_normalize_sfn_execution_history_overlays_state_status() -> None:
+    events = [
+        {"id": 1, "type": "ExecutionStarted", "timestamp": datetime(2026, 1, 1, tzinfo=UTC), "executionStartedEventDetails": {}},
+        {"id": 2, "type": "TaskStateEntered", "timestamp": datetime(2026, 1, 1, 0, 0, 1, tzinfo=UTC), "stateEnteredEventDetails": {"name": "CallLambda"}},
+        {"id": 3, "type": "TaskFailed", "timestamp": datetime(2026, 1, 1, 0, 0, 2, tzinfo=UTC), "taskFailedEventDetails": {"error": "Lambda.ServiceException", "cause": "boom"}},
+        {"id": 4, "type": "ExecutionFailed", "timestamp": datetime(2026, 1, 1, 0, 0, 3, tzinfo=UTC), "executionFailedEventDetails": {"error": "States.TaskFailed", "cause": "failed"}},
+    ]
+
+    normalized = _normalize_sfn_execution_history(events)
+
+    assert normalized["execution"]["status"] == "FAILED"
+    assert normalized["states"]["CallLambda"]["status"] == "failed"
+    assert normalized["states"]["CallLambda"]["error"] == "States.TaskFailed"
 
 
 def test_scan_aws_dry_run_prints_planned_calls(monkeypatch) -> None:

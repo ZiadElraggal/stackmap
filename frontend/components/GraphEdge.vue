@@ -257,12 +257,13 @@ const labelPosition = computed(() => {
 
 const edgeLabelText = computed(() => {
   if (isUserLink.value && props.edge.label) return props.edge.label
+  if (props.edge.metadata?.source === 'sfn_workflow' && props.edge.label) return props.edge.label
   return MANUAL_EDGE_TYPES.find(type => type.id === props.edge.edge_type)?.label || props.edge.edge_type
 })
 const labelWidth = computed(() => Math.max(36, edgeLabelText.value.length * 5.4 + 8))
 const showLabel = computed(() => {
   if (props.zoomScale <= 0.6) return false
-  return ['triggers', 'reads_from', 'writes_to', 'cross_account_reference', 'user_link', 'manual_generic', 'manual_request', 'manual_event', 'manual_data', 'manual_auth'].includes(props.edge.edge_type)
+  return ['triggers', 'reads_from', 'writes_to', 'routes_to', 'cross_account_reference', 'user_link', 'manual_generic', 'manual_request', 'manual_event', 'manual_data', 'manual_auth'].includes(props.edge.edge_type)
 })
 
 const midpoint = computed(() => {

@@ -322,12 +322,123 @@ def _summarize_sfn_executions(executions: list[dict[str, Any]]) -> list[dict[str
             except Exception:
                 duration_ms = None
         summaries.append({
+            "execution_arn": item.get("executionArn"),
+            "name": item.get("name"),
             "status": item.get("status"),
             "start": start.isoformat() if hasattr(start, "isoformat") else str(start) if start else None,
+            "stop": stop.isoformat() if hasattr(stop, "isoformat") else str(stop) if stop else None,
             "duration_ms": duration_ms,
             "failed_state": None,
         })
     return summaries
+
+
+def _event_time(value: Any) -> str | None:
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value) if value else None
+
+
+def _duration_ms(start: Any, stop: Any) -> int | None:
+    if not start or not stop:
+        return None
+    try:
+        return int((stop - start).total_seconds() * 1000)
+    except Exception:
+        return None
+
+
+def _normalize_sfn_execution_history(events: list[dict[str, Any]]) -> dict[str, Any]:
+    states: dict[str, dict[str, Any]] = {}
+    last_state_name: str | None = None
+    execution: dict[str, Any] = {"status": "UNKNOWN"}
+    normalized_events: list[dict[str, Any]] = []
+
+    def ensure_state(name: str) -> dict[str, Any]:
+        if name not in states:
+            states[name] = {
+                "status": "running",
+                "entered_at": None,
+                "exited_at": None,
+                "duration_ms": None,
+                "error": None,
+                "cause": None,
+            }
+        return states[name]
+
+    for event in sorted(events, key=lambda item: int(item.get("id") or 0)):
+        event_type = str(event.get("type") or "")
+        timestamp = event.get("timestamp")
+        detail: dict[str, Any] = {}
+        for key, value in event.items():
+            if key.endswith("EventDetails") and isinstance(value, dict):
+                detail = value
+                break
+
+        state_name = detail.get("name")
+        if event_type.endswith("StateEntered") and state_name:
+            last_state_name = str(state_name)
+            state = ensure_state(last_state_name)
+            state["status"] = "running"
+            state["entered_at"] = _event_time(timestamp)
+            normalized_events.append({"id": event.get("id"), "type": event_type, "state": last_state_name, "timestamp": _event_time(timestamp)})
+            continue
+
+        if event_type.endswith("StateExited") and state_name:
+            last_state_name = str(state_name)
+            state = ensure_state(last_state_name)
+            state["status"] = "succeeded"
+            state["exited_at"] = _event_time(timestamp)
+            entered = state.get("entered_at")
+            if entered and hasattr(timestamp, "isoformat"):
+                try:
+                    start_dt = datetime.fromisoformat(str(entered).replace("Z", "+00:00"))
+                    state["duration_ms"] = _duration_ms(start_dt, timestamp)
+                except Exception:
+                    state["duration_ms"] = None
+            normalized_events.append({"id": event.get("id"), "type": event_type, "state": last_state_name, "timestamp": _event_time(timestamp)})
+            continue
+
+        if event_type in {"TaskFailed", "TaskTimedOut", "LambdaFunctionFailed", "LambdaFunctionTimedOut", "ActivityFailed", "ActivityTimedOut"}:
+            if last_state_name:
+                state = ensure_state(last_state_name)
+                state["status"] = "timed_out" if "TimedOut" in event_type else "failed"
+                state["exited_at"] = _event_time(timestamp)
+                state["error"] = detail.get("error")
+                state["cause"] = detail.get("cause")
+            normalized_events.append({"id": event.get("id"), "type": event_type, "state": last_state_name, "timestamp": _event_time(timestamp), "error": detail.get("error")})
+            continue
+
+        if event_type in {"ExecutionStarted", "ExecutionSucceeded", "ExecutionFailed", "ExecutionTimedOut", "ExecutionAborted"}:
+            if event_type == "ExecutionStarted":
+                execution["status"] = "RUNNING"
+                execution["start"] = _event_time(timestamp)
+            elif event_type == "ExecutionSucceeded":
+                execution["status"] = "SUCCEEDED"
+                execution["stop"] = _event_time(timestamp)
+            elif event_type == "ExecutionTimedOut":
+                execution["status"] = "TIMED_OUT"
+                execution["stop"] = _event_time(timestamp)
+            elif event_type == "ExecutionAborted":
+                execution["status"] = "ABORTED"
+                execution["stop"] = _event_time(timestamp)
+            else:
+                execution["status"] = "FAILED"
+                execution["stop"] = _event_time(timestamp)
+                execution["error"] = detail.get("error")
+                execution["cause"] = detail.get("cause")
+                if last_state_name:
+                    state = ensure_state(last_state_name)
+                    state["status"] = "failed"
+                    state["error"] = detail.get("error")
+                    state["cause"] = detail.get("cause")
+            normalized_events.append({"id": event.get("id"), "type": event_type, "timestamp": _event_time(timestamp)})
+
+    return {
+        "execution": execution,
+        "states": states,
+        "events": normalized_events[-200:],
+    }
 
 
 def _apply_cost_anomalies_with_thresholds(
@@ -600,6 +711,9 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
         if path == "/api/sfn-executions":
             self._handle_sfn_executions_post()
             return
+        if path == "/api/sfn-execution-history":
+            self._handle_sfn_execution_history_post()
+            return
         self.send_response(404)
         self.end_headers()
 
@@ -702,6 +816,96 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
             "region": region,
             "executions": summaries,
             "version": version,
+        })
+
+    def _handle_sfn_execution_history_post(self) -> None:
+        body = self._read_json_body()
+        node_id = str(body.get("node_id") or "").strip()
+        execution_arn = str(body.get("execution_arn") or "").strip()
+        if not node_id:
+            self._send_json({"error": "node_id is required."}, status=400)
+            return
+        if not execution_arn:
+            self._send_json({"error": "execution_arn is required."}, status=400)
+            return
+
+        aws_session, active_profile, _, _ = self._aws_features.snapshot()
+        if aws_session is None:
+            self._send_json(
+                {
+                    "error": "AWS session is unavailable. Serve with --aws-profile, or launch from scan-aws --profile ... --serve.",
+                },
+                status=403,
+            )
+            return
+
+        ir = self._get_ir()
+        node = next((candidate for candidate in ir.nodes if candidate.id == node_id), None)
+        if node is None:
+            self._send_json({"error": f"Node not found: {node_id}"}, status=404)
+            return
+
+        arn = str(node.properties.get("arn") or node.properties.get("state_machine_arn") or "").strip()
+        if not arn:
+            self._send_json({"error": "Selected state machine has no ARN to query."}, status=400)
+            return
+        if ":stateMachine:" not in arn:
+            self._send_json({"error": "Selected node is not a Step Functions state machine."}, status=400)
+            return
+
+        region = (
+            node.metadata.get("region")
+            or node.position_hint.get("region")
+            or node.properties.get("region")
+            or _region_from_arn(execution_arn)
+            or _region_from_arn(arn)
+            or getattr(aws_session, "region_name", None)
+            or "us-east-1"
+        )
+        try:
+            client = aws_session.client("stepfunctions", region_name=region)
+            events: list[dict[str, Any]] = []
+            paginator = client.get_paginator("get_execution_history")
+            for page in paginator.paginate(
+                executionArn=execution_arn,
+                reverseOrder=False,
+                PaginationConfig={"MaxItems": 1000},
+            ):
+                page_events = page.get("events", [])
+                if isinstance(page_events, list):
+                    events.extend(page_events)
+        except Exception as exc:
+            self._send_json(
+                {
+                    "error": (
+                        "Your AWS profile can view the state machine definition, but not execution history. "
+                        "Add states:ListExecutions and states:GetExecutionHistory to use debugging overlays."
+                    ),
+                    "detail": f"{type(exc).__name__}: {exc}",
+                },
+                status=502,
+            )
+            return
+
+        normalized = _normalize_sfn_execution_history(events)
+        graph = node.properties.get("asl_graph")
+        if isinstance(graph, dict):
+            graph["selected_execution"] = {
+                "execution_arn": execution_arn,
+                "status": normalized.get("execution", {}).get("status"),
+                "states": normalized.get("states", {}),
+            }
+            version = self._state.update(ir)
+        else:
+            version, _ = self._state.snapshot()
+
+        self._send_json({
+            "node_id": node_id,
+            "execution_arn": execution_arn,
+            "active_profile": active_profile,
+            "region": region,
+            "version": version,
+            **normalized,
         })
 
     def _handle_timeline(self, query: str) -> None:
@@ -1290,18 +1494,18 @@ def aws_policy(
     addon: str | None = typer.Option(
         None,
         "--addon",
-        help="Print a standalone optional policy instead of the base scan policy. Supported: logs, billing.",
+        help="Print a standalone optional policy instead of the base scan policy. Supported: logs, billing, stepfunctions.",
     ),
     extras: str = typer.Option(
         "",
-        help="Deprecated: merge optional permissions into the base policy. Prefer --addon logs or --addon billing.",
+        help="Deprecated: merge optional permissions into the base policy. Prefer --addon logs, --addon billing, or --addon stepfunctions.",
     ),
 ) -> None:
     """Print the least-privilege AWS read-only policy StackMap expects."""
     if addon:
         normalized_addon = addon.lower()
-        if normalized_addon not in {"billing", "logs"}:
-            console.print("[red]Error:[/red] --addon must be 'billing' or 'logs'.")
+        if normalized_addon not in {"billing", "logs", "stepfunctions"}:
+            console.print("[red]Error:[/red] --addon must be 'billing', 'logs', or 'stepfunctions'.")
             raise typer.Exit(1)
         console.print_json(json.dumps(build_addon_policy_document(normalized_addon)))
         return
@@ -1311,9 +1515,9 @@ def aws_policy(
         console.print("[red]Error:[/red] --service-set must be 'core' or 'broad'.")
         raise typer.Exit(1)
     extra_list = [e.strip() for e in extras.split(",") if e.strip()] if extras else []
-    invalid = [e for e in extra_list if e not in {"billing", "logs"}]
+    invalid = [e for e in extra_list if e not in {"billing", "logs", "stepfunctions"}]
     if invalid:
-        console.print(f"[red]Error:[/red] Unknown extras: {', '.join(invalid)}. Supported: billing, logs")
+        console.print(f"[red]Error:[/red] Unknown extras: {', '.join(invalid)}. Supported: billing, logs, stepfunctions")
         raise typer.Exit(1)
     if extra_list:
         console.print(f"[dim]Including optional permissions: {', '.join(extra_list)}[/dim]")

@@ -205,6 +205,36 @@
       class="severity-halo"
     />
     <rect
+      v-if="workflowWarningCount > 0"
+      :width="nodeWidth + 22"
+      :height="nodeHeight + 22"
+      :x="-(nodeWidth + 22) / 2"
+      :y="-(nodeHeight + 22) / 2"
+      :rx="20"
+      :ry="20"
+      fill="none"
+      stroke="#f59e0b"
+      stroke-width="1.8"
+      stroke-dasharray="5 4"
+      opacity="0.58"
+      class="severity-halo"
+    />
+    <rect
+      v-if="workflowStatus"
+      :width="nodeWidth + 18"
+      :height="nodeHeight + 18"
+      :x="-(nodeWidth + 18) / 2"
+      :y="-(nodeHeight + 18) / 2"
+      :rx="19"
+      :ry="19"
+      fill="none"
+      :stroke="workflowStatusColor"
+      stroke-width="1.8"
+      :stroke-dasharray="workflowStatus === 'running' ? '6 4' : 'none'"
+      opacity="0.48"
+      class="workflow-status-halo"
+    />
+    <rect
       :width="nodeWidth"
       :height="nodeHeight"
       :x="-nodeWidth / 2"
@@ -571,6 +601,52 @@
       >!</text>
     </g>
 
+    <!-- Workflow warning indicator -->
+    <g v-if="workflowWarningCount > 0">
+      <circle
+        :cx="nodeWidth / 2 + 2"
+        :cy="nodeHeight / 2 + 2"
+        r="5"
+        fill="#f59e0b"
+        stroke="#0d0d14"
+        stroke-width="1.5"
+      />
+      <text
+        :x="nodeWidth / 2 + 2"
+        :y="nodeHeight / 2 + 3"
+        text-anchor="middle"
+        dominant-baseline="central"
+        fill="#111827"
+        font-size="7"
+        font-weight="800"
+      >!</text>
+    </g>
+
+    <!-- Step Functions execution status badge -->
+    <g v-if="workflowStatus">
+      <rect
+        :x="-nodeWidth / 2 - 2"
+        :y="-nodeHeight / 2 - 4"
+        :width="workflowStatusLabel.length * 6 + 12"
+        height="14"
+        rx="3"
+        ry="3"
+        :fill="workflowStatusColor + '25'"
+        :stroke="workflowStatusColor + '66'"
+        stroke-width="1"
+      />
+      <text
+        :x="-nodeWidth / 2 + (workflowStatusLabel.length * 6 + 12) / 2 - 2"
+        :y="-nodeHeight / 2 + 4"
+        text-anchor="middle"
+        dominant-baseline="central"
+        :fill="workflowStatusColor"
+        font-size="8"
+        font-weight="700"
+        font-family="'JetBrains Mono', monospace"
+      >{{ workflowStatusLabel }}</text>
+    </g>
+
     <title>{{ node.name }} ({{ node.resource_type }})</title>
   </g>
 </template>
@@ -662,6 +738,23 @@ const findingColor = computed(() => {
 const costAnomaly = computed(() => {
   const estimate = store.costData?.by_node?.[props.node.id] as any
   return estimate?.anomaly || estimate?.breakdown?.anomaly || null
+})
+const workflowWarningCount = computed(() => Number(props.node.properties?.warning_count || 0))
+const workflowStatus = computed(() => String(props.node.metadata?.execution_status || props.node.properties?.execution_overlay?.status || '').toLowerCase())
+const workflowStatusLabel = computed(() => workflowStatus.value.replace(/_/g, ' ').toUpperCase())
+const workflowStatusColor = computed(() => {
+  switch (workflowStatus.value) {
+    case 'succeeded':
+      return '#22c55e'
+    case 'failed':
+    case 'timed_out':
+    case 'aborted':
+      return '#ef4444'
+    case 'running':
+      return '#f59e0b'
+    default:
+      return '#38bdf8'
+  }
 })
 
 const diffBorderColor = computed(() => {
