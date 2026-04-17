@@ -41,6 +41,65 @@ function getLayoutParams(nodeCount: number) {
 }
 
 export function useLayout() {
+  function computeWorkflowLayout(
+    nodes: StackMapNode[],
+    edges: StackMapEdge[]
+  ): Record<string, NodePosition> {
+    if (nodes.length === 0) return {}
+
+    const g = new dagre.graphlib.Graph()
+    g.setGraph({
+      rankdir: 'TB',
+      nodesep: nodes.length > 40 ? 80 : 64,
+      ranksep: nodes.length > 40 ? 112 : 92,
+      edgesep: 28,
+      marginx: 60,
+      marginy: 60,
+      ranker: 'network-simplex',
+    })
+    g.setDefaultEdgeLabel(() => ({}))
+
+    const nodeIdSet = new Set(nodes.map(node => node.id))
+    for (const node of nodes) {
+      g.setNode(node.id, {
+        width: getNodeWidth(node),
+        height: getNodeHeight(node),
+      })
+    }
+
+    for (const edge of edges) {
+      if (!nodeIdSet.has(edge.source) || !nodeIdSet.has(edge.target)) continue
+      g.setEdge(edge.source, edge.target, {
+        weight: edge.edge_type === 'contains' ? 1 : 3,
+        minlen: 1,
+      })
+    }
+
+    try {
+      dagre.layout(g)
+      const positions: Record<string, NodePosition> = {}
+      for (const node of nodes) {
+        const dagreNode = g.node(node.id)
+        if (dagreNode && Number.isFinite(dagreNode.x) && Number.isFinite(dagreNode.y)) {
+          positions[node.id] = { x: dagreNode.x, y: dagreNode.y }
+        }
+      }
+      if (Object.keys(positions).length === nodes.length) return positions
+    } catch {
+      // Fall back to ordered rows below.
+    }
+
+    const positions: Record<string, NodePosition> = {}
+    const ordered = [...nodes].sort((a, b) => (a.position_hint?.manual_order || 0) - (b.position_hint?.manual_order || 0))
+    ordered.forEach((node, index) => {
+      positions[node.id] = {
+        x: (index % 6) * 230,
+        y: Math.floor(index / 6) * 145,
+      }
+    })
+    return positions
+  }
+
   /**
    * Hybrid layout: dagre computes optimal X positions (minimizing edge crossings),
    * then we override Y positions with our fixed tier system.
@@ -320,5 +379,5 @@ export function useLayout() {
     })
   }
 
-  return { computeLayout, computeGroupBounds, sortByTier }
+  return { computeLayout, computeWorkflowLayout, computeGroupBounds, sortByTier }
 }

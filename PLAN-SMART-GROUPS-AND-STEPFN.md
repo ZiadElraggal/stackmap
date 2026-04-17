@@ -347,6 +347,9 @@ New component `frontend/components/StateMachineViewer.vue`:
 - [x] `StateMachineViewer.vue` (new) renders all state types + warnings + raw ASL toggle.
 - [x] `DetailPanel.vue` conditional section + full-screen modal button.
 - [x] Main canvas workflow graph mode opens from **Open workflow graph** and renders ASL states/paths with StackMap nodes and edges.
+- [x] Workflow mode no longer uses architecture layers; it uses a dedicated Step Functions flow layout.
+- [x] Step state nodes use dedicated icons for Pass, Choice, Task, Map, Parallel, Wait, Succeed, and Fail.
+- [x] Older stacked-card Step Functions viewer removed from the active UI.
 - [x] **Show target resources** toggle renders mirrored Task targets and jumps back to the real architecture node.
 - [x] `/api/sfn-execution-history` loads one selected execution and overlays per-state status.
 - [x] Permission warnings document `states:ListExecutions` and `states:GetExecutionHistory`; `stackmap aws-policy --addon stepfunctions` emits the optional policy.

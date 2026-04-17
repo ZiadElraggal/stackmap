@@ -336,25 +336,30 @@ function workflowTargetNodeId(machineNodeId: string, targetNodeId: string): stri
 }
 
 function stateTier(state: AslState): string {
-  if (state.type === 'Choice') return 'api'
-  if (state.type === 'Succeed' || state.type === 'Fail') return 'data'
-  if (state.type === 'Task') return 'serverless'
-  return 'compute'
+  if (state.path?.length) return 'workflow-iterator'
+  return 'workflow'
 }
 
 function stateCategory(state: AslState): string {
+  if (state.type === 'Pass') return 'other'
+  if (state.type === 'Choice') return 'integration'
+  if (state.type === 'Map' || state.type === 'Parallel') return 'queue'
+  if (state.type === 'Wait') return 'monitoring'
+  if (state.type === 'Succeed') return 'monitoring'
+  if (state.type === 'Fail') return 'security'
   if (state.type === 'Task') {
     if (state.resource_kind === 'dynamodb') return 'database'
     if (state.resource_kind === 'sqs') return 'queue'
     if (state.resource_kind === 'sns' || state.resource_kind === 'eventbridge') return 'integration'
     return 'serverless'
   }
-  if (state.type === 'Fail') return 'security'
-  if (state.type === 'Succeed') return 'monitoring'
-  return 'integration'
+  return 'other'
 }
 
 function stateResourceType(state: AslState): string {
+  if (state.type === 'Task' && state.resource_kind) {
+    return `aws_sfn_task_${state.resource_kind}_state`
+  }
   return `aws_sfn_${state.type.toLowerCase()}_state`
 }
 
@@ -458,6 +463,35 @@ function buildWorkflowGraph(
         asl_transition: transition,
       },
     }))
+
+  for (const state of asl.states) {
+    const nestedStarts: string[] = []
+    if (state.iterator?.states?.length) {
+      const start = state.iterator.start_at
+      const qualifiedStart = state.iterator.states.find(candidate => candidate.endsWith(`::${start}`)) || state.iterator.states[0]
+      if (qualifiedStart) nestedStarts.push(qualifiedStart)
+    }
+    for (const branch of state.branches || []) {
+      const qualifiedStart = branch.states.find(candidate => candidate.endsWith(`::${branch.start_at}`)) || branch.states[0]
+      if (qualifiedStart) nestedStarts.push(qualifiedStart)
+    }
+    for (const nestedStart of nestedStarts) {
+      if (!stateNames.has(nestedStart)) continue
+      edges.push({
+        id: `sfn:${encodeWorkflowPart(machine.id)}:contains:${encodeWorkflowPart(state.qualified_name)}:${encodeWorkflowPart(nestedStart)}`,
+        source: workflowStateNodeId(machine.id, state.qualified_name),
+        target: workflowStateNodeId(machine.id, nestedStart),
+        edge_type: 'contains',
+        label: state.type === 'Map' ? 'iterator' : 'branch',
+        metadata: {
+          source: 'sfn_workflow',
+          confidence: 'high',
+          inference_rule: `asl_${state.type.toLowerCase()}_child`,
+          evidence: state.type === 'Map' ? 'iterator start' : 'branch start',
+        },
+      })
+    }
+  }
 
   if (showTargets) {
     const addedTargets = new Set<string>()

@@ -409,15 +409,9 @@
                   Workflow structure is available from the scan. Recent executions require states:ListExecutions; per-step debugging requires states:GetExecutionHistory.
                 </div>
               </div>
-              <div class="mb-3 flex justify-end">
-                <button
-                  class="rounded-md border border-cyan-400/20 bg-cyan-500/10 px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.16em] text-cyan-200 transition hover:border-cyan-300/35 hover:bg-cyan-500/15"
-                  @click="showStateMachineModal = true"
-                >
-                  Full screen
-                </button>
+              <div class="rounded-lg border border-white/[0.06] bg-black/20 px-3 py-3 text-xs leading-relaxed text-gray-400">
+                The old stacked Step Functions card view has been replaced by the main workflow graph. Open it to inspect branches, iterators, warnings, target resources, and execution overlays in one canvas.
               </div>
-              <StateMachineViewer :node="node" />
             </div>
           </Transition>
         </div>
@@ -950,42 +944,15 @@
     </div>
   </Transition>
 
-  <Teleport to="body">
-    <div
-      v-if="showStateMachineModal && node"
-      class="fixed inset-0 z-[90] bg-[#05070d]/92 p-4 backdrop-blur-md md:p-8"
-      @click.self="showStateMachineModal = false"
-    >
-      <div class="mx-auto flex h-full max-w-6xl flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0c1018] shadow-[0_30px_120px_rgba(0,0,0,0.45)]">
-        <div class="flex items-center justify-between gap-4 border-b border-white/10 px-4 py-3">
-          <div>
-            <div class="text-[10px] font-mono uppercase tracking-[0.18em] text-cyan-300">State Machine</div>
-            <div class="mt-1 text-sm font-semibold text-white">{{ node.name }}</div>
-          </div>
-          <button
-            class="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.16em] text-gray-300 transition hover:bg-white/10 hover:text-white"
-            @click="showStateMachineModal = false"
-          >
-            Close
-          </button>
-        </div>
-        <div class="min-h-0 flex-1 overflow-auto p-4">
-          <StateMachineViewer :node="node" />
-        </div>
-      </div>
-    </div>
-  </Teleport>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useGraphStore } from '~/stores/graph'
 import { CATEGORY_COLORS, MANUAL_EDGE_TYPES, USER_NODE_TEMPLATES, buildLayerDefinitions, getNodeIconAsset, getNodeIconPath, getResourceIconAsset, getResourceIconPath } from '~/composables/useGraph'
-import StateMachineViewer from '~/components/StateMachineViewer.vue'
 
 const store = useGraphStore()
 const showRaw = ref(false)
-const showStateMachineModal = ref(false)
 const newLayerName = ref('')
 const userLinkColors = ['#4ADE80', '#38BDF8', '#C084FC', '#FB923C', '#F87171']
 const sectionOpen = ref<Record<string, boolean>>({

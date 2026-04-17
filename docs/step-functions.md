@@ -26,7 +26,7 @@ When parsing fails, `asl_graph` is still present as an error object such as `{"e
 
 The detail panel renders a State Machine section for `aws_sfn_state_machine`, `AWS::StepFunctions::StateMachine`, and `AWS::Serverless::StateMachine` nodes.
 
-Click **Open workflow graph** to switch the main canvas into a dedicated Step Functions graph mode. The compact card viewer remains available as a summary/fallback, but the graph mode is the primary review surface.
+Click **Open workflow graph** to switch the main canvas into a dedicated Step Functions graph mode. This replaces the older stacked card viewer so state machines have one primary inspection surface.
 
 The workflow graph covers:
 
@@ -34,6 +34,8 @@ The workflow graph covers:
 - Choice branches and defaults as labeled edges
 - Parallel branches, classic Map iterators, and Distributed Map `ItemProcessor`
 - Wait, Pass, Succeed, and Fail states
+- Step Functions-specific node icons for Pass, Choice, Task, Map, Parallel, Wait, Succeed, and Fail
+- a lane-free workflow layout instead of architecture tiers/layers
 - Retry and Catch paths
 - warnings for unreachable states, orphan `Next` targets, missing terminal states, and Tasks without Catch handlers as amber state halos
 - optional mirrored Task targets via **Show target resources**
@@ -87,6 +89,5 @@ If AWS denies execution access, the UI reports: “Your AWS profile can view the
 - Toggle **Show target resources** and confirm resolved Task targets appear as mirrored architecture nodes.
 - Click a mirrored target and confirm the real architecture node is selected.
 - Toggle Raw graph JSON and confirm the parsed graph is visible.
-- Open full screen and confirm the same state-machine view expands without losing state.
 - Serve with an AWS profile without the optional debugger policy, click **Load recent executions**, and confirm the permission warning is clear.
 - Add the optional debugger policy, click **Load recent executions**, choose one execution, click **Overlay selected execution**, and confirm per-state status appears.

@@ -39,7 +39,7 @@
       <rect width="100%" height="100%" fill="#0a0a0f" @click="clearSelection" />
 
       <g ref="zoomGroupRef">
-        <g v-if="store.viewMode !== 'organization'">
+        <g v-if="showArchitectureLayers">
           <rect
             v-for="band in tierBands"
             :key="`tier-band-${band.id}`"
@@ -55,7 +55,7 @@
           />
         </g>
 
-        <g v-if="store.viewMode !== 'organization'">
+        <g v-if="showArchitectureLayers">
           <line
             v-for="divider in tierDividers"
             :key="`tier-divider-${divider.name}`"
@@ -78,7 +78,7 @@
           @click="clearSelection"
         />
 
-        <g v-if="store.viewMode !== 'organization'" v-for="band in tierBands" :key="`tier-${band.id}`">
+        <g v-if="showArchitectureLayers" v-for="band in tierBands" :key="`tier-${band.id}`">
           <rect
             :x="graphBounds.minX - 226"
             :y="band.yStart + 12"
@@ -125,7 +125,7 @@
           >{{ band.name.toUpperCase() }}</text>
         </g>
 
-        <g v-if="store.viewMode !== 'organization'" v-for="(band, idx) in tierBands" :key="`flow-arrow-${band.id}`">
+        <g v-if="showArchitectureLayers" v-for="(band, idx) in tierBands" :key="`flow-arrow-${band.id}`">
           <text
             v-if="idx < tierBands.length - 1"
             :x="graphBounds.minX + graphBounds.width / 2"
@@ -247,7 +247,7 @@
 
     <Transition name="fade">
       <div
-        v-if="store.editMode && store.editSubmode === 'structure' && store.viewMode !== 'organization' && !store.presentationMode"
+        v-if="store.editMode && store.editSubmode === 'structure' && showArchitectureLayers && !store.presentationMode"
         class="absolute z-50 w-56 rounded-2xl border border-white/[0.08] bg-[#12121a]/92 p-3 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,0,0,0.45)]"
         :style="layerRailStyle"
       >
@@ -686,7 +686,7 @@
       <span v-if="store.metadata.terraform_version" class="text-gray-600">TF v{{ store.metadata.terraform_version }}</span>
       <span v-if="store.showCrossAccountEdges && store.metadata.cross_account_edges" class="text-gray-600">{{ store.metadata.cross_account_edges }} cross-account</span>
       <span class="text-gray-600">{{ Math.round(zoomScale * 100) }}%</span>
-      <div class="flex items-center gap-0.5 rounded-md border border-white/[0.06] bg-white/[0.02] px-1 py-0.5">
+      <div v-if="store.viewMode !== 'step_function'" class="flex items-center gap-0.5 rounded-md border border-white/[0.06] bg-white/[0.02] px-1 py-0.5">
         <div
           v-for="lane in architectureStrip"
           :key="`strip-${lane.name}`"
@@ -710,7 +710,7 @@ import { useLayout } from '~/composables/useLayout'
 import { EDGE_COLORS, MANUAL_EDGE_TYPES, buildLayerDefinitions, getNodeHeight } from '~/composables/useGraph'
 
 const store = useGraphStore()
-const { computeLayout, sortByTier } = useLayout()
+const { computeLayout, computeWorkflowLayout, sortByTier } = useLayout()
 
 const svgRef = ref<SVGSVGElement>()
 const zoomGroupRef = ref<SVGGElement>()
@@ -728,6 +728,9 @@ let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null
 let svgSelection: d3.Selection<SVGSVGElement, unknown, null, undefined> | null = null
 
 const orderedVisibleNodes = computed(() => {
+  if (store.viewMode === 'step_function') {
+    return [...store.visibleNodes].sort((a, b) => (a.position_hint?.manual_order || 0) - (b.position_hint?.manual_order || 0))
+  }
   if (store.viewMode === 'organization') {
     return [...store.visibleNodes].sort((a, b) => a.name.localeCompare(b.name))
   }
@@ -739,6 +742,7 @@ const edgeTypesInGraph = computed(() => [...new Set(store.visibleEdges.map(edge 
 const visibleUserLinks = computed(() => store.visibleEdges.filter(edge => edge.edge_type === 'user_link' || edge.id.startsWith('user:')))
 const primaryResourceCount = computed(() => store.viewMode === 'components' ? store.architectureSourceNodes.length : store.visibleNodes.length)
 const primaryConnectionCount = computed(() => store.viewMode === 'components' ? store.architectureSourceEdges.length : store.visibleEdges.length)
+const showArchitectureLayers = computed(() => store.viewMode !== 'organization' && store.viewMode !== 'step_function')
 const selectedWorkflowExecutionArn = ref('')
 const workflowExecutionsLoading = ref(false)
 const workflowHistoryLoading = ref(false)
@@ -1318,7 +1322,9 @@ function activateConnectForSelectedNode() {
 function recomputeLayout() {
   const allNodes = store.visibleNodes
   const allEdges = store.visibleEdges
-  const positions = store.diffMode
+  const positions = store.viewMode === 'step_function'
+    ? computeWorkflowLayout(allNodes, allEdges)
+    : store.diffMode
     ? computeDiffLayout()
     : computeLayout(allNodes, allEdges, store.graphGroups, visibleLayerDefinitions.value.map(layer => layer.id), { mode: store.relayoutMode })
   store.setPositions(positions)

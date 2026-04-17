@@ -263,6 +263,7 @@ const edgeLabelText = computed(() => {
 const labelWidth = computed(() => Math.max(36, edgeLabelText.value.length * 5.4 + 8))
 const showLabel = computed(() => {
   if (props.zoomScale <= 0.6) return false
+  if (props.edge.metadata?.source === 'sfn_workflow' && props.edge.label) return true
   return ['triggers', 'reads_from', 'writes_to', 'routes_to', 'cross_account_reference', 'user_link', 'manual_generic', 'manual_request', 'manual_event', 'manual_data', 'manual_auth'].includes(props.edge.edge_type)
 })
 

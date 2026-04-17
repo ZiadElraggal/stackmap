@@ -102,6 +102,8 @@ Implemented on `bug-fixes-v2` for the 0.4.0 release.
 - Step Functions Task resources now emit kind-labeled edges such as `invokes`, `publishes`, `writes`, `queries`, `sends`, `emits`, and `starts`.
 - Live AWS Step Functions scanning now uses ASL parsing instead of raw ARN regex extraction for Task edges.
 - Added a dedicated main-canvas Step Functions workflow graph mode opened from **Open workflow graph** in the state-machine detail panel.
+- Workflow graph mode now uses a lane-free flow layout, not the architecture layer system.
+- Added Step Functions-specific icons for Pass, Choice, Task, Map, Parallel, Wait, Succeed, and Fail nodes.
 - Workflow graph mode renders ASL states as normal StackMap graph nodes with labeled `next`, `choice`, `default`, `catch`, and retry/error paths.
 - Warning overlays now appear directly on affected ASL states.
 - Added **Show target resources** for mirrored Task targets, with click-through back to the real architecture resource.
@@ -110,13 +112,7 @@ Implemented on `bug-fixes-v2` for the 0.4.0 release.
 - Added `stackmap aws-policy --addon stepfunctions` for optional `states:ListExecutions` and `states:GetExecutionHistory` permissions without expanding the default scan policy.
 - Added typed frontend ASL contract and store getter for state-machine graphs.
 - Added state-machine detail rendering:
-  - all major ASL state types
-  - Choice, Parallel, classic Map, and Distributed Map structure
-  - Retry/Catch details
-  - warning banner and per-state warning markers
-  - raw ASL graph toggle
-  - full-screen modal
-  - resolved Task resource click-through to the main graph
+- Removed the older stacked Step Functions card viewer in favor of the single graph-mode experience.
 - Added docs in `docs/step-functions.md`.
 
 ## Validation
