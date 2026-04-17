@@ -674,7 +674,6 @@ class AWSLiveScanner:
         cache_dir: str | None = None,
         no_cache: bool = False,
         partial_write_path: str | None = None,
-        sfn_executions: bool = False,
         session_factory: Callable[..., boto3.session.Session] | None = None,
     ) -> None:
         self.profile = profile
@@ -691,7 +690,6 @@ class AWSLiveScanner:
         self.try_current_creds = try_current_creds
         self.cache_dir = None if no_cache else Path(cache_dir or "~/.stackmap/cache").expanduser()
         self.partial_write_path = Path(partial_write_path) if partial_write_path else None
-        self.sfn_executions = sfn_executions
         self._session_factory = session_factory or boto3.session.Session
 
     def scan(self) -> StackMapIR:
@@ -2951,8 +2949,6 @@ class AWSLiveScanner:
             role_arn = detail.get("roleArn")
             definition = detail.get("definition", "")
             asl_graph = parse_asl(definition) if definition else {"error": "empty"}
-            if self.sfn_executions and isinstance(asl_graph, dict) and "error" not in asl_graph:
-                asl_graph["recent_executions"] = self._collect_recent_sfn_executions(executor, region, arn)
             node = _build_live_node(
                 account_id=account_id,
                 region=region,
@@ -2986,41 +2982,6 @@ class AWSLiveScanner:
                 )
                 pending.append((node.id, target_arn, label, EdgeType.TRIGGERS))
         return nodes, pending, []
-
-    def _collect_recent_sfn_executions(
-        self,
-        executor: AWSAPIExecutor,
-        region: str,
-        state_machine_arn: str,
-    ) -> list[dict[str, Any]]:
-        response = executor.call_optional(
-            "stepfunctions",
-            "list_executions",
-            region=region,
-            swallow_codes={"AccessDeniedException", "StateMachineDoesNotExist"},
-            stateMachineArn=state_machine_arn,
-            maxResults=25,
-        ) or {}
-        executions = response.get("executions", [])
-        if not isinstance(executions, list):
-            return []
-        summaries: list[dict[str, Any]] = []
-        for item in executions[:25]:
-            start = item.get("startDate")
-            stop = item.get("stopDate")
-            duration_ms = None
-            if start and stop:
-                try:
-                    duration_ms = int((stop - start).total_seconds() * 1000)
-                except Exception:
-                    duration_ms = None
-            summaries.append({
-                "status": item.get("status"),
-                "start": start.isoformat() if hasattr(start, "isoformat") else str(start) if start else None,
-                "duration_ms": duration_ms,
-                "failed_state": None,
-            })
-        return summaries
 
     def _collect_ecr(self, region: str, executor: AWSAPIExecutor) -> tuple[list[StackMapNode], list[tuple[str, str | None, str, EdgeType]], list[StackMapGroup]]:
         account_id = executor.context.account_id

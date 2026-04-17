@@ -1,6 +1,6 @@
 # StackMap Roadmap Upgrades
 
-Implemented on `bug-fixes-v2` after the 0.3.1 foundation work.
+Implemented on `bug-fixes-v2` for the 0.4.0 release.
 
 ## Timeline / Time Travel
 
@@ -101,7 +101,7 @@ Implemented on `bug-fixes-v2` after the 0.3.1 foundation work.
 - Terraform, CloudFormation/SAM, and live AWS parsing now persist `asl_graph` on state-machine nodes when definitions are available.
 - Step Functions Task resources now emit kind-labeled edges such as `invokes`, `publishes`, `writes`, `queries`, `sends`, `emits`, and `starts`.
 - Live AWS Step Functions scanning now uses ASL parsing instead of raw ARN regex extraction for Task edges.
-- Added optional `scan-aws --sfn-executions` to include compact recent execution summaries without enabling extra calls by default.
+- Added on-demand recent execution summaries from the State Machine panel. No scan flag is needed; the viewer calls `states:ListExecutions` only when the user clicks **Load recent executions**.
 - Added typed frontend ASL contract and store getter for state-machine graphs.
 - Added state-machine detail rendering:
   - all major ASL state types

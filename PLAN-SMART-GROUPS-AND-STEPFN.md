@@ -1,6 +1,6 @@
 # StackMap — Smart Grouping v2 & Step Functions Viewer
 
-Two focused upgrades layered on top of the current 0.3.x+ foundation:
+Two focused upgrades layered on top of the 0.4.0 foundation:
 
 1. **Smart Grouping v2** — lift the current heuristic grouper from "good enough to make big graphs readable" to "actually explains the architecture". New signals, hierarchy, confidence scoring, and UI-visible reasons.
 2. **Step Functions Extended Viewer** — an in-app state machine diagram that is strictly better than the AWS console: clear flow, resolved resources, catch/retry branches, parallel/map visualization, and drill-down to the target Lambda/SQS/DDB/etc.
@@ -292,7 +292,7 @@ Integrations:
 - `stackmap/aws_live/scanner.py::_collect_stepfunctions`
   - Stop relying on the raw regex; call `parse_asl(definition, resolver=...)` and persist `asl_graph`.
   - Emit edges from `asl_graph.resources[i].node_id` (where resolvable) instead of ARN substrings — removes false positives on ARNs that appear in `Parameters` but aren't actually called.
-  - Optionally fetch recent execution history (`list_executions` with `maxResults=25`) and write a compact `asl_graph.recent_executions` summary: `[{status, start, duration_ms, failed_state}]`. Gated by a scanner flag so it doesn't hammer the API.
+  - Fetch recent execution history (`list_executions` with `maxResults=25`) on demand from the viewer and write a compact `asl_graph.recent_executions` summary: `[{status, start, duration_ms, failed_state}]`. Gated by a UI button so it doesn't hammer the API.
 
 ### Frontend surface
 
@@ -334,7 +334,7 @@ New component `frontend/components/StateMachineViewer.vue`:
 ### CLI / config surface
 
 - No new flags for Smart Grouping v2 beyond `.stackmap/groups.yaml`.
-- For Step Functions: new optional `--sfn-executions` flag on `scan-aws` (default off) that enables the recent-executions overlay data.
+- For Step Functions: no new CLI flag. The State Machine panel exposes a `Load recent executions` button that calls AWS only when clicked.
 - `stackmap serve` is unaffected — the new data rides inside the same IR JSON.
 
 ### Ship checklist
@@ -342,7 +342,7 @@ New component `frontend/components/StateMachineViewer.vue`:
 - [x] `stackmap/parsers/asl.py` with full contract coverage; golden-file tests in `tests/parsers/test_asl.py` covering: Lambda Task, `.sync:2`, Choice, Parallel, Map (both classic and Distributed), Catch cascade, unreachable state, missing terminal.
 - [x] Terraform parser stores `asl_graph` and emits kind-labeled edges.
 - [x] CFN / SAM parsers plumb `DefinitionString` / `DefinitionUri` into `parse_asl`.
-- [x] Live scanner persists `asl_graph`; behind-flag execution history overlay.
+- [x] Live scanner persists `asl_graph`; on-demand execution history overlay button.
 - [x] `types/asl.ts` + store getter `getAslGraph`.
 - [x] `StateMachineViewer.vue` (new) renders all state types + warnings + raw ASL toggle.
 - [x] `DetailPanel.vue` conditional section + full-screen modal button.

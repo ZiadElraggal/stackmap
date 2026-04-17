@@ -36,19 +36,25 @@ The viewer covers:
 - Retry and Catch paths
 - warnings for unreachable states, orphan `Next` targets, missing terminal states, and Tasks without Catch handlers
 - raw ASL graph JSON for debugging
-- optional recent execution summaries from live scans
+- optional recent execution summaries loaded on demand
 
 Clicking a resolved Task resource selects and pans the main graph to that resource.
 
 ## Optional Execution Overlay
 
-Recent execution summaries are off by default to avoid extra AWS API calls. Enable them with:
+Recent execution summaries are off by default to avoid extra AWS API calls. Open the State Machine panel and click **Load recent executions** while serving with an AWS profile:
 
 ```bash
-stackmap scan-aws --profile dev --serve --sfn-executions
+stackmap scan-aws --profile dev --serve
 ```
 
-This calls `states:ListExecutions` for each state machine and stores up to 25 compact summaries in `asl_graph.recent_executions`.
+For an existing JSON output, use:
+
+```bash
+stackmap serve --source aws-output.json --aws-profile dev
+```
+
+The button calls `states:ListExecutions` for the selected state machine only and stores up to 25 compact summaries in `asl_graph.recent_executions`.
 
 ## Manual Review Checklist
 
@@ -58,4 +64,4 @@ This calls `states:ListExecutions` for each state machine and stores up to 25 co
 - Toggle Raw graph JSON and confirm the parsed graph is visible.
 - Open full screen and confirm the same state-machine view expands without losing state.
 - Click a resolved Task resource and confirm the main graph selects/pans to that resource.
-- Scan with `--sfn-executions` and confirm the summary appears when execution data is available.
+- Serve with an AWS profile, click **Load recent executions**, and confirm the summary appears when execution data is available.

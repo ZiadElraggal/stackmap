@@ -21,6 +21,21 @@
       <div v-if="recentExecutionSummary" class="mt-2 rounded-lg border border-emerald-400/15 bg-emerald-500/[0.06] px-2 py-1.5 text-[11px] font-mono text-emerald-100/85">
         {{ recentExecutionSummary }}
       </div>
+      <div class="mt-2 flex flex-wrap items-center gap-2">
+        <button
+          class="rounded-lg border border-cyan-400/20 bg-cyan-500/10 px-2.5 py-1.5 text-[10px] font-mono uppercase tracking-[0.16em] text-cyan-200 transition hover:border-cyan-300/35 hover:bg-cyan-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="executionLoading"
+          @click="loadRecentExecutions"
+        >
+          {{ executionLoading ? 'Loading executions' : hasRecentExecutions ? 'Refresh executions' : 'Load recent executions' }}
+        </button>
+        <span v-if="executionProfile" class="text-[10px] font-mono text-gray-500">
+          {{ executionProfile }}
+        </span>
+      </div>
+      <div v-if="executionError" class="mt-2 rounded-lg border border-amber-400/20 bg-amber-500/[0.07] px-2 py-1.5 text-[11px] font-mono text-amber-100">
+        {{ executionError }}
+      </div>
     </div>
 
     <!-- Warnings banner -->
@@ -136,6 +151,9 @@ export interface AslGraph {
 const props = defineProps<{ node: { id: string; properties?: Record<string, any> } }>()
 const store = useGraphStore()
 const showRaw = ref(false)
+const executionLoading = ref(false)
+const executionError = ref('')
+const executionProfile = ref('')
 
 const asl = computed<AslGraph | null>(() => {
   const raw = props.node?.properties?.asl_graph
@@ -186,6 +204,7 @@ const recentExecutionSummary = computed(() => {
     : 'duration pending'
   return `${succeeded}/${executions.length} succeeded · ${failed} failed · ${avg}`
 })
+const hasRecentExecutions = computed(() => Boolean(asl.value?.recent_executions?.length))
 
 const rawJson = computed(() => JSON.stringify(asl.value, null, 2))
 
@@ -193,5 +212,29 @@ function focusResource(nodeId: string) {
   if (!nodeId) return
   store.selectNode(nodeId)
   window.dispatchEvent(new CustomEvent('stackmap-pan-to-node', { detail: { nodeId } }))
+}
+
+async function loadRecentExecutions() {
+  executionLoading.value = true
+  executionError.value = ''
+  try {
+    const response = await fetch('/api/sfn-executions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ node_id: props.node.id }),
+    })
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(payload.error || 'Could not load recent executions.')
+    }
+    if (asl.value) {
+      asl.value.recent_executions = Array.isArray(payload.executions) ? payload.executions : []
+    }
+    executionProfile.value = payload.active_profile ? `profile ${payload.active_profile}` : ''
+  } catch (error) {
+    executionError.value = error instanceof Error ? error.message : 'Could not load recent executions.'
+  } finally {
+    executionLoading.value = false
+  }
 }
 </script>

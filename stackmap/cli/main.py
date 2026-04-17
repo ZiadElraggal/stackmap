@@ -84,6 +84,7 @@ class _LiveAWSFeatureState:
             return {
                 "logs": bool(self.session and self.live_logs_enabled),
                 "billing": bool(self.session and self.live_billing_enabled),
+                "stepfunctions": bool(self.session),
             }
 
     def snapshot(self) -> tuple[Any | None, str | None, bool, bool]:
@@ -300,6 +301,33 @@ def _parse_anomaly_thresholds(value: str) -> tuple[float, float, float]:
     if not (1.0 <= low <= medium <= high):
         raise typer.BadParameter("Expected thresholds where 1.0 <= low <= medium <= high.")
     return low, medium, high
+
+
+def _region_from_arn(arn: str) -> str | None:
+    parts = arn.split(":")
+    if len(parts) >= 4 and parts[0] == "arn":
+        return parts[3] or None
+    return None
+
+
+def _summarize_sfn_executions(executions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    summaries: list[dict[str, Any]] = []
+    for item in executions[:25]:
+        start = item.get("startDate")
+        stop = item.get("stopDate")
+        duration_ms = None
+        if start and stop:
+            try:
+                duration_ms = int((stop - start).total_seconds() * 1000)
+            except Exception:
+                duration_ms = None
+        summaries.append({
+            "status": item.get("status"),
+            "start": start.isoformat() if hasattr(start, "isoformat") else str(start) if start else None,
+            "duration_ms": duration_ms,
+            "failed_state": None,
+        })
+    return summaries
 
 
 def _apply_cost_anomalies_with_thresholds(
@@ -569,6 +597,9 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
         if path == "/api/nl-query":
             self._handle_nl_query()
             return
+        if path == "/api/sfn-executions":
+            self._handle_sfn_executions_post()
+            return
         self.send_response(404)
         self.end_headers()
 
@@ -600,6 +631,78 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
             self._send_json(report.to_dict())
         except Exception as exc:
             self._send_json({"error": str(exc)}, status=500)
+
+    def _handle_sfn_executions_post(self) -> None:
+        body = self._read_json_body()
+        node_id = str(body.get("node_id") or "").strip()
+        if not node_id:
+            self._send_json({"error": "node_id is required."}, status=400)
+            return
+
+        aws_session, active_profile, _, _ = self._aws_features.snapshot()
+        if aws_session is None:
+            self._send_json(
+                {
+                    "error": "AWS session is unavailable. Serve with --aws-profile, or launch from scan-aws --profile ... --serve.",
+                },
+                status=403,
+            )
+            return
+
+        ir = self._get_ir()
+        node = next((candidate for candidate in ir.nodes if candidate.id == node_id), None)
+        if node is None:
+            self._send_json({"error": f"Node not found: {node_id}"}, status=404)
+            return
+
+        arn = str(node.properties.get("arn") or node.properties.get("state_machine_arn") or "").strip()
+        if not arn:
+            self._send_json({"error": "Selected state machine has no ARN to query."}, status=400)
+            return
+
+        region = (
+            node.metadata.get("region")
+            or node.position_hint.get("region")
+            or node.properties.get("region")
+            or _region_from_arn(arn)
+            or getattr(aws_session, "region_name", None)
+            or "us-east-1"
+        )
+        try:
+            client = aws_session.client("stepfunctions", region_name=region)
+            response = client.list_executions(stateMachineArn=arn, maxResults=25)
+        except Exception as exc:
+            self._send_json(
+                {
+                    "error": (
+                        "Could not load recent Step Functions executions. "
+                        "The AWS profile needs states:ListExecutions for this state machine."
+                    ),
+                    "detail": f"{type(exc).__name__}: {exc}",
+                },
+                status=502,
+            )
+            return
+
+        executions = response.get("executions", [])
+        if not isinstance(executions, list):
+            executions = []
+        summaries = _summarize_sfn_executions(executions)
+
+        graph = node.properties.get("asl_graph")
+        if isinstance(graph, dict):
+            graph["recent_executions"] = summaries
+            version = self._state.update(ir)
+        else:
+            version, _ = self._state.snapshot()
+
+        self._send_json({
+            "node_id": node_id,
+            "active_profile": active_profile,
+            "region": region,
+            "executions": summaries,
+            "version": version,
+        })
 
     def _handle_timeline(self, query: str) -> None:
         from urllib.parse import parse_qs
@@ -1335,11 +1438,6 @@ def scan_aws(
         "--live-billing",
         help="When used with --serve, enable AWS Cost Explorer and CloudWatch usage metrics in the viewer. Requires --profile and billing IAM permissions.",
     ),
-    sfn_executions: bool = typer.Option(
-        False,
-        "--sfn-executions",
-        help="Include recent Step Functions execution summaries in state-machine nodes. Requires states:ListExecutions.",
-    ),
     accounts: str | None = typer.Option(None, help="Comma-separated account:role_arn pairs for multi-account scan (e.g. '123456789012:arn:aws:iam::123456789012:role/StackMapReadOnly,987654321098:arn:aws:iam::987654321098:role/StackMapReadOnly')"),
     account_profiles: str | None = typer.Option(None, help="Comma-separated AWS profile names for multi-account scan (e.g. 'dev,sandbox,prod')"),
     snapshot_dir: str | None = typer.Option(
@@ -1378,7 +1476,6 @@ def scan_aws(
         cache_dir=cache_dir,
         no_cache=no_cache,
         partial_write_path=output if output_format == "json" and not dry_run else None,
-        sfn_executions=sfn_executions,
     )
 
     if accounts and account_profiles:
@@ -1484,7 +1581,7 @@ def scan_aws(
                 watch_interval=1.0,
                 open_browser=True,
                 auto_group=True,
-                aws_profile=profile if (live_logs or live_billing) else None,
+                aws_profile=profile,
                 live_logs=live_logs,
                 live_billing=live_billing,
                 security_findings=True,
@@ -1571,7 +1668,7 @@ def scan_aws(
                 watch_interval=1.0,
                 open_browser=True,
                 auto_group=True,
-                aws_profile=profile if (live_logs or live_billing) else None,
+                aws_profile=profile,
                 live_logs=live_logs,
                 live_billing=live_billing,
                 security_findings=True,
@@ -1735,7 +1832,7 @@ def scan_aws(
             watch_interval=1.0,
             open_browser=True,
             auto_group=True,
-            aws_profile=profile if (live_logs or live_billing) else None,
+            aws_profile=profile,
             live_logs=live_logs,
             live_billing=live_billing,
             security_findings=True,
@@ -1913,14 +2010,16 @@ def serve(
     _, snapshot = state.snapshot()
     _write_graph_json(public_dir / "sample-data.json", snapshot)
 
-    # Set up optional AWS session for explicitly enabled live features.
+    # Set up optional AWS session for on-demand live features. Logs and billing
+    # still require their explicit flags; Step Functions execution summaries
+    # are loaded only when the user clicks the button in the viewer.
     aws_session = None
-    if aws_profile and (live_logs or live_billing):
+    if aws_profile:
         try:
             import boto3
         except ImportError as exc:
             console.print(
-                f"[red]Error:[/red] boto3 is required for --live-logs/--live-billing but could not be imported: {exc}\n"
+                f"[red]Error:[/red] boto3 is required for AWS live features but could not be imported: {exc}\n"
                 "        Live features will be disabled. Reinstall stackmap or run `pip install boto3`."
             )
         else:
@@ -1928,10 +2027,14 @@ def serve(
                 aws_session = boto3.Session(profile_name=aws_profile)
                 # Force credential resolution now so we don't silently serve with a broken session.
                 aws_session.client("sts").get_caller_identity()
-                enabled = ", ".join(
-                    name for name, is_enabled in (("logs", live_logs), ("billing", live_billing)) if is_enabled
-                )
-                console.print(f"[green]✓[/green] AWS session active (profile: {aws_profile}) — live {enabled} enabled")
+                enabled = [
+                    name for name, is_enabled in (
+                        ("logs", live_logs),
+                        ("billing", live_billing),
+                        ("Step Functions executions on demand", True),
+                    ) if is_enabled
+                ]
+                console.print(f"[green]✓[/green] AWS session active (profile: {aws_profile}) — {', '.join(enabled)}")
             except Exception as exc:
                 aws_session = None
                 console.print(
