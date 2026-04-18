@@ -1067,6 +1067,9 @@ class TerraformParser(BaseParser):
         # Pass 3.5: mark helper resources for architecture-mode collapse
         self._mark_logical_helpers(nodes, id_index, arn_index)
 
+        # Pass 3.75: prune orphan network nodes (disconnected route tables, SGs, IGWs, EIPs)
+        nodes, edges = self._prune_orphan_network_nodes(nodes, edges)
+
         # Pass 4: Extract groups (VPCs, subnets)
         groups = self._extract_groups(nodes, id_index)
 
@@ -1421,6 +1424,106 @@ class TerraformParser(BaseParser):
                                 label=label,
                             )
                         )
+
+    # Network resource types that are safe to drop when they end up with
+    # no inbound/outbound edges AND no non-network resource references them.
+    # VPCs and subnets stay — they're structural containers. Load balancers,
+    # target groups, and listeners stay — they're always meaningful.
+    _PRUNABLE_NETWORK_TYPES = frozenset({
+        "aws_route_table",
+        "aws_route_table_association",
+        "aws_internet_gateway",
+        "aws_nat_gateway",
+        "aws_eip",
+        "aws_security_group",
+        "aws_vpc_peering_connection",
+    })
+
+    def _prune_orphan_network_nodes(
+        self,
+        nodes: list[StackMapNode],
+        edges: list[StackMapEdge],
+    ) -> tuple[list[StackMapNode], list[StackMapEdge]]:
+        """Drop network nodes that have no connections and aren't referenced.
+
+        Many terraform stacks emit route tables, IGWs, SGs, and EIPs that
+        exist solely to wire a VPC together. When no compute resource points
+        at them, rendering them as nodes just clutters the diagram. We keep
+        them when:
+        - something references them via security_groups / vpc_security_group_ids
+          / route_table_id / gateway_id / allocation_id / subnet_id etc.
+        - they have any inbound or outbound edge.
+        """
+        if not nodes:
+            return nodes, edges
+
+        # Build edge incidence set keyed by node id.
+        touched: set[str] = set()
+        for edge in edges:
+            touched.add(edge.source)
+            touched.add(edge.target)
+
+        # Collect identifiers that other resources explicitly reference, so
+        # we can keep network nodes that are the target of a real reference
+        # even without an explicit edge being emitted.
+        referenced_ids: set[str] = set()
+        reference_keys = (
+            "security_groups",
+            "vpc_security_group_ids",
+            "security_group_ids",
+            "source_security_group_id",
+            "route_table_id",
+            "gateway_id",
+            "nat_gateway_id",
+            "internet_gateway_id",
+            "allocation_id",
+            "peer_vpc_id",
+        )
+        for node in nodes:
+            # Skip references from prunable network nodes themselves —
+            # otherwise IGW<->RT loops keep both alive.
+            if node.resource_type in self._PRUNABLE_NETWORK_TYPES:
+                continue
+            for key in reference_keys:
+                val = node.properties.get(key)
+                if isinstance(val, str) and val:
+                    referenced_ids.add(val)
+                elif isinstance(val, list):
+                    for item in val:
+                        if isinstance(item, str) and item:
+                            referenced_ids.add(item)
+
+        def is_referenced(node: StackMapNode) -> bool:
+            own_id = node.properties.get("id")
+            if isinstance(own_id, str) and own_id and own_id in referenced_ids:
+                return True
+            name = node.properties.get("name")
+            if isinstance(name, str) and name and name in referenced_ids:
+                return True
+            return False
+
+        kept: list[StackMapNode] = []
+        dropped_ids: set[str] = set()
+        for node in nodes:
+            if node.resource_type not in self._PRUNABLE_NETWORK_TYPES:
+                kept.append(node)
+                continue
+            if node.id in touched:
+                kept.append(node)
+                continue
+            if is_referenced(node):
+                kept.append(node)
+                continue
+            dropped_ids.add(node.id)
+
+        if not dropped_ids:
+            return nodes, edges
+
+        pruned_edges = [
+            edge for edge in edges
+            if edge.source not in dropped_ids and edge.target not in dropped_ids
+        ]
+        return kept, pruned_edges
 
     def _extract_groups(
         self,

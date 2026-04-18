@@ -163,6 +163,16 @@ export interface CostOverrideInput {
   avg_duration_ms?: number
   storage_gb?: number
   data_transfer_gb?: number
+  // EC2
+  instance_type?: string
+  ebs_gb?: number
+  hours_per_month?: number
+  spot?: boolean
+  // ECS
+  cpu?: number
+  memory?: number
+  desired_count?: number
+  launch_type?: string
 }
 
 export interface CostNodeEstimate {
@@ -380,8 +390,12 @@ function statusSeverity(status?: string): 'info' | 'warning' | 'critical' | unde
 
 function workflowEdgeLabel(transition: AslTransition): string {
   const kind = transition.kind || 'next'
-  if (transition.error_equals?.length) return `${kind}: ${transition.error_equals.join(', ')}`
-  return transition.label || kind
+  if (transition.error_equals?.length) return `catch ${transition.error_equals.join(', ')}`
+  if (transition.label) return transition.label
+  if (kind === 'next') return ''
+  if (kind === 'default') return 'default'
+  if (kind === 'choice') return 'choice'
+  return kind
 }
 
 function workflowEdgeType(transition: AslTransition): string {
@@ -3309,7 +3323,14 @@ export const useGraphStore = defineStore('graph', {
       const cleanedEntries = Object.entries(overrides)
         .map(([nodeId, values]) => {
           const cleanedValues = Object.fromEntries(
-            Object.entries(values).filter(([, raw]) => typeof raw === 'number' && Number.isFinite(raw) && raw >= 0)
+            Object.entries(values)
+              .map(([key, raw]) => [key, typeof raw === 'string' ? raw.trim() : raw] as const)
+              .filter(([, raw]) => {
+                if (typeof raw === 'number') return Number.isFinite(raw) && raw >= 0
+                if (typeof raw === 'string') return raw.length > 0
+                if (typeof raw === 'boolean') return true
+                return false
+              })
           ) as CostOverrideInput
           return [nodeId, cleanedValues] as const
         })
@@ -3406,15 +3427,23 @@ export const useGraphStore = defineStore('graph', {
 
     async setNodeCostOverrides(nodeId: string, overrides: CostOverrideInput): Promise<{ ok: boolean; error?: string }> {
       const current = this.costOverrides[nodeId] || {}
-      // Only merge keys that are explicitly provided (not undefined)
       const merged = { ...current }
       for (const [key, value] of Object.entries(overrides)) {
         if (value !== undefined) {
           (merged as Record<string, unknown>)[key] = value
+        } else {
+          delete (merged as Record<string, unknown>)[key]
         }
       }
       const cleaned = Object.fromEntries(
-        Object.entries(merged).filter(([, value]) => typeof value === 'number' && Number.isFinite(value) && value >= 0)
+        Object.entries(merged)
+          .map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value] as const)
+          .filter(([, value]) => {
+            if (typeof value === 'number') return Number.isFinite(value) && value >= 0
+            if (typeof value === 'string') return value.length > 0
+            if (typeof value === 'boolean') return true
+            return false
+          })
       ) as CostOverrideInput
 
       if (Object.keys(cleaned).length > 0) {

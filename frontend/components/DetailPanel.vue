@@ -132,9 +132,19 @@
         <h3 class="mb-2 text-xs uppercase tracking-wider text-cyan-300/80">Workflow State</h3>
         <div class="rounded-lg border border-white/10 bg-white/[0.03] p-3">
           <div class="flex items-center justify-between gap-2">
-            <div>
-              <div class="text-xs font-semibold text-white">{{ workflowState?.type || 'State' }}</div>
-              <div class="mt-1 text-[11px] font-mono text-gray-500">{{ workflowState?.qualified_name || workflowState?.name }}</div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-semibold text-white">{{ workflowState?.type || 'State' }}</span>
+                <span
+                  v-if="workflowStateIntegrationBadge"
+                  class="rounded bg-cyan-500/15 px-1.5 py-0.5 text-[9px] font-mono uppercase text-cyan-200"
+                >{{ workflowStateIntegrationBadge }}</span>
+                <span
+                  v-if="workflowState?.pattern"
+                  class="rounded bg-white/5 px-1.5 py-0.5 text-[9px] font-mono uppercase text-gray-400"
+                >{{ workflowState.pattern }}</span>
+              </div>
+              <div class="mt-1 text-[11px] font-mono text-gray-500 truncate">{{ workflowState?.qualified_name || workflowState?.name }}</div>
             </div>
             <span
               v-if="workflowExecutionStatus"
@@ -143,14 +153,99 @@
             >{{ workflowExecutionStatus }}</span>
           </div>
           <div v-if="workflowState?.comment" class="mt-2 text-xs leading-relaxed text-gray-400">{{ workflowState.comment }}</div>
+
+          <!-- I/O path chain: the ASL data flow pipeline -->
+          <div v-if="workflowIoChain.length > 0" class="mt-3 rounded-md border border-white/8 bg-black/30 p-2">
+            <div class="mb-1 text-[9px] font-mono uppercase tracking-wider text-cyan-300/60">I/O path</div>
+            <div class="flex flex-wrap items-center gap-1 text-[10px] font-mono">
+              <template v-for="(step, i) in workflowIoChain" :key="i">
+                <span
+                  class="rounded px-1.5 py-0.5"
+                  :class="step.kind === 'literal' ? 'bg-white/5 text-gray-500' : 'bg-cyan-500/10 text-cyan-200'"
+                >{{ step.label }}</span>
+                <span v-if="i < workflowIoChain.length - 1" class="text-gray-600">→</span>
+              </template>
+            </div>
+          </div>
+
           <div class="mt-3 grid grid-cols-2 gap-2 text-[11px] font-mono">
             <div v-if="workflowState?.next" class="rounded-md border border-white/8 bg-black/20 px-2 py-1.5 text-gray-400">next <span class="text-white">{{ workflowState.next }}</span></div>
             <div v-if="workflowState?.end" class="rounded-md border border-white/8 bg-black/20 px-2 py-1.5 text-gray-400">terminal <span class="text-white">yes</span></div>
             <div v-if="workflowState?.integration" class="rounded-md border border-white/8 bg-black/20 px-2 py-1.5 text-gray-400">integration <span class="text-white">{{ workflowState.integration }}</span></div>
+            <div v-if="workflowState?.timeout_seconds != null" class="rounded-md border border-white/8 bg-black/20 px-2 py-1.5 text-gray-400">timeout <span class="text-white">{{ workflowState.timeout_seconds }}s</span></div>
+            <div v-if="workflowState?.heartbeat_seconds != null" class="rounded-md border border-white/8 bg-black/20 px-2 py-1.5 text-gray-400">heartbeat <span class="text-white">{{ workflowState.heartbeat_seconds }}s</span></div>
+            <div v-if="workflowState?.max_concurrency != null" class="rounded-md border border-white/8 bg-black/20 px-2 py-1.5 text-gray-400">concurrency <span class="text-white">{{ workflowState.max_concurrency }}</span></div>
+            <div v-if="workflowState?.wait_seconds != null" class="rounded-md border border-white/8 bg-black/20 px-2 py-1.5 text-gray-400">wait <span class="text-white">{{ workflowState.wait_seconds }}s</span></div>
             <div v-if="workflowOverlay?.duration_ms != null" class="rounded-md border border-white/8 bg-black/20 px-2 py-1.5 text-gray-400">duration <span class="text-white">{{ workflowOverlay.duration_ms }}ms</span></div>
           </div>
+
+          <!-- Retry policy -->
+          <div v-if="workflowState?.retry?.length" class="mt-3">
+            <div class="mb-1 text-[9px] font-mono uppercase tracking-wider text-amber-300/70">Retry policy</div>
+            <div class="space-y-1.5">
+              <div
+                v-for="(retry, i) in workflowState.retry"
+                :key="`retry-${i}`"
+                class="rounded-md border border-amber-400/15 bg-amber-500/[0.04] px-2 py-1.5 text-[10px] font-mono"
+              >
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-amber-200 truncate">{{ (retry.error_equals || []).join(', ') || 'States.ALL' }}</span>
+                  <span class="text-gray-400">↻ {{ retry.max_attempts ?? 3 }}×</span>
+                </div>
+                <div class="mt-0.5 text-[9px] text-gray-500">
+                  interval {{ retry.interval_seconds ?? 1 }}s · backoff {{ retry.backoff_rate ?? 2.0 }}x{{ retry.max_delay_seconds ? ` · max ${retry.max_delay_seconds}s` : '' }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Catch handlers -->
+          <div v-if="workflowState?.catch?.length" class="mt-3">
+            <div class="mb-1 text-[9px] font-mono uppercase tracking-wider text-red-300/70">Error catches</div>
+            <div class="space-y-1.5">
+              <div
+                v-for="(catchRule, i) in workflowState.catch"
+                :key="`catch-${i}`"
+                class="rounded-md border border-red-400/20 bg-red-500/[0.05] px-2 py-1.5 text-[10px] font-mono"
+              >
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-red-200 truncate">{{ (catchRule.error_equals || []).join(', ') || 'States.ALL' }}</span>
+                  <span v-if="catchRule.next" class="text-gray-400">→ {{ catchRule.next }}</span>
+                </div>
+                <div v-if="catchRule.result_path" class="mt-0.5 text-[9px] text-gray-500">result {{ catchRule.result_path }}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Choice branches -->
+          <div v-if="workflowState?.choices?.length" class="mt-3">
+            <div class="mb-1 text-[9px] font-mono uppercase tracking-wider text-violet-300/70">Choice rules</div>
+            <div class="space-y-1">
+              <div
+                v-for="(choice, i) in workflowState.choices"
+                :key="`choice-${i}`"
+                class="rounded-md border border-violet-400/20 bg-violet-500/[0.05] px-2 py-1 text-[10px] font-mono"
+              >
+                <div class="text-violet-100 truncate">{{ choice.condition_summary || 'condition' }}</div>
+                <div v-if="choice.next" class="text-[9px] text-gray-500">→ {{ choice.next }}</div>
+              </div>
+              <div
+                v-if="workflowState.default"
+                class="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-mono text-gray-300"
+              >default → {{ workflowState.default }}</div>
+            </div>
+          </div>
+
+          <!-- Parameters tree -->
+          <details v-if="workflowState?.parameters_summary" class="mt-3">
+            <summary class="cursor-pointer text-[9px] font-mono uppercase tracking-wider text-cyan-300/60 hover:text-cyan-300">Parameters</summary>
+            <div class="mt-1 rounded-md border border-white/8 bg-black/30 px-2 py-1.5 text-[10px] font-mono text-gray-400 break-all">
+              {{ workflowState.parameters_summary }}
+            </div>
+          </details>
+
           <div v-if="workflowState?.resource_arn" class="mt-3 rounded-md border border-white/8 bg-black/20 px-2 py-1.5 text-[10px] font-mono text-gray-400 break-all">
-            target {{ workflowState.resource_arn }}
+            <span class="text-gray-500">target</span> {{ workflowState.resource_arn }}
           </div>
           <div v-if="workflowOverlay?.error || workflowOverlay?.cause" class="mt-3 rounded-md border border-red-400/20 bg-red-500/[0.06] px-2 py-1.5 text-[11px] text-red-100">
             <div v-if="workflowOverlay.error" class="font-mono">{{ workflowOverlay.error }}</div>
@@ -443,7 +538,7 @@
               </div>
 
               <div class="rounded-lg border border-white/[0.06] bg-black/20 px-3 py-3 text-xs leading-relaxed text-gray-400">
-                Add usage assumptions for better per-resource forecasts. Current AWS billing import is not wired yet, so this compares built-in baseline estimates against your edits.
+                {{ costInputHelpText }}
               </div>
 
               <div
@@ -520,6 +615,104 @@
                   placeholder="100"
                 />
               </label>
+
+              <template v-if="supportsEc2Inputs">
+                <div class="grid grid-cols-2 gap-2">
+                  <label class="block">
+                    <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Instance type</span>
+                    <input
+                      v-model="costInputs.instance_type"
+                      type="text"
+                      class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+                      :placeholder="ec2InstanceTypePlaceholder"
+                    />
+                  </label>
+                  <label class="block">
+                    <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Hours / month</span>
+                    <input
+                      v-model="costInputs.hours_per_month"
+                      type="number"
+                      min="0"
+                      max="730"
+                      step="1"
+                      class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+                      placeholder="730"
+                    />
+                  </label>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <label class="block">
+                    <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">EBS GB</span>
+                    <input
+                      v-model="costInputs.ebs_gb"
+                      type="number"
+                      min="0"
+                      step="1"
+                      class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+                      placeholder="30"
+                    />
+                  </label>
+                  <label class="flex h-full items-end gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-mono text-gray-300">
+                    <input
+                      type="checkbox"
+                      class="h-4 w-4 rounded border-white/20 bg-black/30 text-emerald-400 focus:ring-emerald-400/30"
+                      :checked="costInputs.spot === 'true'"
+                      @change="setSpotInput"
+                    />
+                    Spot pricing
+                  </label>
+                </div>
+              </template>
+
+              <template v-if="supportsEcsInputs">
+                <label class="block">
+                  <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Launch type</span>
+                  <select
+                    v-model="costInputs.launch_type"
+                    class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+                  >
+                    <option value="">Scanned / default</option>
+                    <option value="FARGATE">Fargate</option>
+                    <option value="FARGATE_SPOT">Fargate Spot</option>
+                    <option value="EC2">EC2 backed</option>
+                  </select>
+                </label>
+                <div class="grid grid-cols-3 gap-2">
+                  <label class="block">
+                    <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">CPU units</span>
+                    <input
+                      v-model="costInputs.cpu"
+                      type="number"
+                      min="0"
+                      step="1"
+                      class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+                      :placeholder="ecsCpuPlaceholder"
+                    />
+                  </label>
+                  <label class="block">
+                    <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Memory MB</span>
+                    <input
+                      v-model="costInputs.memory"
+                      type="number"
+                      min="0"
+                      step="1"
+                      class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+                      :placeholder="ecsMemoryPlaceholder"
+                    />
+                  </label>
+                  <label class="block">
+                    <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Tasks</span>
+                    <input
+                      v-model="costInputs.desired_count"
+                      type="number"
+                      min="0"
+                      step="1"
+                      class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+                      :placeholder="ecsDesiredCountPlaceholder"
+                    />
+                  </label>
+                </div>
+              </template>
 
               <div v-if="hasSupportedCostInputs" class="flex gap-2">
                 <button
@@ -976,6 +1169,14 @@ const costInputs = ref<Record<string, string>>({
   avg_duration_ms: '',
   storage_gb: '',
   data_transfer_gb: '',
+  instance_type: '',
+  ebs_gb: '',
+  hours_per_month: '',
+  spot: '',
+  cpu: '',
+  memory: '',
+  desired_count: '',
+  launch_type: '',
 })
 const costFeedback = ref('')
 const costFeedbackTone = ref<'success' | 'warning'>('success')
@@ -1008,6 +1209,25 @@ const workflowExecutionStatusClass = computed(() => {
   }
 })
 const workflowTargetRealId = computed(() => String(node.value?.metadata?.mirrored_from_node_id || node.value?.properties?.mirrored_from_node_id || ''))
+const workflowStateIntegrationBadge = computed(() => {
+  const s = workflowState.value as any
+  if (!s) return ''
+  if (s.resource_kind && s.resource_kind !== 'unknown') return String(s.resource_kind)
+  if (s.integration) return String(s.integration).split(':')[0]
+  return ''
+})
+const workflowIoChain = computed<Array<{ label: string; kind: 'literal' | 'path' }>>(() => {
+  const s = workflowState.value as any
+  if (!s) return []
+  const steps: Array<{ label: string; kind: 'literal' | 'path' }> = [{ label: '$', kind: 'literal' }]
+  if (s.input_path && s.input_path !== '$') steps.push({ label: `InputPath ${s.input_path}`, kind: 'path' })
+  if (s.parameters_summary) steps.push({ label: 'Parameters', kind: 'path' })
+  if (s.result_selector) steps.push({ label: 'ResultSelector', kind: 'path' })
+  if (s.result_path && s.result_path !== '$') steps.push({ label: `ResultPath ${s.result_path}`, kind: 'path' })
+  if (s.output_path && s.output_path !== '$') steps.push({ label: `OutputPath ${s.output_path}`, kind: 'path' })
+  steps.push({ label: '$', kind: 'literal' })
+  return steps.length > 2 ? steps : []
+})
 const stateMachineStateCount = computed(() => {
   const asl = node.value?.properties?.asl_graph as { states?: unknown[] } | undefined
   return Array.isArray(asl?.states) ? asl!.states!.length : 0
@@ -1131,6 +1351,14 @@ const TRANSFER_OVERRIDE_TYPES = new Set([
   'aws_nat_gateway',
   'AWS::EC2::NatGateway',
 ])
+const EC2_OVERRIDE_TYPES = new Set([
+  'aws_instance',
+  'AWS::EC2::Instance',
+])
+const ECS_OVERRIDE_TYPES = new Set([
+  'aws_ecs_service',
+  'AWS::ECS::Service',
+])
 const supportsLambdaInputs = computed(() => {
   if (!node.value) return false
   return node.value.resource_type.includes('lambda')
@@ -1146,9 +1374,51 @@ const supportsTransferInput = computed(() => {
   if (!node.value) return false
   return TRANSFER_OVERRIDE_TYPES.has(node.value.resource_type)
 })
+const supportsEc2Inputs = computed(() => {
+  if (!node.value) return false
+  return EC2_OVERRIDE_TYPES.has(node.value.resource_type)
+})
+const supportsEcsInputs = computed(() => {
+  if (!node.value) return false
+  return ECS_OVERRIDE_TYPES.has(node.value.resource_type)
+})
 const hasSupportedCostInputs = computed(() =>
-  supportsMemoryInput.value || supportsInvocationInput.value || supportsDurationInput.value || supportsStorageInput.value || supportsTransferInput.value
+  supportsMemoryInput.value
+  || supportsInvocationInput.value
+  || supportsDurationInput.value
+  || supportsStorageInput.value
+  || supportsTransferInput.value
+  || supportsEc2Inputs.value
+  || supportsEcsInputs.value
 )
+const costInputHelpText = computed(() => {
+  if (supportsEc2Inputs.value) {
+    return 'Tune EC2 instance assumptions for the selected node. Leave fields blank to use scanned metadata and built-in defaults.'
+  }
+  if (supportsEcsInputs.value) {
+    return 'Tune ECS service assumptions for Fargate, Fargate Spot, or EC2-backed services. EC2-backed service compute is priced on the container instances.'
+  }
+  if (hasSupportedCostInputs.value) {
+    return 'Add usage assumptions for better per-resource forecasts. Current AWS billing import is not wired yet, so this compares built-in baseline estimates against your edits.'
+  }
+  return 'This resource uses a fixed estimate today. Editable assumptions are available for Lambda, storage and transfer resources, EC2 instances, and ECS services.'
+})
+const ec2InstanceTypePlaceholder = computed(() => {
+  const value = node.value?.properties?.instance_type
+  return typeof value === 'string' && value ? value : 't3.medium'
+})
+const ecsCpuPlaceholder = computed(() => {
+  const value = node.value?.properties?.cpu
+  return typeof value === 'number' || typeof value === 'string' ? String(value) : '256'
+})
+const ecsMemoryPlaceholder = computed(() => {
+  const value = node.value?.properties?.memory
+  return typeof value === 'number' || typeof value === 'string' ? String(value) : '512'
+})
+const ecsDesiredCountPlaceholder = computed(() => {
+  const value = node.value?.properties?.desired_count
+  return typeof value === 'number' || typeof value === 'string' ? String(value) : '1'
+})
 const emptyStateTitle = computed(() => {
   if (store.editSubmode === 'inspect') return 'Select a resource or link'
   if (store.editSubmode === 'structure') return 'Choose something to shape'
@@ -1351,6 +1621,14 @@ function toInputValue(value: number | undefined): string {
   return typeof value === 'number' && Number.isFinite(value) ? String(value) : ''
 }
 
+function toStringInputValue(value: string | undefined): string {
+  return typeof value === 'string' ? value : ''
+}
+
+function toBooleanInputValue(value: boolean | undefined): string {
+  return value === true ? 'true' : ''
+}
+
 function syncCostInputs() {
   const overrides = node.value ? store.costOverrides[node.value.id] || {} : {}
   costFeedback.value = ''
@@ -1360,6 +1638,14 @@ function syncCostInputs() {
     avg_duration_ms: toInputValue(overrides.avg_duration_ms),
     storage_gb: toInputValue(overrides.storage_gb),
     data_transfer_gb: toInputValue(overrides.data_transfer_gb),
+    instance_type: toStringInputValue(overrides.instance_type),
+    ebs_gb: toInputValue(overrides.ebs_gb),
+    hours_per_month: toInputValue(overrides.hours_per_month),
+    spot: toBooleanInputValue(overrides.spot),
+    cpu: toInputValue(overrides.cpu),
+    memory: toInputValue(overrides.memory),
+    desired_count: toInputValue(overrides.desired_count),
+    launch_type: toStringInputValue(overrides.launch_type),
   }
 }
 
@@ -1369,6 +1655,20 @@ function parseOptionalNumber(value: string | number): number | undefined {
   const parsed = Number(value)
   if (!Number.isFinite(parsed) || parsed < 0) return undefined
   return parsed
+}
+
+function parseOptionalString(value: string): string | undefined {
+  const trimmed = value.trim()
+  return trimmed ? trimmed : undefined
+}
+
+function parseOptionalBoolean(value: string): boolean | undefined {
+  return value === 'true' ? true : undefined
+}
+
+function setSpotInput(event: Event) {
+  const target = event.target as HTMLInputElement | null
+  costInputs.value.spot = target?.checked ? 'true' : ''
 }
 
 async function applyCostOverrides() {
@@ -1386,6 +1686,14 @@ async function applyCostOverrides() {
     avg_duration_ms: parseOptionalNumber(costInputs.value.avg_duration_ms),
     storage_gb: parseOptionalNumber(costInputs.value.storage_gb),
     data_transfer_gb: parseOptionalNumber(costInputs.value.data_transfer_gb),
+    instance_type: parseOptionalString(costInputs.value.instance_type),
+    ebs_gb: parseOptionalNumber(costInputs.value.ebs_gb),
+    hours_per_month: parseOptionalNumber(costInputs.value.hours_per_month),
+    spot: parseOptionalBoolean(costInputs.value.spot),
+    cpu: parseOptionalNumber(costInputs.value.cpu),
+    memory: parseOptionalNumber(costInputs.value.memory),
+    desired_count: parseOptionalNumber(costInputs.value.desired_count),
+    launch_type: parseOptionalString(costInputs.value.launch_type),
   })
   if (!result.ok) {
     costFeedbackTone.value = 'warning'

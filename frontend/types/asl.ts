@@ -27,9 +27,20 @@ export interface AslState {
   resource_node_id?: string | null
   parameters_summary?: string
   result_summary?: string
+  input_path?: string
+  output_path?: string
+  result_path?: string
+  result_selector?: Record<string, unknown>
   timeout_seconds?: number
   heartbeat_seconds?: number
-  retry?: Array<{ error_equals: string[]; interval_seconds?: number; max_attempts?: number; backoff_rate?: number }>
+  retry?: Array<{
+    error_equals: string[]
+    interval_seconds?: number
+    max_attempts?: number
+    backoff_rate?: number
+    max_delay_seconds?: number
+    jitter_strategy?: string
+  }>
   catch?: Array<{ error_equals: string[]; next?: string; result_path?: string }>
   choices?: Array<{ condition_summary: string; next?: string }>
   default?: string

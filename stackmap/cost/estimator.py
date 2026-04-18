@@ -19,6 +19,9 @@ _RESOURCE_TYPE_ALIASES = {
     "AWS::S3::Bucket": "aws_s3_bucket",
     "AWS::CloudFront::Distribution": "aws_cloudfront_distribution",
     "AWS::EC2::NatGateway": "aws_nat_gateway",
+    "AWS::EC2::Instance": "aws_instance",
+    "AWS::EC2::Volume": "aws_ebs_volume",
+    "AWS::AutoScaling::AutoScalingGroup": "aws_autoscaling_group",
     "AWS::ECS::Service": "aws_ecs_service",
     "AWS::RDS::DBInstance": "aws_db_instance",
     "AWS::RDS::DBCluster": "aws_rds_cluster",
@@ -215,25 +218,87 @@ def _estimate_dynamodb(node: StackMapNode, service_config: dict) -> CostEstimate
     )
 
 
-def _estimate_ecs(node: StackMapNode, service_config: dict) -> CostEstimate:
-    """Estimate ECS/Fargate cost."""
-    cpu = node.properties.get("cpu", 256)
-    memory = node.properties.get("memory", 512)
-    desired_count = node.properties.get("desired_count", 1)
+def _resolve_launch_type(node: StackMapNode) -> str:
+    """Infer ECS launch type from service properties / capacity providers."""
+    launch = node.properties.get("launch_type")
+    if isinstance(launch, str) and launch:
+        return launch.upper()
+    providers = node.properties.get("capacity_provider_strategy", [])
+    if isinstance(providers, list):
+        names: list[str] = []
+        for p in providers:
+            if isinstance(p, dict):
+                cp = p.get("capacity_provider")
+                if isinstance(cp, str):
+                    names.append(cp.upper())
+        joined = " ".join(names)
+        if "FARGATE_SPOT" in joined:
+            return "FARGATE_SPOT"
+        if "FARGATE" in joined:
+            return "FARGATE"
+        if names:
+            return "EC2"
+    return "FARGATE"
+
+
+def _estimate_ecs(node: StackMapNode, service_config: dict, override: dict | None = None) -> CostEstimate:
+    """Estimate ECS cost, aware of Fargate vs Fargate Spot vs EC2 launch type.
+
+    For EC2-backed services there is no per-task compute cost here — it rolls
+    up into the underlying ``aws_instance`` / ASG estimates — so we return a
+    small orchestration-only estimate and note the reason.
+
+    Override keys:
+    - cpu, memory, desired_count: task sizing + scale
+    - launch_type: one of FARGATE, FARGATE_SPOT, EC2
+    - spot: bool, equivalent to launch_type=FARGATE_SPOT
+    """
+    override = override or {}
+    cpu = override.get("cpu") or node.properties.get("cpu", 256)
+    memory = override.get("memory") or node.properties.get("memory", 512)
+    desired_count = override.get("desired_count")
+    if desired_count is None:
+        desired_count = node.properties.get("desired_count", 1)
+    if override.get("launch_type"):
+        launch_type = str(override["launch_type"]).upper()
+    elif override.get("spot"):
+        launch_type = "FARGATE_SPOT"
+    else:
+        launch_type = _resolve_launch_type(node)
+
+    if launch_type == "EC2":
+        return CostEstimate(
+            resource_id=node.id,
+            resource_name=node.name,
+            resource_type=node.resource_type,
+            monthly_estimate=0.0,
+            confidence="high",
+            pricing_model="ec2-backed",
+            estimate_note="EC2 launch type — compute priced via container instances",
+        )
+
+    is_spot = launch_type == "FARGATE_SPOT"
+    per_vcpu_hour = service_config.get(
+        "per_vcpu_hour_spot" if is_spot else "per_vcpu_hour",
+        0.01214 if is_spot else 0.04048,
+    )
+    per_gb_hour = service_config.get(
+        "per_gb_hour_spot" if is_spot else "per_gb_hour",
+        0.001333 if is_spot else 0.004445,
+    )
 
     if isinstance(cpu, (int, float)) and isinstance(memory, (int, float)):
         vcpu = cpu / 1024
         gb = memory / 1024
-        per_vcpu_hour = service_config.get("per_vcpu_hour", 0.04048)
-        per_gb_hour = service_config.get("per_gb_hour", 0.004445)
-        hours = 730  # avg hours/month
-        cost = (vcpu * per_vcpu_hour + gb * per_gb_hour) * hours * (desired_count if isinstance(desired_count, (int, float)) else 1)
+        hours = 730
+        tasks = desired_count if isinstance(desired_count, (int, float)) else 1
+        cost = (vcpu * per_vcpu_hour + gb * per_gb_hour) * hours * tasks
         confidence = "medium"
-        note = f"Fargate: {vcpu} vCPU, {gb}GB, {desired_count} tasks"
+        note = f"{'Fargate Spot' if is_spot else 'Fargate'}: {vcpu} vCPU, {gb}GB, {tasks} tasks"
     else:
         cost = service_config.get("default_monthly", 36.0)
         confidence = "low"
-        note = "Default Fargate estimate"
+        note = f"Default {launch_type.lower()} estimate"
 
     return CostEstimate(
         resource_id=node.id,
@@ -241,8 +306,78 @@ def _estimate_ecs(node: StackMapNode, service_config: dict) -> CostEstimate:
         resource_type=node.resource_type,
         monthly_estimate=cost,
         confidence=confidence,
-        pricing_model="fargate",
+        pricing_model="fargate_spot" if is_spot else "fargate",
         estimate_note=note,
+    )
+
+
+def _estimate_ec2(node: StackMapNode, service_config: dict, override: dict | None = None) -> CostEstimate:
+    """Estimate EC2 instance monthly cost.
+
+    Includes a default 30 GB gp3 EBS allowance. Regional pricing applied via
+    ``regional_multipliers`` against the us-east-1 baseline. Honours Spot
+    pricing (~70% discount) via ``spot_instance_interruption_behavior`` or
+    override key ``spot: True``.
+
+    Override keys:
+    - instance_type: override the node's instance_type
+    - ebs_gb: total EBS gp3 provisioned (default 30)
+    - hours_per_month: defaults to 730 (always on); pass lower for dev boxes
+    - spot: bool, pass True to apply Spot discount
+    """
+    override = override or {}
+    instance_type = override.get("instance_type") or node.properties.get("instance_type", "")
+    instance_costs = service_config.get("instance_costs", {})
+    default_cost = service_config.get("default_cost", 30.37)
+
+    if instance_type and instance_type in instance_costs:
+        base = instance_costs[instance_type]
+        confidence = "high"
+        note = instance_type
+    elif instance_type:
+        base = default_cost
+        confidence = "low"
+        note = f"{instance_type} not in pricing DB"
+    else:
+        base = default_cost
+        confidence = "low"
+        note = "no instance_type, default t3.medium"
+
+    region = node.metadata.get("region") or node.position_hint.get("region") or "us-east-1"
+    multipliers = service_config.get("regional_multipliers", {})
+    region_mult = multipliers.get(region, 1.0)
+    base *= region_mult
+    if region_mult != 1.0:
+        note += f", {region} (x{region_mult})"
+
+    hours = override.get("hours_per_month")
+    if isinstance(hours, (int, float)) and hours > 0 and hours < 730:
+        base *= hours / 730
+        note += f", {int(hours)}h/mo"
+
+    is_spot = bool(override.get("spot")) or bool(node.properties.get("instance_market_options"))
+    if is_spot:
+        base *= 0.3
+        note += ", spot"
+
+    ebs_gb = override.get("ebs_gb")
+    if ebs_gb is None:
+        ebs_gb = service_config.get("default_ebs_gb", 30)
+    ebs_rate = service_config.get("ebs_gp3_per_gb_monthly", 0.08)
+    ebs_cost = ebs_rate * ebs_gb if isinstance(ebs_gb, (int, float)) else 0.0
+    total = base + ebs_cost
+    if ebs_gb:
+        note += f" + {ebs_gb}GB EBS"
+
+    return CostEstimate(
+        resource_id=node.id,
+        resource_name=node.name,
+        resource_type=node.resource_type,
+        monthly_estimate=total,
+        confidence=confidence,
+        pricing_model="instance",
+        estimate_note=note,
+        breakdown={"instance": round(base, 2), "ebs": round(ebs_cost, 2)},
     )
 
 
@@ -337,7 +472,10 @@ def _estimate_node_cost(
         return _estimate_dynamodb(node, service_config)
 
     if pricing_resource_type in ("aws_ecs_service",):
-        return _estimate_ecs(node, service_config)
+        return _estimate_ecs(node, service_config, override)
+
+    if pricing_resource_type == "aws_instance":
+        return _estimate_ec2(node, service_config, override)
 
     if pricing_model == "instance" and "instance_costs" in service_config:
         return _estimate_instance_based(node, service_config)
