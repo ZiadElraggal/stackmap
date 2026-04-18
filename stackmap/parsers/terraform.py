@@ -1439,6 +1439,22 @@ class TerraformParser(BaseParser):
         "aws_vpc_peering_connection",
     })
 
+    @staticmethod
+    def _has_security_relevant_exposure(node: StackMapNode) -> bool:
+        if node.resource_type != "aws_security_group":
+            return False
+        ingress = node.properties.get("ingress") or []
+        if not isinstance(ingress, list):
+            return False
+        for rule in ingress:
+            if not isinstance(rule, dict):
+                continue
+            cidrs = rule.get("cidr_blocks") or []
+            ipv6 = rule.get("ipv6_cidr_blocks") or []
+            if "0.0.0.0/0" in cidrs or "::/0" in ipv6:
+                return True
+        return False
+
     def _prune_orphan_network_nodes(
         self,
         nodes: list[StackMapNode],
@@ -1512,6 +1528,9 @@ class TerraformParser(BaseParser):
                 kept.append(node)
                 continue
             if is_referenced(node):
+                kept.append(node)
+                continue
+            if self._has_security_relevant_exposure(node):
                 kept.append(node)
                 continue
             dropped_ids.add(node.id)
