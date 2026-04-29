@@ -2,7 +2,7 @@
 
 Architecture diagrams that generate themselves from your infrastructure code and live AWS accounts.
 
-StackMap is a CLI-first infrastructure visualization and architecture inference tool. It scans real infrastructure inputs, live AWS accounts, and repository sources, then produces interactive architecture maps with inferred relationships, smart grouping, cost forecasting, drift detection, live logs, billing-aware usage imports, and editable presentation workflows.
+StackMap is a CLI-first infrastructure visualization and architecture inference tool. It scans real infrastructure inputs, live AWS accounts, and repository sources, then produces interactive architecture maps with inferred relationships, smart grouping, Step Functions workflow views, cost forecasting, drift detection, live logs, billing-aware usage imports, and editable presentation workflows.
 
 Instead of keeping diagrams up to date by hand, you point StackMap at what actually exists, inspect the evidence behind the generated graph, refine anything inference cannot know, and share the result as JSON, HTML, or the local interactive viewer.
 
@@ -13,9 +13,10 @@ StackMap turns infrastructure into:
 - interactive architecture diagrams
 - grouped system/component views for larger graphs
 - evidence-rich inferred service relationships
+- Step Functions workflow inspection from ASL definitions
 - editable architecture maps when inference is incomplete
 - diffable snapshots of infrastructure over time
-- live AWS operational context when explicitly enabled
+- live AWS operational context when explicitly enabled or clicked on demand
 - exportable HTML and JSON outputs
 
 It is designed for platform engineers, DevOps teams, cloud architects, and anyone who needs fast, trustworthy architecture visibility from real infrastructure.
@@ -42,6 +43,8 @@ The StackMap web UI supports:
 - category and relationship filtering
 - component landing views for large graphs
 - smart grouping overlays for large AWS graphs
+- smart component landing pages with grouping confidence, parent-scope filters, and an unlinked-resource bucket
+- Step Functions state-machine inspection from Terraform, CloudFormation/SAM, and live AWS scans
 - edge confidence and evidence inspection for inferred live AWS relationships
 - low-confidence edge filtering
 - dependency tracing from the detail panel
@@ -278,6 +281,8 @@ Enable AWS billing and usage metric imports in the viewer:
 stackmap scan-aws --profile dev --output aws-output.json --serve --live-billing
 ```
 
+Step Functions definitions are shown automatically when a state machine node is selected. Recent execution summaries are loaded from a button in the State Machine panel when the viewer has an AWS profile.
+
 Multi-account via named profiles:
 
 ```bash
@@ -331,7 +336,9 @@ Use this for:
 - multi-account visibility
 - environments that are not fully represented in code snippets alone
 - relationship inference from live AWS configuration
+- Step Functions workflow parsing from live state-machine definitions
 - optional live logs and billing-aware usage imports when explicitly enabled
+- on-demand recent Step Functions executions from the State Machine panel when served with a profile
 
 ### `stackmap serve`
 
@@ -347,6 +354,7 @@ Useful options:
 
 - `--drift-against <file>` compares the served graph against another snapshot and enables drift badges in the UI
 - `--auto-group/--no-auto-group` controls smart grouping during serve
+- `--aws-profile <profile>` enables on-demand AWS-backed detail actions such as recent Step Functions executions
 - `--aws-profile <profile> --live-logs` enables the CloudWatch log viewer for locally served graphs when the profile has the separate logs policy
 - `--aws-profile <profile> --live-billing` enables AWS billing and CloudWatch usage metric imports when the profile has the separate billing policy
 
@@ -373,6 +381,7 @@ Optional live features are separate add-on policies, not part of the default sca
 ```bash
 stackmap aws-policy --addon logs
 stackmap aws-policy --addon billing
+stackmap aws-policy --addon stepfunctions
 ```
 
 ### `stackmap setup-org-role`
@@ -394,6 +403,7 @@ When you open the StackMap UI, you get:
 - search
 - filter sidebar
 - detail panel
+- Step Functions workflow panel for state-machine nodes
 - keyboard shortcuts
 - timeline / diff controls
 - edit mode
@@ -408,16 +418,39 @@ For live AWS scans, StackMap also applies a live-account grouping pass during sc
 
 The grouping engine prioritizes:
 
-1. CloudFormation or SAM stack membership from tags such as `aws:cloudformation:stack-name`
-2. business tags such as `service`, `app`, `application`, `project`, `component`, and environment labels
-3. connected components formed by high/medium-confidence functional edges
-4. API entrypoint expansion from API Gateway, CloudFront, or ALB into downstream Lambda, ECS, and data stores
+1. environment, account, and region scopes when a graph spans multiple boundaries
+2. business tags such as `service`, `app`, `project`, `component`, `workload`, and team/owner labels
+3. Terraform module paths and CloudFormation/SAM stack membership
+4. shared IAM roles for compute resources
 5. naming-family fallback with normalized resource-name tokenization
 6. VPC or subnet grouping only as a fallback
+7. connected components when no stronger grouping signal exists
 
 Earlier strategies win, so a CloudFormation/SAM or business-tagged application cluster is preferred over a lower-signal VPC bucket. This keeps the UI focused on business components first and infrastructure topology second.
 
-Auto-generated groups can include metadata such as grouping strategy, confidence, evidence, entrypoints, account IDs, regions, and resource counts by type. The detail panel shows a smart group reason when that metadata is available.
+Auto-generated groups include metadata such as grouping strategy, confidence, reason, signals, parent group, account IDs, regions, and resource counts by type. The component landing page shows reason captions, confidence pips, parent-scope filter chips, and a View All option. Resources that no smart group claims are collected in an unlinked bucket instead of being mixed into the main component list.
+
+See `docs/smart-groups.md` for grouping examples and tuning notes.
+
+#### Step Functions viewer
+
+State machine definitions are parsed into a structured ASL graph when StackMap sees them in Terraform, CloudFormation/SAM, or live AWS scans. The detail panel renders a state-machine section with Task, Choice, Parallel, Map, Wait, Pass, Succeed, and Fail states, warnings for unreachable or malformed flows, and a raw ASL graph toggle.
+
+Recent execution summaries are loaded on demand from the State Machine panel. Click **Load recent executions** while serving with an AWS profile:
+
+```bash
+stackmap scan-aws --profile dev --serve
+```
+
+For already-created JSON graphs, serve with a profile:
+
+```bash
+stackmap serve --source aws-output.json --aws-profile dev
+```
+
+The button calls `states:ListExecutions` only when clicked. Without that permission, the workflow diagram still works and the viewer shows a clear message for execution history.
+
+Clicking a resolved Task resource in the state-machine viewer selects and pans the main graph to that resource. See `docs/step-functions.md` for the ASL graph contract and manual review checklist.
 
 #### Relationship evidence and architecture inference
 
@@ -490,6 +523,23 @@ The billing policy is separate from the normal scan policy:
 
 ```bash
 stackmap aws-policy --addon billing
+```
+
+#### Step Functions workflow graph and execution debugging
+
+State machine definitions are parsed during normal Terraform, CloudFormation/SAM, and live AWS scans. Select a Step Functions node and click **Open workflow graph** to switch the main canvas into a StackMap-style workflow view with ASL states, labeled paths, warnings, and an optional **Show target resources** toggle for resolved Task targets.
+
+Workflow structure uses the normal scan permissions:
+
+- `states:ListStateMachines`
+- `states:DescribeStateMachine`
+
+Execution debugging is deliberately on demand. **Load recent executions** requires `states:ListExecutions`; selecting one execution and applying the per-state overlay requires `states:GetExecutionHistory`. StackMap does not fetch execution histories automatically.
+
+Attach the optional debugger policy only when you want execution overlays:
+
+```bash
+stackmap aws-policy --addon stepfunctions
 ```
 
 #### Drift detection
@@ -739,6 +789,7 @@ Optional live UI features use separate policies that can be reviewed and attache
 ```bash
 stackmap aws-policy --addon logs
 stackmap aws-policy --addon billing
+stackmap aws-policy --addon stepfunctions
 ```
 
 The same reviewable JSON files are included in the package:
@@ -746,6 +797,7 @@ The same reviewable JSON files are included in the package:
 - `stackmap/cli/aws_policy.json`
 - `stackmap/cli/aws_policy_live_logs.json`
 - `stackmap/cli/aws_policy_billing.json`
+- `stackmap/cli/aws_policy_stepfunctions.json`
 
 ## License
 

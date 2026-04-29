@@ -5,7 +5,8 @@ from stackmap.parsers.base import ResourceCategory, StackMapIR, StackMapNode
 
 
 def _node(id: str, name: str, rtype: str = "aws_lambda_function",
-          tags: dict | None = None, props: dict | None = None) -> StackMapNode:
+          tags: dict | None = None, props: dict | None = None,
+          metadata: dict | None = None) -> StackMapNode:
     return StackMapNode(
         id=id,
         name=name,
@@ -14,6 +15,7 @@ def _node(id: str, name: str, rtype: str = "aws_lambda_function",
         category=ResourceCategory.SERVERLESS,
         tags=tags or {},
         properties=props or {},
+        metadata=metadata or {},
     )
 
 
@@ -77,3 +79,18 @@ class TestSuggestGroups:
         suggestions = suggest_groups(ir)
         for s in suggestions:
             assert len(s.rules) > 0
+
+    def test_suggest_env_team_and_module_with_confidence_metadata(self) -> None:
+        ir = StackMapIR(nodes=[
+            _node("fn1", "payments-api", tags={"environment": "prod", "team": "payments"}, metadata={"source_module": "module.payments"}),
+            _node("fn2", "payments-worker", tags={"environment": "prod", "team": "payments"}, metadata={"source_module": "module.payments"}),
+            _node("fn3", "payments-events", tags={"environment": "prod", "team": "payments"}, metadata={"source_module": "module.payments"}),
+            _node("fn4", "orders-api", tags={"environment": "dev", "team": "orders"}, metadata={"source_module": "module.orders"}),
+        ])
+
+        suggestions = suggest_groups(ir)
+
+        assert any(s.rules[0].key == "environment" for s in suggestions)
+        assert any(s.rules[0].key == "team" for s in suggestions)
+        assert any(s.metadata.get("module") == "module.payments" for s in suggestions)
+        assert all("confidence:" in s.metadata.get("comment", "") for s in suggestions)

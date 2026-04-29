@@ -128,10 +128,15 @@ POLICY_ACTIONS_LOGS = [
     "logs:FilterLogEvents",
     "logs:GetLogEvents",
 ]
+POLICY_ACTIONS_STEPFUNCTIONS = [
+    "states:ListExecutions",
+    "states:GetExecutionHistory",
+]
 
 POLICY_ACTIONS_OPTIONAL = {
     "billing": POLICY_ACTIONS_BILLING,
     "logs": POLICY_ACTIONS_LOGS,
+    "stepfunctions": POLICY_ACTIONS_STEPFUNCTIONS,
 }
 
 _LIVE_WRITE_ACTIONS = {
@@ -163,7 +168,8 @@ def build_policy_document(
         service_set: "core" or "broad" base permission set.
         extras: Optional list of extra permission sets to include.
             Supported: "billing" (Cost Explorer + CloudWatch metrics),
-                       "logs" (CloudWatch Logs viewer).
+                       "logs" (CloudWatch Logs viewer),
+                       "stepfunctions" (execution debugger).
     """
     actions = list(POLICY_ACTIONS_CORE if service_set == "core" else POLICY_ACTIONS_BROAD)
     extras = extras or []
@@ -172,6 +178,8 @@ def build_policy_document(
             actions.extend(POLICY_ACTIONS_BILLING)
         elif extra == "logs":
             actions.extend(POLICY_ACTIONS_LOGS)
+        elif extra == "stepfunctions":
+            actions.extend(POLICY_ACTIONS_STEPFUNCTIONS)
     return {
         "Version": "2012-10-17",
         "Statement": [
@@ -195,6 +203,7 @@ def build_addon_policy_document(addon: str) -> dict[str, Any]:
     sid = {
         "billing": "StackMapBillingReadOnly",
         "logs": "StackMapLiveLogsReadOnly",
+        "stepfunctions": "StackMapStepFunctionsDebuggerReadOnly",
     }[normalized]
 
     return {
@@ -2929,6 +2938,8 @@ class AWSLiveScanner:
         return nodes, pending, []
 
     def _collect_stepfunctions(self, region: str, executor: AWSAPIExecutor) -> tuple[list[StackMapNode], list[tuple[str, str | None, str, EdgeType]], list[StackMapGroup]]:
+        from stackmap.parsers.asl import classify_edge_label, parse_asl
+
         account_id = executor.context.account_id
         nodes: list[StackMapNode] = []
         pending: list[tuple[str, str | None, str, EdgeType]] = []
@@ -2945,6 +2956,7 @@ class AWSLiveScanner:
             name = detail.get("name") or sm.get("name", _resource_id_from_arn(arn))
             role_arn = detail.get("roleArn")
             definition = detail.get("definition", "")
+            asl_graph = parse_asl(definition) if definition else {"error": "empty"}
             node = _build_live_node(
                 account_id=account_id,
                 region=region,
@@ -2959,16 +2971,24 @@ class AWSLiveScanner:
                     "status": detail.get("status"),
                     "role_arn": role_arn,
                     "creation_date": str(detail.get("creationDate")) if detail.get("creationDate") else None,
+                    "asl_graph": asl_graph,
                 },
             )
             nodes.append(node)
             if role_arn:
                 pending.append((node.id, role_arn, "assumes role", EdgeType.AUTHENTICATES))
-            # Extract ARN references from the state machine definition
-            if isinstance(definition, str):
-                import re
-                for arn_match in re.findall(r'arn:aws:[a-z0-9-]+:[a-z0-9-]*:\d{12}:[^\s"\\}]+', definition):
-                    pending.append((node.id, arn_match.rstrip('",'), "invokes", EdgeType.TRIGGERS))
+            # Emit TRIGGERS edges only for ARNs the ASL parser actually
+            # classified as Task targets. Previous regex scan produced
+            # false positives from ARNs embedded in Parameters/Credentials.
+            for resource in asl_graph.get("resources", []) or []:
+                target_arn = resource.get("arn")
+                if not target_arn:
+                    continue
+                label = classify_edge_label(
+                    resource.get("kind", "unknown"),
+                    resource.get("integration"),
+                )
+                pending.append((node.id, target_arn, label, EdgeType.TRIGGERS))
         return nodes, pending, []
 
     def _collect_ecr(self, region: str, executor: AWSAPIExecutor) -> tuple[list[StackMapNode], list[tuple[str, str | None, str, EdgeType]], list[StackMapGroup]]:

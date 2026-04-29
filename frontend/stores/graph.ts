@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import type { AslExecutionStateOverlay, AslGraph, AslState, AslTransition, AslWarning } from '~/types/asl'
 
 export interface StackMapNode {
   id: string
@@ -15,6 +16,7 @@ export interface StackMapNode {
     org_path?: string
     view_kind?: string
     scanned?: boolean
+    [key: string]: any
   }
   position_hint: {
     tier: string
@@ -57,6 +59,7 @@ export interface StackMapEdge {
 }
 
 export type EditSubmode = 'inspect' | 'structure' | 'connect'
+export type ViewMode = 'architecture' | 'raw' | 'organization' | 'components' | 'step_function'
 
 export interface CustomLayerConfig {
   id: string
@@ -97,7 +100,21 @@ export interface StackMapGroup {
     org_path?: string
     auto_strategy?: string
     evidence?: string
-    confidence?: string
+    confidence?: string | number
+    reason?: string
+    signals?: string[]
+    dominant_categories?: string[]
+    resource_count?: number
+    cohesion?: number
+    tag_key?: string
+    tag_value?: string
+    module?: string
+    stack_name?: string
+    role?: string
+    prefix?: string
+    vpc_id?: string
+    subnet_id?: string
+    region?: string
     [key: string]: any
   }
 }
@@ -119,6 +136,13 @@ export interface ComponentSummary {
   id: string
   name: string
   kind: 'service_component' | 'weakly_linked' | 'unlinked' | 'unlinked_bucket'
+  source?: 'smart_group' | 'connectivity' | 'ungrouped'
+  groupId?: string
+  parentGroupId?: string | null
+  reason?: string
+  confidence?: number
+  signals?: string[]
+  autoStrategy?: string
   nodeIds: string[]
   edgeIds: string[]
   resourceCount: number
@@ -139,6 +163,16 @@ export interface CostOverrideInput {
   avg_duration_ms?: number
   storage_gb?: number
   data_transfer_gb?: number
+  // EC2
+  instance_type?: string
+  ebs_gb?: number
+  hours_per_month?: number
+  spot?: boolean
+  // ECS
+  cpu?: number
+  memory?: number
+  desired_count?: number
+  launch_type?: string
 }
 
 export interface CostNodeEstimate {
@@ -150,6 +184,16 @@ export interface CostNodeEstimate {
   pricing_model: string
   estimate_note: string
   breakdown?: Record<string, unknown> | null
+  monthly_actual?: number
+  anomaly?: { delta: number; ratio: number; severity: string }
+}
+
+export interface TimelineSnapshotMeta {
+  id: string
+  label: string
+  source: string
+  node_count?: number
+  edge_count?: number
 }
 
 export interface CostReportData {
@@ -171,6 +215,11 @@ interface EditHistorySnapshot {
   nodeTierOverrides: Record<string, string>
   nodeOverrides: Record<string, NodeOverrideMeta>
   layoutLayers: string[]
+}
+
+interface WorkflowGraphBuildResult {
+  nodes: StackMapNode[]
+  edges: StackMapEdge[]
 }
 
 const HELPER_RESOURCE_TYPES = new Set([
@@ -282,6 +331,234 @@ const NETWORK_HEAVY_RESOURCE_TYPES = new Set([
 const UNLINKED_COMPONENT_ID = '__unlinked_resources__'
 const COMPONENT_VIEW_THRESHOLD_DEFAULT = 35
 const DEFAULT_LAYOUT_LAYERS = ['frontend', 'api', 'serverless', 'compute', 'security', 'data']
+const STEP_FUNCTION_LAYERS = ['api', 'serverless', 'compute', 'data']
+
+function encodeWorkflowPart(value: string): string {
+  return encodeURIComponent(value).replace(/[!'()*]/g, char => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)
+}
+
+function workflowStateNodeId(machineNodeId: string, stateName: string): string {
+  return `sfn:${encodeWorkflowPart(machineNodeId)}:state:${encodeWorkflowPart(stateName)}`
+}
+
+function workflowTargetNodeId(machineNodeId: string, targetNodeId: string): string {
+  return `sfn:${encodeWorkflowPart(machineNodeId)}:target:${encodeWorkflowPart(targetNodeId)}`
+}
+
+function stateTier(state: AslState): string {
+  if (state.path?.length) return 'workflow-iterator'
+  return 'workflow'
+}
+
+function stateCategory(state: AslState): string {
+  if (state.type === 'Pass') return 'other'
+  if (state.type === 'Choice') return 'integration'
+  if (state.type === 'Map' || state.type === 'Parallel') return 'queue'
+  if (state.type === 'Wait') return 'monitoring'
+  if (state.type === 'Succeed') return 'monitoring'
+  if (state.type === 'Fail') return 'security'
+  if (state.type === 'Task') {
+    if (state.resource_kind === 'dynamodb') return 'database'
+    if (state.resource_kind === 'sqs') return 'queue'
+    if (state.resource_kind === 'sns' || state.resource_kind === 'eventbridge') return 'integration'
+    return 'serverless'
+  }
+  return 'other'
+}
+
+function stateResourceType(state: AslState): string {
+  if (state.type === 'Task' && state.resource_kind) {
+    return `aws_sfn_task_${state.resource_kind}_state`
+  }
+  return `aws_sfn_${state.type.toLowerCase()}_state`
+}
+
+function statusSeverity(status?: string): 'info' | 'warning' | 'critical' | undefined {
+  switch ((status || '').toLowerCase()) {
+    case 'failed':
+    case 'timed_out':
+    case 'aborted':
+      return 'critical'
+    case 'running':
+      return 'warning'
+    case 'succeeded':
+      return 'info'
+    default:
+      return undefined
+  }
+}
+
+function workflowEdgeLabel(transition: AslTransition): string {
+  const kind = transition.kind || 'next'
+  if (transition.error_equals?.length) return `catch ${transition.error_equals.join(', ')}`
+  if (transition.label) return transition.label
+  if (kind === 'next') return ''
+  if (kind === 'default') return 'default'
+  if (kind === 'choice') return 'choice'
+  return kind
+}
+
+function workflowEdgeType(transition: AslTransition): string {
+  if (transition.kind === 'catch') return 'routes_to'
+  if (transition.kind === 'choice' || transition.kind === 'default') return 'routes_to'
+  return 'triggers'
+}
+
+function buildWorkflowGraph(
+  machine: StackMapNode | null,
+  asl: AslGraph | null,
+  sourceNodes: StackMapNode[],
+  showTargets: boolean,
+  overlays: Record<string, AslExecutionStateOverlay>
+): WorkflowGraphBuildResult {
+  if (!machine || !asl || !Array.isArray(asl.states)) return { nodes: [], edges: [] }
+
+  const warningsByState = new Map<string, AslWarning[]>()
+  for (const warning of asl.warnings || []) {
+    if (!warning.state) continue
+    warningsByState.set(warning.state, [...(warningsByState.get(warning.state) || []), warning])
+  }
+
+  const realNodeById = new Map(sourceNodes.map(node => [node.id, node]))
+  const nodes: StackMapNode[] = asl.states.map((state, index) => {
+    const overlay = overlays[state.qualified_name] || overlays[state.name]
+    const warningCount = (warningsByState.get(state.qualified_name) || warningsByState.get(state.name) || []).length
+    const severity = warningCount > 0 ? 'warning' : statusSeverity(overlay?.status)
+    return {
+      id: workflowStateNodeId(machine.id, state.qualified_name),
+      name: state.name,
+      resource_type: stateResourceType(state),
+      provider: 'aws',
+      category: stateCategory(state),
+      properties: {
+        asl_state: state,
+        state_machine_node_id: machine.id,
+        execution_overlay: overlay || null,
+        warning_count: warningCount,
+      },
+      tags: {},
+      metadata: {
+        account_id: machine.metadata?.account_id,
+        account_name: machine.metadata?.account_name,
+        region: machine.metadata?.region || machine.position_hint?.region,
+        view_kind: 'sfn_state',
+        state_machine_node_id: machine.id,
+        asl_state_name: state.qualified_name,
+        asl_state_type: state.type,
+        execution_status: overlay?.status,
+      },
+      position_hint: {
+        tier: stateTier(state),
+        weight: state.type === 'Choice' || state.type === 'Parallel' || state.type === 'Map' ? 6 : 5,
+        manual_order: (index + 1) * 100,
+        account_id: machine.position_hint?.account_id || machine.metadata?.account_id,
+        region: machine.position_hint?.region || machine.metadata?.region,
+        view_kind: 'sfn_state',
+        drift_status: overlay?.status === 'succeeded' ? 'in_sync' : undefined,
+        drift_severity: severity,
+      },
+    }
+  })
+
+  const stateNames = new Set(asl.states.map(state => state.qualified_name))
+  const edges: StackMapEdge[] = (asl.transitions || [])
+    .filter(transition => stateNames.has(transition.from) && stateNames.has(transition.to))
+    .map((transition, index) => ({
+      id: `sfn:${encodeWorkflowPart(machine.id)}:edge:${index}:${encodeWorkflowPart(transition.from)}:${encodeWorkflowPart(transition.to)}:${transition.kind}`,
+      source: workflowStateNodeId(machine.id, transition.from),
+      target: workflowStateNodeId(machine.id, transition.to),
+      edge_type: workflowEdgeType(transition),
+      label: workflowEdgeLabel(transition),
+      metadata: {
+        source: 'sfn_workflow',
+        confidence: 'high',
+        inference_rule: `asl_${transition.kind || 'next'}`,
+        evidence: workflowEdgeLabel(transition),
+        asl_transition: transition,
+      },
+    }))
+
+  for (const state of asl.states) {
+    const nestedStarts: string[] = []
+    if (state.iterator?.states?.length) {
+      const start = state.iterator.start_at
+      const qualifiedStart = state.iterator.states.find(candidate => candidate.endsWith(`::${start}`)) || state.iterator.states[0]
+      if (qualifiedStart) nestedStarts.push(qualifiedStart)
+    }
+    for (const branch of state.branches || []) {
+      const qualifiedStart = branch.states.find(candidate => candidate.endsWith(`::${branch.start_at}`)) || branch.states[0]
+      if (qualifiedStart) nestedStarts.push(qualifiedStart)
+    }
+    for (const nestedStart of nestedStarts) {
+      if (!stateNames.has(nestedStart)) continue
+      edges.push({
+        id: `sfn:${encodeWorkflowPart(machine.id)}:contains:${encodeWorkflowPart(state.qualified_name)}:${encodeWorkflowPart(nestedStart)}`,
+        source: workflowStateNodeId(machine.id, state.qualified_name),
+        target: workflowStateNodeId(machine.id, nestedStart),
+        edge_type: 'contains',
+        label: state.type === 'Map' ? 'iterator' : 'branch',
+        metadata: {
+          source: 'sfn_workflow',
+          confidence: 'high',
+          inference_rule: `asl_${state.type.toLowerCase()}_child`,
+          evidence: state.type === 'Map' ? 'iterator start' : 'branch start',
+        },
+      })
+    }
+  }
+
+  if (showTargets) {
+    const addedTargets = new Set<string>()
+    for (const state of asl.states) {
+      if (state.type !== 'Task' || !state.resource_node_id) continue
+      const realTarget = realNodeById.get(state.resource_node_id)
+      if (!realTarget) continue
+      const targetId = workflowTargetNodeId(machine.id, realTarget.id)
+      if (!addedTargets.has(targetId)) {
+        addedTargets.add(targetId)
+        nodes.push({
+          ...realTarget,
+          id: targetId,
+          name: realTarget.name,
+          properties: {
+            ...realTarget.properties,
+            mirrored_from_node_id: realTarget.id,
+            state_machine_node_id: machine.id,
+          },
+          metadata: {
+            ...realTarget.metadata,
+            view_kind: 'sfn_target',
+            mirrored_from_node_id: realTarget.id,
+            state_machine_node_id: machine.id,
+          },
+          position_hint: {
+            ...realTarget.position_hint,
+            tier: 'data',
+            weight: Math.max(3, realTarget.position_hint?.weight || 3),
+            manual_order: (nodes.length + 1) * 100,
+            view_kind: 'sfn_target',
+          },
+        })
+      }
+      edges.push({
+        id: `sfn:${encodeWorkflowPart(machine.id)}:target-edge:${encodeWorkflowPart(state.qualified_name)}:${encodeWorkflowPart(realTarget.id)}`,
+        source: workflowStateNodeId(machine.id, state.qualified_name),
+        target: targetId,
+        edge_type: state.resource_kind === 'dynamodb' || state.resource_kind === 's3' ? 'writes_to' : 'triggers',
+        label: state.resource_kind || 'target',
+        metadata: {
+          source: 'sfn_workflow_target',
+          confidence: 'high',
+          inference_rule: 'asl_task_resource',
+          evidence: state.resource_arn || realTarget.id,
+          real_node_id: realTarget.id,
+        },
+      })
+    }
+  }
+
+  return { nodes, edges }
+}
 
 function normalizeNodeTier(node: StackMapNode): string {
   const currentTier = node.position_hint?.tier
@@ -766,7 +1043,129 @@ function flattenOrganizationTree(groups: StackMapGroup[]): OrgTreeItem[] {
   return result
 }
 
-function buildComponentSummaries(nodes: StackMapNode[], edges: StackMapEdge[]): ComponentSummary[] {
+function componentSort(a: ComponentSummary, b: ComponentSummary): number {
+  if (a.kind === 'unlinked_bucket' && b.kind !== 'unlinked_bucket') return 1
+  if (b.kind === 'unlinked_bucket' && a.kind !== 'unlinked_bucket') return -1
+  if (b.usefulnessScore !== a.usefulnessScore) return b.usefulnessScore - a.usefulnessScore
+  if (b.resourceCount !== a.resourceCount) return b.resourceCount - a.resourceCount
+  return a.name.localeCompare(b.name)
+}
+
+function buildUnlinkedSummary(
+  nodeIds: Set<string>,
+  nodesById: Map<string, StackMapNode>,
+  edges: StackMapEdge[]
+): ComponentSummary | null {
+  if (nodeIds.size === 0) return null
+  const unlinkedNodes = [...nodeIds]
+    .map(id => nodesById.get(id))
+    .filter((value): value is StackMapNode => Boolean(value))
+  if (!unlinkedNodes.length) return null
+  const unlinkedIdSet = new Set(unlinkedNodes.map(node => node.id))
+  const unlinkedEdges = edges.filter(edge => unlinkedIdSet.has(edge.source) && unlinkedIdSet.has(edge.target))
+  const categories = topCategoriesForNodes(unlinkedNodes)
+  const accounts = [...new Set(unlinkedNodes.map(node => accountIdForNode(node)).filter((value): value is string => Boolean(value)))].sort()
+  const regions = [...new Set(unlinkedNodes.map(node => node.metadata?.region || node.position_hint?.region).filter((value): value is string => Boolean(value)))].sort()
+  return {
+    id: UNLINKED_COMPONENT_ID,
+    name: 'unlinked-resources',
+    kind: 'unlinked_bucket',
+    source: 'ungrouped',
+    nodeIds: unlinkedNodes.map(node => node.id),
+    edgeIds: unlinkedEdges.map(edge => edge.id),
+    resourceCount: unlinkedNodes.length,
+    edgeCount: unlinkedEdges.length,
+    dominantCategories: categories,
+    entrypoints: [],
+    accountIds: accounts,
+    regions,
+    usefulnessScore: 0,
+    helperRatio: unlinkedNodes.length > 0 ? unlinkedNodes.filter(isHelperNode).length / unlinkedNodes.length : 0,
+    mostlyNetwork: unlinkedNodes.length > 0 && unlinkedNodes.every(node => node.category === 'network' || NETWORK_HEAVY_RESOURCE_TYPES.has(node.resource_type)),
+    summary: `${categories.slice(0, 2).join(' + ') || 'mixed'} · ${accounts.length || 1} account${accounts.length === 1 ? '' : 's'}`,
+  }
+}
+
+const PARENT_TIER_STRATEGIES = new Set(['account', 'region', 'environment'])
+
+function buildSmartGroupComponentSummaries(
+  nodes: StackMapNode[],
+  edges: StackMapEdge[],
+  groups: StackMapGroup[]
+): ComponentSummary[] {
+  const nodesById = new Map(nodes.map(node => [node.id, node]))
+  const visibleIds = new Set(nodes.map(node => node.id))
+  const adjacency = buildAdjacency(edges)
+  const summaries: ComponentSummary[] = []
+  const assigned = new Set<string>()
+  // Parent-tier groups (account/region/environment) are scopes, not
+  // primary cards — they're used for hierarchy parent pointers and UI
+  // filter chips, but they don't become components themselves.
+  const smartGroupEntries = groups
+    .filter(group => group.group_type === 'smart_group')
+    .map(group => ({
+      group,
+      children: group.children.filter(child => visibleIds.has(child)),
+    }))
+    .filter(entry => entry.children.length > 0)
+
+  const primary = smartGroupEntries
+    .filter(({ group }) => !PARENT_TIER_STRATEGIES.has(String(group.metadata?.auto_strategy || '')))
+    .sort((a, b) => {
+      const cA = Number(a.group.metadata?.confidence ?? 0)
+      const cB = Number(b.group.metadata?.confidence ?? 0)
+      if (cB !== cA) return cB - cA
+      if (b.children.length !== a.children.length) return b.children.length - a.children.length
+      return a.group.name.localeCompare(b.group.name)
+    })
+
+  if (!primary.length) return []
+
+  for (const { group, children } of primary) {
+    const groupNodeIds = children.filter(nodeId => !assigned.has(nodeId))
+    if (!groupNodeIds.length) continue
+    for (const nodeId of groupNodeIds) assigned.add(nodeId)
+    const groupIdSet = new Set(groupNodeIds)
+    const groupNodes = groupNodeIds
+      .map(id => nodesById.get(id))
+      .filter((value): value is StackMapNode => Boolean(value))
+    const groupEdges = edges.filter(edge => groupIdSet.has(edge.source) && groupIdSet.has(edge.target))
+    const described = describeComponent(groupNodes, groupEdges, adjacency)
+    const meta = group.metadata || {}
+    const reason = typeof meta.reason === 'string' ? meta.reason : ''
+    const confidence = typeof meta.confidence === 'number' ? meta.confidence : undefined
+    const strategy = typeof meta.auto_strategy === 'string' ? meta.auto_strategy : undefined
+    const signals = Array.isArray(meta.signals) ? (meta.signals as string[]) : undefined
+    summaries.push({
+      ...described,
+      id: `component:${group.id}`,
+      name: group.name || described.name,
+      kind: 'service_component',
+      source: 'smart_group',
+      groupId: group.id,
+      parentGroupId: group.parent ?? null,
+      reason,
+      confidence,
+      autoStrategy: strategy,
+      signals,
+      usefulnessScore: described.usefulnessScore + 12,
+      summary: strategy
+        ? `${described.summary} · grouped by ${strategy.replace(/_/g, ' ')}`
+        : described.summary,
+    })
+  }
+
+  const ungroupedNodeIds = new Set(nodes.filter(node => !assigned.has(node.id)).map(node => node.id))
+  const unlinkedSummary = buildUnlinkedSummary(ungroupedNodeIds, nodesById, edges)
+  if (unlinkedSummary) summaries.push(unlinkedSummary)
+
+  return summaries.sort(componentSort)
+}
+
+function buildComponentSummaries(nodes: StackMapNode[], edges: StackMapEdge[], groups: StackMapGroup[] = []): ComponentSummary[] {
+  const groupSummaries = buildSmartGroupComponentSummaries(nodes, edges, groups)
+  if (groupSummaries.length > 0) return groupSummaries
+
   const nodeById = new Map(nodes.map(node => [node.id, node]))
   const adjacency = buildAdjacency(edges)
   const seen = new Set<string>()
@@ -906,7 +1305,6 @@ function buildComponentSummaries(nodes: StackMapNode[], edges: StackMapEdge[]): 
 
   const visibleSummaries: ComponentSummary[] = []
   const unlinkedNodeIds = new Set<string>()
-  const unlinkedEdgeIds = new Set<string>()
 
   for (const summary of summaries) {
     if (summary.kind === 'service_component' || summary.kind === 'weakly_linked') {
@@ -914,43 +1312,14 @@ function buildComponentSummaries(nodes: StackMapNode[], edges: StackMapEdge[]): 
       continue
     }
     for (const nodeId of summary.nodeIds) unlinkedNodeIds.add(nodeId)
-    for (const edgeId of summary.edgeIds) unlinkedEdgeIds.add(edgeId)
   }
 
   if (unlinkedNodeIds.size > 0) {
-    const unlinkedNodes = [...unlinkedNodeIds]
-      .map(id => nodeById.get(id))
-      .filter((value): value is StackMapNode => Boolean(value))
-    const unlinkedEdges = edges.filter(edge => unlinkedEdgeIds.has(edge.id))
-    const categories = topCategoriesForNodes(unlinkedNodes)
-    const accounts = [...new Set(unlinkedNodes.map(node => accountIdForNode(node)).filter((value): value is string => Boolean(value)))].sort()
-    const regions = [...new Set(unlinkedNodes.map(node => node.metadata?.region || node.position_hint?.region).filter((value): value is string => Boolean(value)))].sort()
-    visibleSummaries.push({
-      id: UNLINKED_COMPONENT_ID,
-      name: 'unlinked-resources',
-      kind: 'unlinked_bucket',
-      nodeIds: [...unlinkedNodeIds],
-      edgeIds: [...unlinkedEdgeIds],
-      resourceCount: unlinkedNodes.length,
-      edgeCount: unlinkedEdges.length,
-      dominantCategories: categories,
-      entrypoints: [],
-      accountIds: accounts,
-      regions,
-      usefulnessScore: 0,
-      helperRatio: unlinkedNodes.length > 0 ? unlinkedNodes.filter(isHelperNode).length / unlinkedNodes.length : 0,
-      mostlyNetwork: unlinkedNodes.length > 0 && unlinkedNodes.every(node => node.category === 'network' || NETWORK_HEAVY_RESOURCE_TYPES.has(node.resource_type)),
-      summary: `${categories.slice(0, 2).join(' + ') || 'mixed'} · ${accounts.length || 1} account${accounts.length === 1 ? '' : 's'}`,
-    })
+    const unlinkedSummary = buildUnlinkedSummary(unlinkedNodeIds, nodeById, edges)
+    if (unlinkedSummary) visibleSummaries.push(unlinkedSummary)
   }
 
-  return visibleSummaries.sort((a, b) => {
-    if (a.kind === 'unlinked_bucket' && b.kind !== 'unlinked_bucket') return 1
-    if (b.kind === 'unlinked_bucket' && a.kind !== 'unlinked_bucket') return -1
-    if (b.usefulnessScore !== a.usefulnessScore) return b.usefulnessScore - a.usefulnessScore
-    if (b.resourceCount !== a.resourceCount) return b.resourceCount - a.resourceCount
-    return a.name.localeCompare(b.name)
-  })
+  return visibleSummaries.sort(componentSort)
 }
 
 export const useGraphStore = defineStore('graph', {
@@ -967,7 +1336,7 @@ export const useGraphStore = defineStore('graph', {
     minWeight: 1,
     hopLimit: 0,
     searchQuery: '',
-    viewMode: 'architecture' as 'architecture' | 'raw' | 'organization' | 'components',
+    viewMode: 'architecture' as ViewMode,
     loaded: false,
     diffMode: false as boolean,
     diffSlider: 0.5 as number,
@@ -975,12 +1344,19 @@ export const useGraphStore = defineStore('graph', {
     activeAccountId: null as string | null,
     activeOrgGroupId: null as string | null,
     activeComponentId: null as string | null,
+    componentViewBypassed: false as boolean,
+    zoomScale: 1 as number,
+    lockedZoomTier: null as null | 'overview' | 'mid' | 'detail',
     componentViewThreshold: COMPONENT_VIEW_THRESHOLD_DEFAULT,
     showUnlinkedResources: true as boolean,
     showWeaklyLinkedComponents: false as boolean,
     collapseNetworkScaffolding: true as boolean,
     showCrossAccountEdges: true as boolean,
     showLowConfidenceEdges: true as boolean,
+    activeStateMachineNodeId: null as string | null,
+    showStateMachineTargets: false as boolean,
+    selectedStateMachineExecutionArn: null as string | null,
+    stateMachineExecutionOverlays: {} as Record<string, Record<string, AslExecutionStateOverlay>>,
 
     // Edit mode state
     editMode: false as boolean,
@@ -1036,6 +1412,7 @@ export const useGraphStore = defineStore('graph', {
       severity: string
       node_ids: string[]
       recommendation: string
+      remediation?: string
       category: string
     }[],
     activeFindingFilter: null as string | null,
@@ -1064,6 +1441,15 @@ export const useGraphStore = defineStore('graph', {
     billingAvailable: false as boolean,
     billingLoading: false as boolean,
     billingError: null as string | null,
+
+    // Feature: Timeline / profiles / NL query
+    timelineSnapshots: [] as TimelineSnapshotMeta[],
+    timelineDiffs: [] as Array<Record<string, any>>,
+    activeSnapshotId: null as string | null,
+    nlQueryReason: '' as string,
+    availableProfiles: [] as string[],
+    activeProfile: null as string | null,
+    profileSwitching: false as boolean,
   }),
 
   getters: {
@@ -1080,6 +1466,15 @@ export const useGraphStore = defineStore('graph', {
       return state.userEdges.find(edge => edge.id === state.selectedEdgeId)
         ?? this.graphEdges.find(edge => edge.id === state.selectedEdgeId)
         ?? null
+    },
+
+    getAslGraph(state): (nodeId: string) => AslGraph | null {
+      return (nodeId: string) => {
+        const node = state.nodes.find(n => n.id === nodeId)
+          ?? state.userNodes.find(n => n.id === nodeId)
+        const graph = node?.properties?.asl_graph
+        return graph && typeof graph === 'object' ? graph as AslGraph : null
+      }
     },
 
     hasCostOverrides(state): boolean {
@@ -1099,14 +1494,50 @@ export const useGraphStore = defineStore('graph', {
     },
 
     shouldUseComponentLanding(): boolean {
+      if (this.componentViewBypassed) return false
       if (!this.isLargeLiveScan) return false
       if (this.isOrganizationOverview) return false
       return true
     },
 
+    zoomTier(state): 'overview' | 'mid' | 'detail' {
+      if (state.lockedZoomTier) return state.lockedZoomTier
+      if (state.zoomScale < 0.35) return 'overview'
+      if (state.zoomScale < 0.8) return 'mid'
+      return 'detail'
+    },
+
     helperParentMap(state): Map<string, string> {
-      if (state.viewMode === 'raw' || state.viewMode === 'organization') return new Map()
+      if (state.viewMode === 'raw' || state.viewMode === 'organization' || state.viewMode === 'step_function') return new Map()
       return buildHelperParentMap(state.nodes, state.edges)
+    },
+
+    activeStateMachineNode(state): StackMapNode | null {
+      if (!state.activeStateMachineNodeId) return null
+      return state.nodes.find(node => node.id === state.activeStateMachineNodeId)
+        ?? state.userNodes.find(node => node.id === state.activeStateMachineNodeId)
+        ?? null
+    },
+
+    activeStateMachineAsl(): AslGraph | null {
+      const node = this.activeStateMachineNode
+      const graph = node?.properties?.asl_graph
+      return graph && typeof graph === 'object' ? graph as AslGraph : null
+    },
+
+    activeStateMachineExecutionOverlay(state): Record<string, AslExecutionStateOverlay> {
+      if (!state.activeStateMachineNodeId) return {}
+      return state.stateMachineExecutionOverlays[state.activeStateMachineNodeId] || {}
+    },
+
+    workflowGraph(): WorkflowGraphBuildResult {
+      return buildWorkflowGraph(
+        this.activeStateMachineNode,
+        this.activeStateMachineAsl,
+        this.nodes,
+        this.showStateMachineTargets,
+        this.activeStateMachineExecutionOverlay,
+      )
     },
 
     organizationNodes(state): StackMapNode[] {
@@ -1232,7 +1663,7 @@ export const useGraphStore = defineStore('graph', {
     },
 
     componentSummaries(state): ComponentSummary[] {
-      const summaries = buildComponentSummaries(this.architectureSourceNodes, this.architectureSourceEdges)
+      const summaries = buildComponentSummaries(this.architectureSourceNodes, this.architectureSourceEdges, state.groups)
       if (state.showWeaklyLinkedComponents) return summaries
       const explicit = summaries.filter(summary => summary.kind !== 'weakly_linked' && summary.kind !== 'unlinked_bucket')
       const hiddenWeakly = summaries.filter(summary => summary.kind === 'weakly_linked')
@@ -1286,6 +1717,7 @@ export const useGraphStore = defineStore('graph', {
     },
 
     graphNodes(state): StackMapNode[] {
+      if (state.viewMode === 'step_function') return this.workflowGraph.nodes
       if (state.viewMode === 'organization') return this.organizationNodes
       if (state.viewMode === 'components') return []
       if (state.viewMode === 'raw') {
@@ -1293,6 +1725,19 @@ export const useGraphStore = defineStore('graph', {
       }
 
       let nodes = this.architectureSourceNodes
+      if (state.viewMode === 'architecture' && this.zoomTier === 'overview' && this.componentSummaries.length > 1 && !state.activeComponentId && !state.componentViewBypassed) {
+        return this.componentSummaries.map((component, index) => ({
+          id: `aggregate:${component.id}`,
+          name: component.name,
+          resource_type: 'stackmap_component',
+          provider: 'stackmap',
+          category: component.dominantCategories[0] || 'other',
+          properties: { resources: component.resourceCount, edges: component.edgeCount },
+          tags: {},
+          metadata: { view_kind: 'aggregate' },
+          position_hint: { tier: 'compute', weight: Math.min(8, Math.max(3, component.resourceCount)), manual_order: (index + 1) * 100 },
+        }))
+      }
       if (state.activeComponentId) {
         const activeIds = this.activeComponentNodeIds
         if (activeIds) nodes = nodes.filter(node => activeIds.has(node.id))
@@ -1307,6 +1752,7 @@ export const useGraphStore = defineStore('graph', {
     },
 
     graphEdges(state): StackMapEdge[] {
+      if (state.viewMode === 'step_function') return this.workflowGraph.edges
       if (state.viewMode === 'organization') return this.organizationEdges
       if (state.viewMode === 'components') return []
       if (state.viewMode === 'raw') return this.rawSourceEdges
@@ -1326,6 +1772,7 @@ export const useGraphStore = defineStore('graph', {
     },
 
     graphGroups(state): StackMapGroup[] {
+      if (state.viewMode === 'step_function') return []
       if (state.viewMode === 'organization') return this.organizationGroups
       const nodesById = new Map(state.nodes.map(node => [node.id, node]))
       const visibleNodeIds = new Set(this.graphNodes.map(node => node.id))
@@ -1405,6 +1852,12 @@ export const useGraphStore = defineStore('graph', {
       return (state.metadata?.diff_summary as { added: number; removed: number; modified: number; unchanged: number }) ?? null
     },
 
+    activeTimelineDiff(state): Record<string, any> | null {
+      if (!state.timelineDiffs.length) return null
+      if (!state.activeSnapshotId) return state.timelineDiffs[state.timelineDiffs.length - 1]
+      return state.timelineDiffs.find(diff => diff.to === state.activeSnapshotId) || state.timelineDiffs[state.timelineDiffs.length - 1]
+    },
+
     nodeDiffStatus(): Record<string, string> {
       return Object.fromEntries(
         this.nodes
@@ -1419,6 +1872,10 @@ export const useGraphStore = defineStore('graph', {
     },
 
     activeBreadcrumb(state): string[] {
+      if (state.viewMode === 'step_function') {
+        const machine = this.activeStateMachineNode
+        return machine ? [machine.name, 'workflow graph'] : ['workflow graph']
+      }
       if (state.viewMode === 'organization' && state.activeOrgGroupId) {
         const groupById = new Map(this.organizationGroupsRaw.map(group => [group.id, group]))
         const path: string[] = []
@@ -1456,6 +1913,10 @@ export const useGraphStore = defineStore('graph', {
         if (state.categoryFilters[node.category] === false) return false
         if (state.minWeight > 1 && (node.position_hint?.weight || 2) < state.minWeight) return false
         if (hopSet && !hopSet.has(node.id)) return false
+        if (state.activeFindingFilter) {
+          const finding = state.findings.find(item => item.pattern_id === state.activeFindingFilter)
+          if (finding && !finding.node_ids.includes(node.id)) return false
+        }
         if (state.diffMode) {
           const diffStatus = node.position_hint?.diff_status
           if (state.showOnlyChanges && diffStatus === 'unchanged') return false
@@ -1648,8 +2109,21 @@ export const useGraphStore = defineStore('graph', {
         this.diffMode = true
         this.diffSlider = 0.5
       }
+      if (data.timeline?.snapshots?.length) {
+        this.timelineSnapshots = data.timeline.snapshots.map((snapshot: any) => ({
+          id: snapshot.id,
+          label: snapshot.label,
+          source: snapshot.source,
+          node_count: snapshot.node_count,
+          edge_count: snapshot.edge_count,
+        }))
+        this.timelineDiffs = data.timeline.diffs || []
+        this.activeSnapshotId = this.metadata.active_snapshot_id || this.timelineSnapshots[this.timelineSnapshots.length - 1]?.id || null
+        this.diffMode = this.timelineDiffs.length > 0
+      }
 
       this.activeComponentId = null
+      this.componentViewBypassed = false
       if (this.metadata?.source_type === 'aws_live' && this.metadata?.scan_mode === 'organization' && this.hasOrganizationData) {
         this.viewMode = 'organization'
       } else if (this.shouldUseComponentLanding) {
@@ -1668,6 +2142,7 @@ export const useGraphStore = defineStore('graph', {
       // Auto-load findings, drift data, and check live features (non-blocking)
       this.loadFindings()
       this.checkLogsAvailable()
+      this.loadProfiles()
       if (this.metadata?.drift_summary) {
         this.driftSummary = this.metadata.drift_summary
       }
@@ -1687,6 +2162,121 @@ export const useGraphStore = defineStore('graph', {
 
     setShowOnlyChanges(show: boolean) {
       this.showOnlyChanges = show
+    },
+
+    setZoomScale(scale: number) {
+      this.zoomScale = Number.isFinite(scale) ? scale : 1
+    },
+
+    setLockedZoomTier(tier: null | 'overview' | 'mid' | 'detail') {
+      this.lockedZoomTier = tier
+    },
+
+    async loadTimeline() {
+      try {
+        const res = await fetch('/api/timeline')
+        if (!res.ok) return
+        const data = await res.json()
+        this.timelineSnapshots = data.snapshots || []
+        this.timelineDiffs = data.diffs || []
+      } catch {
+        // Timeline is optional.
+      }
+    },
+
+    async setActiveSnapshot(snapshotId: string) {
+      try {
+        const res = await fetch(`/api/timeline?id=${encodeURIComponent(snapshotId)}`)
+        if (!res.ok) return
+        const data = await res.json()
+        this.metadata = data.metadata || {}
+        this.nodes = data.nodes || []
+        this.edges = data.edges || []
+        this.groups = data.groups || []
+        this.activeSnapshotId = snapshotId
+        this.activeStateMachineNodeId = null
+        this.selectedStateMachineExecutionArn = null
+        this.selectedNodeId = null
+        this.selectedEdgeId = null
+        this.requestRelayout()
+        await this.loadFindings()
+        await this.refreshCostData()
+      } catch {
+        // Keep current graph if snapshot fetch fails.
+      }
+    },
+
+    getDiffBetween(fromId: string, toId: string): Record<string, any> | null {
+      return this.timelineDiffs.find(diff => diff.from === fromId && diff.to === toId) || null
+    },
+
+    jumpToNextTimelineChange() {
+      const diff = this.activeTimelineDiff
+      const changedIds = [...(diff?.changed || []), ...(diff?.added || []), ...(diff?.removed || [])]
+      if (changedIds.length === 0) return null
+      const currentIndex = this.selectedNodeId ? changedIds.indexOf(this.selectedNodeId) : -1
+      const nextId = changedIds[(currentIndex + 1) % changedIds.length]
+      this.selectNode(nextId)
+      return nextId
+    },
+
+    async applyNaturalLanguageQuery(query: string): Promise<{ ok: boolean; error?: string }> {
+      try {
+        const res = await fetch('/api/nl-query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query }),
+        })
+        const data = await res.json()
+        if (!res.ok || data.error) return { ok: false, error: data.error || `Server returned ${res.status}` }
+        const nodeIds: string[] = data.filter?.nodeIds || []
+        this.nlQueryReason = data.reason || ''
+        if (nodeIds.length > 0) {
+          this.isolateNodeSet(nodeIds, 'applied natural-language filter')
+          this.selectNode(nodeIds[0])
+        } else {
+          this.nlQueryReason = data.reason || 'No matching resources.'
+        }
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: String(err) }
+      }
+    },
+
+    async loadProfiles() {
+      try {
+        const res = await fetch('/api/profiles')
+        if (!res.ok) return
+        const data = await res.json()
+        this.availableProfiles = data.available || []
+        this.activeProfile = data.active || null
+      } catch {
+        // Profiles are optional outside live AWS serve mode.
+      }
+    },
+
+    async activateProfile(profile: string): Promise<{ ok: boolean; error?: string }> {
+      if (this.profileSwitching || this.logLoading || this.billingLoading) {
+        return { ok: false, error: 'Wait for the current logs, billing, or profile request to finish.' }
+      }
+      this.profileSwitching = true
+      try {
+        const res = await fetch('/api/profiles/activate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ profile }),
+        })
+        const data = await res.json()
+        if (!res.ok || !data.ok) return { ok: false, error: data.error || `Server returned ${res.status}` }
+        this.activeProfile = data.active || profile
+        this.logsAvailable = !!data.logs
+        this.billingAvailable = !!data.billing
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: String(err) }
+      } finally {
+        this.profileSwitching = false
+      }
     },
 
     selectNode(nodeId: string | null) {
@@ -1749,8 +2339,12 @@ export const useGraphStore = defineStore('graph', {
       this.searchQuery = query
     },
 
-    setViewMode(mode: 'architecture' | 'raw' | 'organization' | 'components') {
+    setViewMode(mode: ViewMode) {
       this.viewMode = mode
+      if (mode === 'components') this.componentViewBypassed = false
+      if (mode !== 'step_function') {
+        this.activeStateMachineNodeId = null
+      }
       if (mode === 'architecture' && this.selectedNodeId) {
         const parent = this.helperParentMap.get(this.selectedNodeId)
         if (parent) this.selectedNodeId = parent
@@ -1762,12 +2356,88 @@ export const useGraphStore = defineStore('graph', {
       if (mode !== 'architecture') {
         this.activeComponentId = null
       }
+      this.requestRelayout()
+    },
+
+    openStateMachineGraph(nodeId: string) {
+      const asl = this.getAslGraph(nodeId)
+      if (!asl || !Array.isArray(asl.states) || asl.states.length === 0) return false
+      this.activeStateMachineNodeId = nodeId
+      this.viewMode = 'step_function'
+      this.showStateMachineTargets = false
+      this.activeComponentId = null
+      this.componentViewBypassed = true
+      this.selectedEdgeId = null
+      const firstState = asl.start_at
+        ? asl.states.find(state => state.qualified_name === asl.start_at || state.name === asl.start_at)
+        : asl.states[0]
+      this.selectedNodeId = firstState ? workflowStateNodeId(nodeId, firstState.qualified_name) : null
+      this.hopLimit = 0
+      for (const layer of STEP_FUNCTION_LAYERS) {
+        if (!this.layoutLayers.includes(layer)) this.layoutLayers.push(layer)
+      }
+      this.requestRelayout()
+      return true
+    },
+
+    returnToArchitectureFromStateMachine() {
+      const machineNodeId = this.activeStateMachineNodeId
+      this.viewMode = 'architecture'
+      this.activeStateMachineNodeId = null
+      this.showStateMachineTargets = false
+      this.selectedStateMachineExecutionArn = null
+      this.selectedEdgeId = null
+      this.selectedNodeId = machineNodeId
+      this.hopLimit = 0
+      this.requestRelayout()
+    },
+
+    setShowStateMachineTargets(show: boolean) {
+      this.showStateMachineTargets = show
+      this.requestRelayout()
+    },
+
+    jumpFromMirroredTarget(targetNodeId: string) {
+      const machineNodeId = this.activeStateMachineNodeId
+      this.viewMode = 'architecture'
+      this.activeStateMachineNodeId = null
+      this.showStateMachineTargets = false
+      this.selectedNodeId = targetNodeId
+      this.selectedEdgeId = null
+      this.hopLimit = 0
+      this.requestRelayout()
+      if (typeof window !== 'undefined') {
+        window.setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('stackmap-pan-to-node', { detail: { nodeId: targetNodeId, fromStateMachine: machineNodeId } }))
+        }, 50)
+      }
+    },
+
+    applyStateMachineExecutionHistory(
+      nodeId: string,
+      executionArn: string,
+      states: Record<string, AslExecutionStateOverlay>,
+      execution?: Record<string, any>
+    ) {
+      this.stateMachineExecutionOverlays[nodeId] = { ...states }
+      this.selectedStateMachineExecutionArn = executionArn
+      const node = this.nodes.find(candidate => candidate.id === nodeId)
+      const asl = node?.properties?.asl_graph as AslGraph | undefined
+      if (asl && typeof asl === 'object') {
+        asl.selected_execution = {
+          execution_arn: executionArn,
+          status: String(execution?.status || ''),
+          states: { ...states },
+        }
+      }
+      this.requestRelayout()
     },
 
     setActiveAccount(accountId: string | null) {
       this.activeAccountId = accountId
       this.activeOrgGroupId = null
       this.activeComponentId = null
+      this.componentViewBypassed = false
       this.selectedNodeId = null
       this.hopLimit = 0
     },
@@ -1776,6 +2446,7 @@ export const useGraphStore = defineStore('graph', {
       this.activeAccountId = accountId
       this.activeOrgGroupId = null
       this.activeComponentId = null
+      this.componentViewBypassed = false
       this.viewMode = this.shouldUseComponentLanding ? 'components' : 'architecture'
       this.selectedNodeId = null
       this.hopLimit = 0
@@ -1796,13 +2467,25 @@ export const useGraphStore = defineStore('graph', {
 
     openComponent(componentId: string) {
       this.activeComponentId = componentId
+      this.componentViewBypassed = false
       this.viewMode = 'architecture'
       this.selectedNodeId = null
       this.hopLimit = 0
     },
 
+    viewAllComponents() {
+      this.activeComponentId = null
+      this.componentViewBypassed = true
+      this.showUnlinkedResources = true
+      this.viewMode = 'architecture'
+      this.selectedNodeId = null
+      this.selectedEdgeId = null
+      this.hopLimit = 0
+    },
+
     returnToComponents() {
       this.activeComponentId = null
+      this.componentViewBypassed = false
       this.selectedNodeId = null
       this.hopLimit = 0
       this.viewMode = 'components'
@@ -2640,7 +3323,14 @@ export const useGraphStore = defineStore('graph', {
       const cleanedEntries = Object.entries(overrides)
         .map(([nodeId, values]) => {
           const cleanedValues = Object.fromEntries(
-            Object.entries(values).filter(([, raw]) => typeof raw === 'number' && Number.isFinite(raw) && raw >= 0)
+            Object.entries(values)
+              .map(([key, raw]) => [key, typeof raw === 'string' ? raw.trim() : raw] as const)
+              .filter(([, raw]) => {
+                if (typeof raw === 'number') return Number.isFinite(raw) && raw >= 0
+                if (typeof raw === 'string') return raw.length > 0
+                if (typeof raw === 'boolean') return true
+                return false
+              })
           ) as CostOverrideInput
           return [nodeId, cleanedValues] as const
         })
@@ -2662,6 +3352,27 @@ export const useGraphStore = defineStore('graph', {
           delete node.position_hint.cost_confidence
           delete node.position_hint.cost_note
         }
+      }
+      this._syncCostAnomalyFindings(report)
+    },
+
+    _syncCostAnomalyFindings(report: CostReportData | null) {
+      this.findings = this.findings.filter(finding => finding.category !== 'cost-anomaly')
+      if (!report?.by_node) return
+      for (const [nodeId, estimate] of Object.entries(report.by_node)) {
+        const anomaly = estimate.anomaly || (estimate.breakdown?.anomaly as any)
+        if (!anomaly || !['medium', 'high'].includes(String(anomaly.severity))) continue
+        this.findings.push({
+          id: `cost-anomaly:${nodeId}`,
+          pattern_id: 'cost.anomaly',
+          title: `Cost anomaly on ${estimate.resource_name}`,
+          description: `Actual usage is ${anomaly.ratio}x the forecast.`,
+          severity: anomaly.severity === 'high' ? 'critical' : 'warning',
+          node_ids: [nodeId],
+          recommendation: 'Review usage metrics, autoscaling, and forecast assumptions for this resource.',
+          remediation: 'Review usage metrics, autoscaling, and forecast assumptions for this resource.',
+          category: 'cost-anomaly',
+        })
       }
     },
 
@@ -2716,15 +3427,23 @@ export const useGraphStore = defineStore('graph', {
 
     async setNodeCostOverrides(nodeId: string, overrides: CostOverrideInput): Promise<{ ok: boolean; error?: string }> {
       const current = this.costOverrides[nodeId] || {}
-      // Only merge keys that are explicitly provided (not undefined)
       const merged = { ...current }
       for (const [key, value] of Object.entries(overrides)) {
         if (value !== undefined) {
           (merged as Record<string, unknown>)[key] = value
+        } else {
+          delete (merged as Record<string, unknown>)[key]
         }
       }
       const cleaned = Object.fromEntries(
-        Object.entries(merged).filter(([, value]) => typeof value === 'number' && Number.isFinite(value) && value >= 0)
+        Object.entries(merged)
+          .map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value] as const)
+          .filter(([, value]) => {
+            if (typeof value === 'number') return Number.isFinite(value) && value >= 0
+            if (typeof value === 'string') return value.length > 0
+            if (typeof value === 'boolean') return true
+            return false
+          })
       ) as CostOverrideInput
 
       if (Object.keys(cleaned).length > 0) {
@@ -2754,6 +3473,8 @@ export const useGraphStore = defineStore('graph', {
     async toggleCosts() {
       this.showCosts = !this.showCosts
       if (this.showCosts) {
+        // Only one heavy right/bottom panel at a time — keeps the UI uncrowded.
+        this.showLogs = false
         await this.refreshCostData()
       }
     },
@@ -2793,8 +3514,12 @@ export const useGraphStore = defineStore('graph', {
 
     async toggleLogs() {
       this.showLogs = !this.showLogs
-      if (this.showLogs && this.logEvents.length === 0) {
-        await this.fetchVisibleLogs()
+      if (this.showLogs) {
+        // Only one heavy right/bottom panel at a time — keeps the UI uncrowded.
+        this.showCosts = false
+        if (this.logEvents.length === 0) {
+          await this.fetchVisibleLogs()
+        }
       }
     },
 

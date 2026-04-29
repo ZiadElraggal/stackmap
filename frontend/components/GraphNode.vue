@@ -190,6 +190,51 @@
       class="diff-glow"
     />
     <rect
+      v-if="findingSeverity"
+      :width="nodeWidth + 20"
+      :height="nodeHeight + 20"
+      :x="-(nodeWidth + 20) / 2"
+      :y="-(nodeHeight + 20) / 2"
+      :rx="20"
+      :ry="20"
+      fill="none"
+      :stroke="findingColor"
+      stroke-width="1.6"
+      stroke-dasharray="5 4"
+      opacity="0.5"
+      class="severity-halo"
+    />
+    <rect
+      v-if="workflowWarningCount > 0"
+      :width="nodeWidth + 22"
+      :height="nodeHeight + 22"
+      :x="-(nodeWidth + 22) / 2"
+      :y="-(nodeHeight + 22) / 2"
+      :rx="20"
+      :ry="20"
+      fill="none"
+      stroke="#f59e0b"
+      stroke-width="1.8"
+      stroke-dasharray="5 4"
+      opacity="0.58"
+      class="severity-halo"
+    />
+    <rect
+      v-if="workflowStatus"
+      :width="nodeWidth + 18"
+      :height="nodeHeight + 18"
+      :x="-(nodeWidth + 18) / 2"
+      :y="-(nodeHeight + 18) / 2"
+      :rx="19"
+      :ry="19"
+      fill="none"
+      :stroke="workflowStatusColor"
+      stroke-width="1.8"
+      :stroke-dasharray="workflowStatus === 'running' ? '6 4' : 'none'"
+      opacity="0.48"
+      class="workflow-status-halo"
+    />
+    <rect
       :width="nodeWidth"
       :height="nodeHeight"
       :x="-nodeWidth / 2"
@@ -467,6 +512,27 @@
     />
 
     <!-- Cost badge -->
+    <g v-if="costAnomaly" @click.stop="store.toggleCosts()">
+      <circle
+        :cx="-nodeWidth / 2 + 12"
+        :cy="-nodeHeight / 2 - 2"
+        r="6"
+        fill="rgba(251,146,60,0.95)"
+        stroke="#0d0d14"
+        stroke-width="1.5"
+      />
+      <text
+        :x="-nodeWidth / 2 + 12"
+        :y="-nodeHeight / 2 - 1"
+        text-anchor="middle"
+        dominant-baseline="central"
+        fill="#111827"
+        font-size="10"
+        font-weight="800"
+      >~</text>
+      <title>Cost anomaly: {{ costAnomaly.ratio }}x forecast</title>
+    </g>
+
     <g v-if="store.showCosts && node.position_hint?.cost_monthly != null && node.position_hint.cost_monthly > 0">
       <rect
         :x="nodeWidth / 2 - 48"
@@ -533,6 +599,131 @@
         font-size="7"
         font-weight="700"
       >!</text>
+    </g>
+
+    <!-- Workflow warning indicator -->
+    <g v-if="workflowWarningCount > 0">
+      <circle
+        :cx="nodeWidth / 2 + 2"
+        :cy="nodeHeight / 2 + 2"
+        r="5"
+        fill="#f59e0b"
+        stroke="#0d0d14"
+        stroke-width="1.5"
+      />
+      <text
+        :x="nodeWidth / 2 + 2"
+        :y="nodeHeight / 2 + 3"
+        text-anchor="middle"
+        dominant-baseline="central"
+        fill="#111827"
+        font-size="7"
+        font-weight="800"
+      >!</text>
+    </g>
+
+    <!-- Step Functions execution status badge -->
+    <g v-if="workflowStatus">
+      <rect
+        :x="-nodeWidth / 2 - 2"
+        :y="-nodeHeight / 2 - 4"
+        :width="workflowStatusLabel.length * 6 + 12"
+        height="14"
+        rx="3"
+        ry="3"
+        :fill="workflowStatusColor + '25'"
+        :stroke="workflowStatusColor + '66'"
+        stroke-width="1"
+      />
+      <text
+        :x="-nodeWidth / 2 + (workflowStatusLabel.length * 6 + 12) / 2 - 2"
+        :y="-nodeHeight / 2 + 4"
+        text-anchor="middle"
+        dominant-baseline="central"
+        :fill="workflowStatusColor"
+        font-size="8"
+        font-weight="700"
+        font-family="'JetBrains Mono', monospace"
+      >{{ workflowStatusLabel }}</text>
+    </g>
+
+    <!-- Workflow state-type pill (top-right corner of SFN state nodes) -->
+    <g v-if="isWorkflowStateNode && workflowStateTypeLabel">
+      <rect
+        :x="nodeWidth / 2 - workflowStateTypeLabel.length * 5.4 - 10"
+        :y="-nodeHeight / 2 - 4"
+        :width="workflowStateTypeLabel.length * 5.4 + 10"
+        height="13"
+        rx="3"
+        ry="3"
+        :fill="workflowStateTypeColor + '1F'"
+        :stroke="workflowStateTypeColor + '55'"
+        stroke-width="1"
+      />
+      <text
+        :x="nodeWidth / 2 - workflowStateTypeLabel.length * 2.7 - 5"
+        :y="-nodeHeight / 2 + 3.5"
+        text-anchor="middle"
+        dominant-baseline="central"
+        :fill="workflowStateTypeColor"
+        font-size="7.5"
+        font-weight="700"
+        font-family="'JetBrains Mono', monospace"
+        letter-spacing="0.5"
+      >{{ workflowStateTypeLabel }}</text>
+    </g>
+
+    <!-- Integration kind label beneath state-type pill (e.g. LAMBDA, DYNAMODB) -->
+    <g v-if="isWorkflowStateNode && workflowIntegrationBadge">
+      <text
+        :x="nodeWidth / 2 - 3"
+        :y="-nodeHeight / 2 + 18"
+        text-anchor="end"
+        dominant-baseline="central"
+        fill="rgba(148,163,184,0.72)"
+        font-size="7"
+        font-weight="600"
+        font-family="'JetBrains Mono', monospace"
+        letter-spacing="0.5"
+      >◆ {{ workflowIntegrationBadge }}</text>
+    </g>
+
+    <!-- Retry + Catch indicator row (bottom-right) -->
+    <g v-if="isWorkflowStateNode && (workflowRetryMax > 0 || workflowCatchCount > 0)">
+      <g v-if="workflowRetryMax > 0" :transform="`translate(${nodeWidth / 2 - 22}, ${nodeHeight / 2 - 8})`">
+        <rect
+          x="-14" y="-6" width="28" height="12" rx="3" ry="3"
+          fill="rgba(245,158,11,0.16)"
+          stroke="rgba(245,158,11,0.48)"
+          stroke-width="0.8"
+        />
+        <text
+          x="0" y="0.5"
+          text-anchor="middle"
+          dominant-baseline="central"
+          fill="#fbbf24"
+          font-size="7.5"
+          font-weight="700"
+          font-family="'JetBrains Mono', monospace"
+        >↻ {{ workflowRetryMax }}×</text>
+      </g>
+      <g v-if="workflowCatchCount > 0" :transform="`translate(${nodeWidth / 2 - (workflowRetryMax > 0 ? 52 : 22)}, ${nodeHeight / 2 - 8})`">
+        <rect
+          x="-14" y="-6" width="28" height="12" rx="3" ry="3"
+          fill="rgba(239,68,68,0.16)"
+          stroke="rgba(239,68,68,0.48)"
+          stroke-width="0.8"
+        />
+        <text
+          x="0" y="0.5"
+          text-anchor="middle"
+          dominant-baseline="central"
+          fill="#fca5a5"
+          font-size="7.5"
+          font-weight="700"
+          font-family="'JetBrains Mono', monospace"
+        >⚠ {{ workflowCatchCount }}</text>
+      </g>
     </g>
 
     <title>{{ node.name }} ({{ node.resource_type }})</title>
@@ -602,6 +793,82 @@ const prominence = computed(() => getNodeProminence(props.node))
 const nodeWidth = computed(() => getNodeWidth(props.node))
 const nodeHeight = computed(() => getNodeHeight(props.node))
 const diffStatus = computed(() => props.node.position_hint?.diff_status as string | undefined)
+const nodeFindings = computed(() => store.findings.filter(finding => finding.node_ids.includes(props.node.id)))
+const findingSeverity = computed(() => {
+  const order = ['critical', 'high', 'warning', 'medium', 'low', 'info']
+  return nodeFindings.value.sort((a, b) => order.indexOf(a.severity) - order.indexOf(b.severity))[0]?.severity
+})
+const findingColor = computed(() => {
+  switch (findingSeverity.value) {
+    case 'critical':
+    case 'high':
+      return '#ef4444'
+    case 'warning':
+    case 'medium':
+      return '#f59e0b'
+    case 'low':
+      return '#facc15'
+    case 'info':
+      return '#38bdf8'
+    default:
+      return '#ef4444'
+  }
+})
+const costAnomaly = computed(() => {
+  const estimate = store.costData?.by_node?.[props.node.id] as any
+  return estimate?.anomaly || estimate?.breakdown?.anomaly || null
+})
+const workflowWarningCount = computed(() => Number(props.node.properties?.warning_count || 0))
+const workflowStatus = computed(() => String(props.node.metadata?.execution_status || props.node.properties?.execution_overlay?.status || '').toLowerCase())
+const workflowStatusLabel = computed(() => workflowStatus.value.replace(/_/g, ' ').toUpperCase())
+const isWorkflowStateNode = computed(() => props.node.metadata?.view_kind === 'sfn_state')
+const workflowAslState = computed(() => (props.node.properties?.asl_state || null) as any)
+const workflowStateTypeLabel = computed(() => {
+  const t = String(workflowAslState.value?.type || '').toUpperCase()
+  return t || ''
+})
+const workflowStateTypeColor = computed(() => {
+  switch (workflowAslState.value?.type) {
+    case 'Task': return '#22d3ee'
+    case 'Choice': return '#a78bfa'
+    case 'Parallel':
+    case 'Map': return '#f472b6'
+    case 'Wait': return '#fbbf24'
+    case 'Pass': return '#94a3b8'
+    case 'Succeed': return '#22c55e'
+    case 'Fail': return '#ef4444'
+    default: return '#64748b'
+  }
+})
+const workflowRetryMax = computed(() => {
+  const retries = workflowAslState.value?.retry as Array<{ max_attempts?: number }> | undefined
+  if (!Array.isArray(retries) || !retries.length) return 0
+  return retries.reduce((acc, r) => Math.max(acc, r?.max_attempts ?? 3), 0)
+})
+const workflowCatchCount = computed(() => {
+  const catches = workflowAslState.value?.catch as unknown[] | undefined
+  return Array.isArray(catches) ? catches.length : 0
+})
+const workflowIntegrationBadge = computed(() => {
+  const s = workflowAslState.value
+  if (!s) return ''
+  if (s.resource_kind && s.resource_kind !== 'unknown') return String(s.resource_kind).toUpperCase()
+  return ''
+})
+const workflowStatusColor = computed(() => {
+  switch (workflowStatus.value) {
+    case 'succeeded':
+      return '#22c55e'
+    case 'failed':
+    case 'timed_out':
+    case 'aborted':
+      return '#ef4444'
+    case 'running':
+      return '#f59e0b'
+    default:
+      return '#38bdf8'
+  }
+})
 
 const diffBorderColor = computed(() => {
   switch (diffStatus.value) {

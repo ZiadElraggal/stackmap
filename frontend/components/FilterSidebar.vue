@@ -309,12 +309,20 @@
         </button>
       </section>
 
-      <section v-if="store.shouldUseComponentLanding || store.activeComponentId" class="sidebar-section">
+      <section v-if="store.shouldUseComponentLanding || store.activeComponentId || store.componentViewBypassed" class="sidebar-section">
         <div class="section-heading">
           <span>Components</span>
           <span class="section-heading__meta">Focus</span>
         </div>
         <div class="space-y-2">
+          <button
+            v-if="store.componentViewBypassed"
+            class="filter-row"
+            @click="store.returnToComponents()"
+          >
+            <span class="text-gray-300">Back to component overview</span>
+            <span class="text-[10px] font-mono uppercase tracking-[0.18em] text-cyan-300">Open</span>
+          </button>
           <button
             class="filter-row"
             @click="store.setShowUnlinkedResources(!store.showUnlinkedResources)"
@@ -347,48 +355,10 @@
 
       <section class="sidebar-section">
         <div class="section-heading">
-          <span>Insights</span>
+          <span>Display</span>
+          <span class="section-heading__meta">Cost, logs &amp; findings in the dock →</span>
         </div>
         <div class="space-y-2">
-          <button
-            class="filter-row"
-            @click="store.toggleCosts()"
-          >
-            <span class="text-gray-300">Cost estimate</span>
-            <span class="toggle" :class="{ on: store.showCosts }" style="--toggle-color: #4ADE80">
-              <span class="knob" />
-            </span>
-          </button>
-          <button
-            v-if="store.metadata?.drift_summary"
-            class="filter-row"
-            @click="store.setDriftMode(!store.driftMode)"
-          >
-            <span class="text-gray-300">Drift analysis</span>
-            <span class="toggle" :class="{ on: store.driftMode }" style="--toggle-color: #f59e0b">
-              <span class="knob" />
-            </span>
-          </button>
-          <button
-            v-if="store.logsAvailable"
-            class="filter-row"
-            @click="store.toggleLogs()"
-          >
-            <span class="text-gray-300">Live logs</span>
-            <span class="toggle" :class="{ on: store.showLogs }" style="--toggle-color: #60a5fa">
-              <span class="knob" />
-            </span>
-          </button>
-          <button
-            v-if="store.billingAvailable"
-            class="filter-row"
-            @click="fetchBilling"
-          >
-            <span class="text-gray-300">AWS billing</span>
-            <span class="toggle" :class="{ on: !!store.billingData }" style="--toggle-color: #c084fc">
-              <span class="knob" />
-            </span>
-          </button>
           <button
             class="filter-row"
             @click="store.setShowLowConfidenceEdges(!store.showLowConfidenceEdges)"
@@ -400,7 +370,6 @@
           </button>
         </div>
       </section>
-      <FindingsPanel />
 
       <section class="pt-2">
         <button
@@ -540,14 +509,6 @@ function onSliderDown(e: MouseEvent) {
   }
   window.addEventListener('mousemove', onMove)
   window.addEventListener('mouseup', onUp)
-}
-
-async function fetchBilling() {
-  if (store.billingData) {
-    store.billingData = null
-  } else {
-    await store.fetchBillingData()
-  }
 }
 
 function resetFilters() {

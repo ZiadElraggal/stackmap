@@ -52,14 +52,36 @@
         </div>
       </div>
 
+      <div v-if="costAnomalies.length > 0" class="cost-section">
+        <button
+          class="cost-section__header cost-section__header--toggle"
+          @click="expandedAnomalies = !expandedAnomalies"
+        >
+          <span>
+            <span class="cost-disclosure-chevron" :class="{ open: expandedAnomalies }">▸</span>
+            Anomalies
+          </span>
+          <span class="cost-section__meta">{{ costAnomalies.length }}</span>
+        </button>
+        <div v-if="expandedAnomalies" class="cost-component-list">
+          <div v-for="item in costAnomalies" :key="item.id" class="cost-component-row">
+            <div class="min-w-0">
+              <div class="cost-component-name">{{ item.name }}</div>
+              <div class="cost-component-meta">{{ item.severity }} · {{ item.ratio }}x forecast</div>
+            </div>
+            <div class="cost-component-amount">+${{ formatCost(item.delta) }}</div>
+          </div>
+        </div>
+      </div>
+
       <!-- Per-resource breakdown (top items in scope) -->
       <div class="cost-section">
         <div class="cost-section__header">
           <span>Top resources</span>
-          <span class="cost-section__meta">{{ topResources.length }}{{ topResources.length >= 8 ? '+' : '' }}</span>
+          <span class="cost-section__meta">{{ visibleTopResources.length }}{{ topResources.length > visibleTopResources.length ? ` / ${topResources.length}` : '' }}</span>
         </div>
         <div class="cost-component-list">
-          <div v-for="item in topResources" :key="item.id" class="cost-component-row">
+          <div v-for="item in visibleTopResources" :key="item.id" class="cost-component-row">
             <div class="min-w-0">
               <div class="cost-component-name">{{ item.name }}</div>
               <div class="cost-component-meta">{{ item.type }} &middot; {{ item.confidence }}</div>
@@ -67,14 +89,27 @@
             <div class="cost-component-amount">${{ formatCost(item.cost) }}</div>
           </div>
         </div>
+        <button
+          v-if="topResources.length > 3"
+          class="cost-disclosure-btn"
+          @click="expandedResources = !expandedResources"
+        >
+          {{ expandedResources ? 'Show less' : `Show ${topResources.length - 3} more` }}
+        </button>
       </div>
 
       <div v-if="topComponents.length > 0" class="cost-section">
-        <div class="cost-section__header">
-          <span>By component</span>
+        <button
+          class="cost-section__header cost-section__header--toggle"
+          @click="expandedComponents = !expandedComponents"
+        >
+          <span>
+            <span class="cost-disclosure-chevron" :class="{ open: expandedComponents }">▸</span>
+            By component
+          </span>
           <span class="cost-section__meta">{{ topComponents.length }}</span>
-        </div>
-        <div class="cost-component-list">
+        </button>
+        <div v-if="expandedComponents" class="cost-component-list">
           <div v-for="component in topComponents" :key="component.id" class="cost-component-row">
             <div class="min-w-0">
               <div class="cost-component-name">{{ component.name }}</div>
@@ -86,11 +121,17 @@
       </div>
 
       <div class="cost-section">
-        <div class="cost-section__header">
-          <span>By category</span>
+        <button
+          class="cost-section__header cost-section__header--toggle"
+          @click="expandedCategories = !expandedCategories"
+        >
+          <span>
+            <span class="cost-disclosure-chevron" :class="{ open: expandedCategories }">▸</span>
+            By category
+          </span>
           <span class="cost-section__meta">{{ sortedCategories.length }}</span>
-        </div>
-        <div class="cost-category-list">
+        </button>
+        <div v-if="expandedCategories" class="cost-category-list">
           <div
             v-for="[category, amount] in sortedCategories"
             :key="category"
@@ -132,6 +173,10 @@ type CostScope = 'all' | 'visible' | 'category'
 const scope = ref<CostScope>('all')
 const awsUsageFeedback = ref('')
 const awsUsageFeedbackTone = ref<'success' | 'warning'>('success')
+const expandedResources = ref(false)
+const expandedComponents = ref(false)
+const expandedCategories = ref(false)
+const expandedAnomalies = ref(false)
 
 const scopeTabs = [
   { key: 'all' as CostScope, label: 'All' },
@@ -205,6 +250,29 @@ const topResources = computed(() => {
     .slice(0, 8)
   return entries
 })
+
+const costAnomalies = computed(() => {
+  if (!store.costData?.by_node) return []
+  return Object.entries(store.costData.by_node)
+    .map(([id, estimate]) => {
+      const anomaly = (estimate.anomaly || estimate.breakdown?.anomaly) as any
+      if (!anomaly) return null
+      return {
+        id,
+        name: estimate.resource_name,
+        delta: Number(anomaly.delta || 0),
+        ratio: Number(anomaly.ratio || 0),
+        severity: String(anomaly.severity || 'low'),
+      }
+    })
+    .filter((item): item is { id: string; name: string; delta: number; ratio: number; severity: string } => !!item)
+    .sort((a, b) => b.delta - a.delta)
+})
+
+// Show only the top 3 by default; user can expand to see the full list.
+const visibleTopResources = computed(() =>
+  expandedResources.value ? topResources.value : topResources.value.slice(0, 3)
+)
 
 // Categories scoped
 const sortedCategories = computed(() => {
@@ -284,9 +352,10 @@ function formatCost(amount: number): string {
 .cost-overlay {
   position: fixed;
   top: 64px;
-  right: 16px;
+  /* Leave room for the InsightsDock anchored at top-right (~160px wide incl. margin). */
+  right: 160px;
   z-index: 995;
-  width: min(380px, calc(100vw - 32px));
+  width: min(360px, calc(100vw - 190px));
   max-height: calc(100vh - 80px);
   overflow-y: auto;
   transition: right 0.2s ease;
@@ -505,6 +574,49 @@ function formatCost(amount: number): string {
   color: var(--sm-text, #e0e0e8);
   font-size: 12px;
   font-weight: 600;
+}
+
+.cost-section__header--toggle {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.cost-section__header--toggle:hover {
+  color: #4ade80;
+}
+
+.cost-disclosure-chevron {
+  display: inline-block;
+  margin-right: 4px;
+  font-size: 10px;
+  transition: transform 0.15s ease;
+  color: var(--sm-text-muted, rgba(245, 245, 247, 0.55));
+}
+
+.cost-disclosure-chevron.open {
+  transform: rotate(90deg);
+}
+
+.cost-disclosure-btn {
+  margin-top: 6px;
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sm-text-muted, rgba(245, 245, 247, 0.55));
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.cost-disclosure-btn:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--sm-text, #e0e0e8);
 }
 
 .cost-component-list,

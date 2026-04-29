@@ -104,6 +104,7 @@ const commands: Command[] = [
   { id: 'database', label: 'Show only database', icon: '⊡', action: () => filterOnly('database') },
   { id: 'storage', label: 'Show only storage', icon: '⬡', action: () => filterOnly('storage') },
   { id: 'network', label: 'Show only network', icon: '◈', action: () => filterOnly('network') },
+  { id: 'timeline-change', label: 'Jump to next timeline change', icon: '△', action: jumpToChange },
   { id: 'deselect', label: 'Deselect node', icon: '✕', shortcut: 'Esc', action: () => store.selectNode(null) },
 ]
 
@@ -158,6 +159,11 @@ function filterOnly(category: string) {
   for (const cat of Object.keys(store.categoryFilters)) {
     store.categoryFilters[cat] = cat === category
   }
+}
+
+function jumpToChange() {
+  const nodeId = store.jumpToNextTimelineChange()
+  if (nodeId) emit('panTo', nodeId)
 }
 
 function shortType(type: string) {

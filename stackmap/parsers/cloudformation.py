@@ -445,6 +445,7 @@ class CloudFormationParser(BaseParser):
 
     def parse(self, source_path: str) -> StackMapIR:
         template = _parse_template(source_path)
+        self._source_path = source_path
         resources = template.get("Resources", {})
         if not isinstance(resources, dict):
             raise ValueError("CloudFormation template must contain an object Resources section")
@@ -656,6 +657,10 @@ class CloudFormationParser(BaseParser):
                                                 edge_type=EdgeType.TRIGGERS, label="event triggers",
                                             ))
 
+        self._parse_state_machine_definitions(
+            nodes, edges, edge_keys, node_by_id, resources, source_path
+        )
+
         self._mark_helper_parents(nodes, edges)
         groups = self._extract_groups(nodes, edges)
 
@@ -673,6 +678,133 @@ class CloudFormationParser(BaseParser):
             edges=edges,
             groups=groups,
         )
+
+    def _parse_state_machine_definitions(
+        self,
+        nodes: list[StackMapNode],
+        edges: list[StackMapEdge],
+        edge_keys: set[tuple[str, str, str]],
+        node_by_id: dict[str, StackMapNode],
+        resources: dict[str, Any],
+        source_path: str,
+    ) -> None:
+        """Parse ASL on StateMachine / Serverless::StateMachine nodes.
+
+        Stores the structured ``asl_graph`` on each node's properties and
+        emits TRIGGERS edges to any CFN logical IDs referenced inside the
+        definition (via Ref / Fn::GetAtt / Fn::Sub). Definition sources:
+        ``Definition`` (inline dict), ``DefinitionString`` (JSON string),
+        or ``DefinitionUri`` (relative path, SAM-only).
+        """
+        from stackmap.parsers.asl import classify_edge_label, parse_asl
+
+        state_machine_types = {
+            "AWS::StepFunctions::StateMachine",
+            "AWS::Serverless::StateMachine",
+        }
+        template_dir = Path(source_path).parent if source_path else None
+
+        for logical_id, spec in resources.items():
+            if not isinstance(spec, dict):
+                continue
+            if spec.get("Type") not in state_machine_types:
+                continue
+            node = node_by_id.get(logical_id)
+            if node is None:
+                continue
+
+            props = spec.get("Properties") or {}
+            if not isinstance(props, dict):
+                continue
+
+            definition_obj = props.get("Definition")
+            definition_str = props.get("DefinitionString")
+            definition_uri = props.get("DefinitionUri")
+
+            parsed_definition: Any = None
+            if isinstance(definition_obj, dict):
+                parsed_definition = definition_obj
+            elif isinstance(definition_str, str):
+                parsed_definition = definition_str
+            elif isinstance(definition_uri, str) and template_dir is not None:
+                # SAM accepts a relative path to a JSON/YAML file on disk.
+                candidate = template_dir / definition_uri
+                if candidate.is_file():
+                    try:
+                        parsed_definition = candidate.read_text()
+                    except OSError:
+                        parsed_definition = None
+
+            if parsed_definition is None:
+                continue
+
+            asl_graph = parse_asl(parsed_definition)
+            node.properties["asl_graph"] = asl_graph
+
+            # Emit TRIGGERS edges for any CFN logical IDs referenced in the
+            # raw definition (Ref / GetAtt / Sub intrinsics).
+            if isinstance(parsed_definition, dict):
+                ref_ids = {r for r, _ in _iter_refs(parsed_definition)}
+            elif isinstance(parsed_definition, str):
+                # Lightweight scan for ${LogicalId} markers in a string body.
+                import re as _re
+                ref_ids = set(_re.findall(r"\$\{([A-Za-z0-9]+)(?:\.[A-Za-z0-9]+)?\}", parsed_definition))
+            else:
+                ref_ids = set()
+
+            for target_logical_id in ref_ids:
+                target = node_by_id.get(target_logical_id)
+                if target is None or target.id == node.id:
+                    continue
+                if target.resource_type.startswith("AWS::IAM::"):
+                    # Role references aren't triggers.
+                    continue
+                key = (node.id, target.id, EdgeType.TRIGGERS.value)
+                if key in edge_keys:
+                    continue
+                edge_keys.add(key)
+                # Best-effort label: find a Task whose resolved kind matches
+                # this logical id by name substring.
+                label = self._state_machine_edge_label(asl_graph, target, classify_edge_label)
+                edges.append(
+                    StackMapEdge(
+                        id=f"{node.id}->{target.id}:{EdgeType.TRIGGERS.value}",
+                        source=node.id,
+                        target=target.id,
+                        edge_type=EdgeType.TRIGGERS,
+                        label=label,
+                        metadata={"via": "step_functions"},
+                    )
+                )
+
+    @staticmethod
+    def _state_machine_edge_label(
+        asl_graph: dict,
+        target: StackMapNode,
+        classify_edge_label,
+    ) -> str:
+        for state in asl_graph.get("states", []) or []:
+            if state.get("type") != "Task":
+                continue
+            kind = state.get("resource_kind")
+            if not kind:
+                continue
+            # Heuristic: match by target resource type family.
+            if kind == "lambda" and target.resource_type in {
+                "AWS::Lambda::Function", "AWS::Serverless::Function",
+            }:
+                return classify_edge_label(kind, state.get("integration"))
+            if kind == "dynamodb" and target.resource_type == "AWS::DynamoDB::Table":
+                return classify_edge_label(kind, state.get("integration"))
+            if kind == "sqs" and target.resource_type == "AWS::SQS::Queue":
+                return classify_edge_label(kind, state.get("integration"))
+            if kind == "sns" and target.resource_type == "AWS::SNS::Topic":
+                return classify_edge_label(kind, state.get("integration"))
+            if kind == "stepfunctions" and target.resource_type in {
+                "AWS::StepFunctions::StateMachine", "AWS::Serverless::StateMachine",
+            }:
+                return classify_edge_label(kind, state.get("integration"))
+        return "triggers"
 
     def _mark_helper_parents(self, nodes: list[StackMapNode], edges: list[StackMapEdge]) -> None:
         node_by_id = {n.id: n for n in nodes}

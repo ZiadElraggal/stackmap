@@ -11,7 +11,10 @@ from stackmap.grouping.engine import (
     SmartGroupConfig,
     apply_smart_groups,
     auto_detect_groups,
+    build_group_hierarchy,
+    build_reason,
     load_grouping_config,
+    score_group,
 )
 from stackmap.parsers.base import (
     EdgeType,
@@ -229,3 +232,121 @@ class TestConfigLoading:
         groups, auto_config = load_grouping_config("/nonexistent/path.yaml")
         assert groups == []
         assert auto_config.enabled is True
+
+
+class TestSmartGroupsV2:
+    def test_env_and_service_produce_hierarchy(self) -> None:
+        ir = StackMapIR(nodes=[
+            _node("fn.pay1", "pay-api", tags={"env": "prod", "service": "payments"}),
+            _node("fn.pay2", "pay-worker", tags={"env": "prod", "service": "payments"}),
+            _node("fn.pay3", "pay-callback", tags={"env": "prod", "service": "payments"}),
+            _node("fn.ship1", "ship-api", tags={"env": "prod", "service": "shipping"}),
+            _node("fn.ship2", "ship-worker", tags={"env": "prod", "service": "shipping"}),
+            _node("fn.ship3", "ship-poller", tags={"env": "prod", "service": "shipping"}),
+        ])
+        groups = auto_detect_groups(ir)
+        strategies = {g.metadata.get("auto_strategy") for g in groups}
+        assert "environment" in strategies
+        assert "tag" in strategies
+        env_group = next(g for g in groups if g.metadata.get("auto_strategy") == "environment")
+        service_groups = [g for g in groups if g.metadata.get("auto_strategy") == "tag"]
+        # Hierarchy links service groups to the env group.
+        assert all(g.parent == env_group.id for g in service_groups)
+        # Reason is populated and non-empty.
+        assert all(g.metadata.get("reason") for g in groups)
+        # Confidence is computed and bounded.
+        for g in groups:
+            c = g.metadata.get("confidence")
+            assert isinstance(c, float)
+            assert 0.0 <= c <= 1.0
+
+    def test_module_path_strategy(self) -> None:
+        ir = StackMapIR(nodes=[
+            StackMapNode(
+                id=f"fn.{i}", name=f"worker-{i}",
+                resource_type="aws_lambda_function", provider="aws",
+                category=ResourceCategory.SERVERLESS,
+                metadata={"source_module": "module.payments"},
+            ) for i in range(4)
+        ])
+        groups = auto_detect_groups(ir)
+        assert any(g.metadata.get("auto_strategy") == "module_path" for g in groups)
+
+    def test_region_parent_only_when_multiregion(self) -> None:
+        single = StackMapIR(nodes=[
+            StackMapNode(id=f"fn.{i}", name=f"f{i}", resource_type="aws_lambda_function",
+                         provider="aws", category=ResourceCategory.SERVERLESS,
+                         tags={"service": "auth"},
+                         metadata={"region": "us-east-1"}) for i in range(3)
+        ])
+        groups = auto_detect_groups(single)
+        assert not any(g.metadata.get("auto_strategy") == "region" for g in groups)
+
+        multi = StackMapIR(nodes=[
+            StackMapNode(id="fn.a", name="a", resource_type="aws_lambda_function",
+                         provider="aws", category=ResourceCategory.SERVERLESS,
+                         metadata={"region": "us-east-1"}),
+            StackMapNode(id="fn.b", name="b", resource_type="aws_lambda_function",
+                         provider="aws", category=ResourceCategory.SERVERLESS,
+                         metadata={"region": "us-east-1"}),
+            StackMapNode(id="fn.c", name="c", resource_type="aws_lambda_function",
+                         provider="aws", category=ResourceCategory.SERVERLESS,
+                         metadata={"region": "eu-west-1"}),
+            StackMapNode(id="fn.d", name="d", resource_type="aws_lambda_function",
+                         provider="aws", category=ResourceCategory.SERVERLESS,
+                         metadata={"region": "eu-west-1"}),
+        ])
+        groups = auto_detect_groups(multi)
+        assert any(g.metadata.get("auto_strategy") == "region" for g in groups)
+
+    def test_multiregion_multiaccount_roots(self) -> None:
+        ir = StackMapIR(nodes=[
+            StackMapNode(id=f"fn.{account}.{region}.{i}", name=f"f-{account}-{region}-{i}",
+                         resource_type="aws_lambda_function", provider="aws",
+                         category=ResourceCategory.SERVERLESS,
+                         metadata={"account_id": account, "region": region})
+            for account in ("111111111111", "222222222222")
+            for region in ("us-east-1", "eu-west-1")
+            for i in range(2)
+        ])
+
+        groups = auto_detect_groups(ir)
+
+        assert sum(1 for g in groups if g.metadata.get("auto_strategy") == "account") == 2
+        assert sum(1 for g in groups if g.metadata.get("auto_strategy") == "region") == 2
+
+    def test_scoring_reason_and_hierarchy_helpers(self) -> None:
+        ir = StackMapIR(nodes=[
+            _node("fn1", "auth-api", tags={"env": "prod", "service": "auth"}),
+            _node("fn2", "auth-worker", tags={"env": "prod", "service": "auth"}),
+            _node("fn3", "auth-hook", tags={"env": "prod", "service": "auth"}),
+        ])
+        groups = auto_detect_groups(ir)
+        group = next(g for g in groups if g.metadata.get("auto_strategy") == "tag")
+
+        assert score_group(group, ir) > 0
+        assert "resources" in build_reason(group, ir)
+        assert build_group_hierarchy(groups) is groups
+
+    def test_shared_role_groups_compute(self) -> None:
+        ir = StackMapIR(nodes=[
+            _node("fn.a", "a", props={"role_arn": "arn:aws:iam::1:role/shared"}),
+            _node("fn.b", "b", props={"role_arn": "arn:aws:iam::1:role/shared"}),
+        ])
+        groups = auto_detect_groups(ir)
+        assert any(g.metadata.get("auto_strategy") == "shared_role" for g in groups)
+
+    def test_explicit_groups_annotated_with_confidence_one(self) -> None:
+        ir = StackMapIR(nodes=[
+            _node("fn1", "auth-handler", tags={"service": "auth"}),
+            _node("fn2", "auth-validator", tags={"service": "auth"}),
+        ])
+        config = SmartGroupConfig(
+            name="Auth",
+            rules=[GroupingRule(match_type="tag", key="service", value="auth")],
+        )
+        new_ir = apply_smart_groups(ir, [config])
+        assert len(new_ir.groups) == 1
+        g = new_ir.groups[0]
+        assert g.metadata["confidence"] == 1.0
+        assert "explicit" in g.metadata["reason"].lower() or "rule" in g.metadata["reason"].lower()

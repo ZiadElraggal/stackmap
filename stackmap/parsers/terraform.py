@@ -1067,6 +1067,9 @@ class TerraformParser(BaseParser):
         # Pass 3.5: mark helper resources for architecture-mode collapse
         self._mark_logical_helpers(nodes, id_index, arn_index)
 
+        # Pass 3.75: prune orphan network nodes (disconnected route tables, SGs, IGWs, EIPs)
+        nodes, edges = self._prune_orphan_network_nodes(nodes, edges)
+
         # Pass 4: Extract groups (VPCs, subnets)
         groups = self._extract_groups(nodes, id_index)
 
@@ -1090,35 +1093,52 @@ class TerraformParser(BaseParser):
         arn_index: dict[str, str],
         node_map: dict[str, StackMapNode],
     ) -> None:
-        """Extract Lambda invocations from Step Functions ASL definitions."""
+        """Parse Step Functions ASL and emit kind-labeled edges.
+
+        The structured ``asl_graph`` is stored on the node so the frontend
+        can render the extended state-machine viewer. Edges are emitted for
+        every Task whose target ARN is resolvable to another node in the
+        graph, with labels derived from the Step Functions integration
+        kind (Lambda invoke, SQS sendMessage, DynamoDB putItem, etc.).
+        """
+        from stackmap.parsers.asl import classify_edge_label, parse_asl
+
         for node in nodes:
             if node.resource_type != "aws_sfn_state_machine":
                 continue
-            defn_str = node.properties.get("definition", "")
-            if not defn_str or not isinstance(defn_str, str):
-                continue
-            try:
-                defn = json.loads(defn_str)
-            except (json.JSONDecodeError, TypeError):
+            defn = node.properties.get("definition", "")
+            if not defn:
                 continue
 
-            # Walk all states and extract Resource ARNs from Task states
-            lambda_arns = _extract_task_resources(defn)
-            for arn in lambda_arns:
-                target_id = arn_index.get(arn)
-                if target_id and target_id != node.id:
-                    edge_key = (node.id, target_id, EdgeType.TRIGGERS.value)
-                    if edge_key not in edge_set:
-                        edge_set.add(edge_key)
-                        edges.append(
-                            StackMapEdge(
-                                id=f"{node.id}->{target_id}",
-                                source=node.id,
-                                target=target_id,
-                                edge_type=EdgeType.TRIGGERS,
-                                label="invokes",
-                            )
-                        )
+            resolver = arn_index.get
+            asl_graph = parse_asl(defn, resolver=resolver)
+            node.properties["asl_graph"] = asl_graph
+
+            if asl_graph.get("error"):
+                continue
+
+            for resource in asl_graph.get("resources", []) or []:
+                target_id = resource.get("node_id")
+                if not target_id or target_id == node.id:
+                    continue
+                edge_key = (node.id, target_id, EdgeType.TRIGGERS.value)
+                if edge_key in edge_set:
+                    continue
+                edge_set.add(edge_key)
+                label = classify_edge_label(
+                    resource.get("kind", "unknown"),
+                    resource.get("integration"),
+                )
+                edges.append(
+                    StackMapEdge(
+                        id=f"{node.id}->{target_id}",
+                        source=node.id,
+                        target=target_id,
+                        edge_type=EdgeType.TRIGGERS,
+                        label=label,
+                        metadata={"via": "step_functions"},
+                    )
+                )
 
     def _parse_iam_policies(
         self,
@@ -1404,6 +1424,125 @@ class TerraformParser(BaseParser):
                                 label=label,
                             )
                         )
+
+    # Network resource types that are safe to drop when they end up with
+    # no inbound/outbound edges AND no non-network resource references them.
+    # VPCs and subnets stay — they're structural containers. Load balancers,
+    # target groups, and listeners stay — they're always meaningful.
+    _PRUNABLE_NETWORK_TYPES = frozenset({
+        "aws_route_table",
+        "aws_route_table_association",
+        "aws_internet_gateway",
+        "aws_nat_gateway",
+        "aws_eip",
+        "aws_security_group",
+        "aws_vpc_peering_connection",
+    })
+
+    @staticmethod
+    def _has_security_relevant_exposure(node: StackMapNode) -> bool:
+        if node.resource_type != "aws_security_group":
+            return False
+        ingress = node.properties.get("ingress") or []
+        if not isinstance(ingress, list):
+            return False
+        for rule in ingress:
+            if not isinstance(rule, dict):
+                continue
+            cidrs = rule.get("cidr_blocks") or []
+            ipv6 = rule.get("ipv6_cidr_blocks") or []
+            if "0.0.0.0/0" in cidrs or "::/0" in ipv6:
+                return True
+        return False
+
+    def _prune_orphan_network_nodes(
+        self,
+        nodes: list[StackMapNode],
+        edges: list[StackMapEdge],
+    ) -> tuple[list[StackMapNode], list[StackMapEdge]]:
+        """Drop network nodes that have no connections and aren't referenced.
+
+        Many terraform stacks emit route tables, IGWs, SGs, and EIPs that
+        exist solely to wire a VPC together. When no compute resource points
+        at them, rendering them as nodes just clutters the diagram. We keep
+        them when:
+        - something references them via security_groups / vpc_security_group_ids
+          / route_table_id / gateway_id / allocation_id / subnet_id etc.
+        - they have any inbound or outbound edge.
+        """
+        if not nodes:
+            return nodes, edges
+
+        # Build edge incidence set keyed by node id.
+        touched: set[str] = set()
+        for edge in edges:
+            touched.add(edge.source)
+            touched.add(edge.target)
+
+        # Collect identifiers that other resources explicitly reference, so
+        # we can keep network nodes that are the target of a real reference
+        # even without an explicit edge being emitted.
+        referenced_ids: set[str] = set()
+        reference_keys = (
+            "security_groups",
+            "vpc_security_group_ids",
+            "security_group_ids",
+            "source_security_group_id",
+            "route_table_id",
+            "gateway_id",
+            "nat_gateway_id",
+            "internet_gateway_id",
+            "allocation_id",
+            "peer_vpc_id",
+        )
+        for node in nodes:
+            # Skip references from prunable network nodes themselves —
+            # otherwise IGW<->RT loops keep both alive.
+            if node.resource_type in self._PRUNABLE_NETWORK_TYPES:
+                continue
+            for key in reference_keys:
+                val = node.properties.get(key)
+                if isinstance(val, str) and val:
+                    referenced_ids.add(val)
+                elif isinstance(val, list):
+                    for item in val:
+                        if isinstance(item, str) and item:
+                            referenced_ids.add(item)
+
+        def is_referenced(node: StackMapNode) -> bool:
+            own_id = node.properties.get("id")
+            if isinstance(own_id, str) and own_id and own_id in referenced_ids:
+                return True
+            name = node.properties.get("name")
+            if isinstance(name, str) and name and name in referenced_ids:
+                return True
+            return False
+
+        kept: list[StackMapNode] = []
+        dropped_ids: set[str] = set()
+        for node in nodes:
+            if node.resource_type not in self._PRUNABLE_NETWORK_TYPES:
+                kept.append(node)
+                continue
+            if node.id in touched:
+                kept.append(node)
+                continue
+            if is_referenced(node):
+                kept.append(node)
+                continue
+            if self._has_security_relevant_exposure(node):
+                kept.append(node)
+                continue
+            dropped_ids.add(node.id)
+
+        if not dropped_ids:
+            return nodes, edges
+
+        pruned_edges = [
+            edge for edge in edges
+            if edge.source not in dropped_ids and edge.target not in dropped_ids
+        ]
+        return kept, pruned_edges
 
     def _extract_groups(
         self,
@@ -1738,29 +1877,6 @@ def _lookup_origin_target(
                 if cf_domain == domain:
                     return node.id
     return None
-
-
-def _extract_task_resources(defn: dict) -> list[str]:
-    """Extract Lambda ARNs from Step Functions ASL definition."""
-    arns: list[str] = []
-    states = defn.get("States", {})
-    for state in states.values():
-        if not isinstance(state, dict):
-            continue
-        if state.get("Type") == "Task":
-            resource = state.get("Resource", "")
-            if isinstance(resource, str) and resource.startswith("arn:aws:lambda:"):
-                arns.append(resource)
-        # Handle Map and Parallel states (recursive)
-        for key in ("Branches", "Iterator"):
-            nested = state.get(key)
-            if isinstance(nested, dict):
-                arns.extend(_extract_task_resources(nested))
-            elif isinstance(nested, list):
-                for branch in nested:
-                    if isinstance(branch, dict):
-                        arns.extend(_extract_task_resources(branch))
-    return arns
 
 
 # Action classification for IAM policies

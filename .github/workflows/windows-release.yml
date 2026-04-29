@@ -52,7 +52,14 @@ jobs:
 
       - name: Build standalone executable
         run: |
-          pyinstaller --noconfirm --clean --onefile --name stackmap --collect-data stackmap --copy-metadata stackmap stackmap/cli/main.py
+          pyinstaller --noconfirm --clean --onefile --name stackmap `
+            --collect-data stackmap `
+            --copy-metadata stackmap `
+            --collect-all boto3 `
+            --collect-all botocore `
+            --collect-submodules boto3 `
+            --collect-submodules botocore `
+            stackmap/cli/main.py
 
       - name: Verify executable
         shell: bash
@@ -67,6 +74,10 @@ jobs:
           if ("${{ github.event_name }}" -eq "release") {
             $tagName = "${{ github.event.release.tag_name }}"
             $version = $tagName.Substring(1)
+            if ($version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$') {
+              Write-Error "Release tag '$tagName' is not full semver (expected vMAJOR.MINOR.PATCH). Aborting."
+              exit 1
+            }
           else
             $version = "dev-${env:GITHUB_RUN_NUMBER}"
           }

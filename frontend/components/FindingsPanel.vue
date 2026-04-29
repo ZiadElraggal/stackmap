@@ -24,11 +24,16 @@
           :class="{ active: store.activeFindingFilter === finding.pattern_id }"
           @click="toggleFinding(finding)"
         >
+          <span class="finding-severity-bar" :class="`finding-severity-bar--${group.severity}`" />
           <div class="finding-title">{{ finding.title }}</div>
           <div class="finding-resources">
             {{ finding.node_ids.slice(0, 2).join(', ') }}
             <span v-if="finding.node_ids.length > 2"> +{{ finding.node_ids.length - 2 }}</span>
           </div>
+          <details v-if="finding.remediation || finding.recommendation" class="finding-remediation" @click.stop>
+            <summary>Remediation</summary>
+            <p>{{ finding.remediation || finding.recommendation }}</p>
+          </details>
         </button>
       </div>
     </div>
@@ -47,6 +52,8 @@ interface Finding {
   title: string
   severity: string
   node_ids: string[]
+  recommendation?: string
+  remediation?: string
 }
 
 const groupedFindings = computed(() => {
@@ -139,6 +146,7 @@ function toggleFinding(finding: Finding) {
 
 .finding-item {
   display: block;
+  position: relative;
   width: 100%;
   text-align: left;
   background: none;
@@ -149,6 +157,22 @@ function toggleFinding(finding: Finding) {
   font-size: 12px;
   transition: all 0.15s;
 }
+
+.finding-severity-bar {
+  position: absolute;
+  left: 10px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 3px;
+}
+
+.finding-severity-bar--critical,
+.finding-severity-bar--high { background: #ef4444; }
+.finding-severity-bar--warning,
+.finding-severity-bar--medium { background: #f59e0b; }
+.finding-severity-bar--low { background: #facc15; }
+.finding-severity-bar--info { background: #3b82f6; }
 
 .finding-item:hover,
 .finding-item.active {
@@ -164,5 +188,23 @@ function toggleFinding(finding: Finding) {
   font-size: 11px;
   opacity: 0.6;
   margin-top: 2px;
+}
+
+.finding-remediation {
+  margin-top: 6px;
+  font-size: 10px;
+  line-height: 1.5;
+  opacity: 0.85;
+}
+
+.finding-remediation summary {
+  color: #4ade80;
+  cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+}
+
+.finding-remediation p {
+  margin: 4px 0 0;
 }
 </style>
