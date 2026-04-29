@@ -1,12 +1,14 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
 PackageIdentifier: ZiadElraggal.StackMap
 PackageVersion: 0.3.0
-InstallerType: portable
-Commands:
-  - stackmap
+InstallerType: zip
+NestedInstallerType: portable
+NestedInstallerFiles:
+  - RelativeFilePath: stackmap.exe
+    PortableCommandAlias: stackmap
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/ZiadElraggal/stackmap/releases/download/v0.3.0/stackmap-0.3.0-windows-x64.exe
+    InstallerUrl: https://github.com/ZiadElraggal/stackmap/releases/download/v0.3/stackmap-0.3-windows-x64.zip
     InstallerSha256: # SHA256 will be computed during release
 ManifestType: installer
 ManifestVersion: 1.6.0

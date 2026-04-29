@@ -12,7 +12,7 @@ jobs:
       contents: write
     outputs:
       version: ${{ steps.package.outputs.version }}
-      exe_url: ${{ steps.package.outputs.exe_url }}
+      winget_url: ${{ steps.package.outputs.winget_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -62,34 +62,43 @@ jobs:
 
       - name: Package Windows release
         id: package
-        shell: bash
+        shell: pwsh
         run: |
-          set -euo pipefail
-          if [ "${{ github.event_name }}" = "release" ]; then
-            TAG_NAME="${{ github.event.release.tag_name }}"
-            VERSION="${TAG_NAME#v}"
+          if ("${{ github.event_name }}" -eq "release") {
+            $tagName = "${{ github.event.release.tag_name }}"
+            $version = $tagName.Substring(1)
           else
-            VERSION="dev-${GITHUB_RUN_NUMBER}"
-          fi
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "exe_url=https://github.com/${{ github.repository }}/releases/download/v${VERSION}/stackmap-${VERSION}-windows-x64.exe" >> "$GITHUB_OUTPUT"
+            $version = "dev-${env:GITHUB_RUN_NUMBER}"
+          }
 
-          # Rename exe with version for release asset
-          cp dist/stackmap.exe "stackmap-${VERSION}-windows-x64.exe"
-          echo "Packaged as stackmap-${VERSION}-windows-x64.exe"
+          $exeName = "stackmap-$version-windows-x64.exe"
+          $zipName = "stackmap-$version-windows-x64.zip"
+
+          Copy-Item "dist/stackmap.exe" $exeName -Force
+
+          if (Test-Path $zipName) {
+            Remove-Item $zipName -Force
+          }
+          Compress-Archive -Path "dist/stackmap.exe" -DestinationPath $zipName
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "winget_url=https://github.com/${{ github.repository }}/releases/download/v$version/$zipName" >> $env:GITHUB_OUTPUT
+          Write-Host "Packaged release assets: $exeName and $zipName"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: stackmap-windows-x64
-          path: stackmap-${{ steps.package.outputs.version }}-windows-x64.exe
+          path: |
+            stackmap-${{ steps.package.outputs.version }}-windows-x64.exe
+            stackmap-${{ steps.package.outputs.version }}-windows-x64.zip
 
       - name: Upload release asset
         if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload "${{ github.event.release.tag_name }}" "stackmap-${{ steps.package.outputs.version }}-windows-x64.exe" --clobber
+          gh release upload "${{ github.event.release.tag_name }}" "stackmap-${{ steps.package.outputs.version }}-windows-x64.exe" "stackmap-${{ steps.package.outputs.version }}-windows-x64.zip" --clobber
 
   publish-winget:
     needs: build-windows-binary
@@ -111,7 +120,7 @@ jobs:
             exit 0
           }
           $version = "${{ needs.build-windows-binary.outputs.version }}"
-          $url = "${{ needs.build-windows-binary.outputs.exe_url }}"
+          $url = "${{ needs.build-windows-binary.outputs.winget_url }}"
           ./wingetcreate.exe update ZiadElraggal.StackMap `
             --version $version `
             --urls $url `
