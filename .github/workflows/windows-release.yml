@@ -78,7 +78,7 @@ jobs:
               Write-Error "Release tag '$tagName' is not full semver (expected vMAJOR.MINOR.PATCH). Aborting."
               exit 1
             }
-          else
+          } else {
             $version = "dev-${env:GITHUB_RUN_NUMBER}"
           }
 
