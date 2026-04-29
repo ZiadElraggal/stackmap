@@ -35,6 +35,7 @@ class Finding:
             "severity": self.severity.value,
             "node_ids": self.node_ids,
             "recommendation": self.recommendation,
+            "remediation": self.recommendation,
             "category": self.category,
         }
 
@@ -72,7 +73,7 @@ _GLOBAL_SERVICE_TYPES = frozenset({
 })
 
 
-def analyze_patterns(ir: StackMapIR) -> list[Finding]:
+def analyze_patterns(ir: StackMapIR, *, include_security: bool = True) -> list[Finding]:
     """Run all pattern detectors on the IR and return findings."""
     findings: list[Finding] = []
     findings.extend(_detect_orphaned_resources(ir))
@@ -82,6 +83,13 @@ def analyze_patterns(ir: StackMapIR) -> list[Finding]:
     findings.extend(_detect_unencrypted_storage(ir))
     findings.extend(_detect_oversized_resources(ir))
     findings.extend(_detect_missing_monitoring(ir))
+    if not include_security:
+        return findings
+    try:
+        from stackmap.findings.security import detect_security_findings
+        findings.extend(detect_security_findings(ir))
+    except Exception:
+        pass
     return findings
 
 

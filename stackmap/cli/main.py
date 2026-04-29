@@ -65,6 +65,47 @@ class _LiveGraphState:
             return self._version
 
 
+class _LiveAWSFeatureState:
+    def __init__(
+        self,
+        session: Any | None,
+        active_profile: str | None,
+        live_logs_enabled: bool,
+        live_billing_enabled: bool,
+    ) -> None:
+        self._lock = threading.Lock()
+        self.session = session
+        self.active_profile = active_profile
+        self.live_logs_enabled = live_logs_enabled
+        self.live_billing_enabled = live_billing_enabled
+
+    def features(self) -> dict[str, bool]:
+        with self._lock:
+            return {
+                "logs": bool(self.session and self.live_logs_enabled),
+                "billing": bool(self.session and self.live_billing_enabled),
+                "stepfunctions": bool(self.session),
+            }
+
+    def snapshot(self) -> tuple[Any | None, str | None, bool, bool]:
+        with self._lock:
+            return (
+                self.session,
+                self.active_profile,
+                self.live_logs_enabled,
+                self.live_billing_enabled,
+            )
+
+    def activate_profile(self, profile: str) -> None:
+        import boto3
+
+        next_session = boto3.Session(profile_name=profile)
+        next_session.client("sts").get_caller_identity()
+        with self._lock:
+            self.session = next_session
+            self.active_profile = profile
+
+
 def _detect_source_type(source_path: str) -> str:
     """Auto-detect infrastructure source type from file extension or content."""
     return _registry_detect_source_type(source_path)
@@ -241,6 +282,223 @@ def _write_ir_output(ir: StackMapIR, output: str, output_format: str) -> None:
     export_ir_to_html(ir, output)
 
 
+def _maybe_write_snapshot(ir: StackMapIR, snapshot_dir: str | None) -> Path | None:
+    if not snapshot_dir:
+        return None
+    from stackmap.timeline import write_snapshot
+
+    return write_snapshot(ir, snapshot_dir)
+
+
+def _parse_anomaly_thresholds(value: str) -> tuple[float, float, float]:
+    parts = [part.strip() for part in value.split(",") if part.strip()]
+    if len(parts) != 3:
+        raise typer.BadParameter("Expected three comma-separated anomaly thresholds: low,medium,high")
+    try:
+        low, medium, high = (float(part) for part in parts)
+    except ValueError as exc:
+        raise typer.BadParameter("Anomaly thresholds must be numbers.") from exc
+    if not (1.0 <= low <= medium <= high):
+        raise typer.BadParameter("Expected thresholds where 1.0 <= low <= medium <= high.")
+    return low, medium, high
+
+
+def _region_from_arn(arn: str) -> str | None:
+    parts = arn.split(":")
+    if len(parts) >= 4 and parts[0] == "arn":
+        return parts[3] or None
+    return None
+
+
+def _summarize_sfn_executions(executions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    summaries: list[dict[str, Any]] = []
+    for item in executions[:25]:
+        start = item.get("startDate")
+        stop = item.get("stopDate")
+        duration_ms = None
+        if start and stop:
+            try:
+                duration_ms = int((stop - start).total_seconds() * 1000)
+            except Exception:
+                duration_ms = None
+        summaries.append({
+            "execution_arn": item.get("executionArn"),
+            "name": item.get("name"),
+            "status": item.get("status"),
+            "start": start.isoformat() if hasattr(start, "isoformat") else str(start) if start else None,
+            "stop": stop.isoformat() if hasattr(stop, "isoformat") else str(stop) if stop else None,
+            "duration_ms": duration_ms,
+            "failed_state": None,
+        })
+    return summaries
+
+
+def _event_time(value: Any) -> str | None:
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value) if value else None
+
+
+def _duration_ms(start: Any, stop: Any) -> int | None:
+    if not start or not stop:
+        return None
+    try:
+        return int((stop - start).total_seconds() * 1000)
+    except Exception:
+        return None
+
+
+def _normalize_sfn_execution_history(events: list[dict[str, Any]]) -> dict[str, Any]:
+    states: dict[str, dict[str, Any]] = {}
+    last_state_name: str | None = None
+    execution: dict[str, Any] = {"status": "UNKNOWN"}
+    normalized_events: list[dict[str, Any]] = []
+
+    def ensure_state(name: str) -> dict[str, Any]:
+        if name not in states:
+            states[name] = {
+                "status": "running",
+                "entered_at": None,
+                "exited_at": None,
+                "duration_ms": None,
+                "error": None,
+                "cause": None,
+            }
+        return states[name]
+
+    for event in sorted(events, key=lambda item: int(item.get("id") or 0)):
+        event_type = str(event.get("type") or "")
+        timestamp = event.get("timestamp")
+        detail: dict[str, Any] = {}
+        for key, value in event.items():
+            if key.endswith("EventDetails") and isinstance(value, dict):
+                detail = value
+                break
+
+        state_name = detail.get("name")
+        if event_type.endswith("StateEntered") and state_name:
+            last_state_name = str(state_name)
+            state = ensure_state(last_state_name)
+            state["status"] = "running"
+            state["entered_at"] = _event_time(timestamp)
+            normalized_events.append({"id": event.get("id"), "type": event_type, "state": last_state_name, "timestamp": _event_time(timestamp)})
+            continue
+
+        if event_type.endswith("StateExited") and state_name:
+            last_state_name = str(state_name)
+            state = ensure_state(last_state_name)
+            state["status"] = "succeeded"
+            state["exited_at"] = _event_time(timestamp)
+            entered = state.get("entered_at")
+            if entered and hasattr(timestamp, "isoformat"):
+                try:
+                    start_dt = datetime.fromisoformat(str(entered).replace("Z", "+00:00"))
+                    state["duration_ms"] = _duration_ms(start_dt, timestamp)
+                except Exception:
+                    state["duration_ms"] = None
+            normalized_events.append({"id": event.get("id"), "type": event_type, "state": last_state_name, "timestamp": _event_time(timestamp)})
+            continue
+
+        if event_type in {"TaskFailed", "TaskTimedOut", "LambdaFunctionFailed", "LambdaFunctionTimedOut", "ActivityFailed", "ActivityTimedOut"}:
+            if last_state_name:
+                state = ensure_state(last_state_name)
+                state["status"] = "timed_out" if "TimedOut" in event_type else "failed"
+                state["exited_at"] = _event_time(timestamp)
+                state["error"] = detail.get("error")
+                state["cause"] = detail.get("cause")
+            normalized_events.append({"id": event.get("id"), "type": event_type, "state": last_state_name, "timestamp": _event_time(timestamp), "error": detail.get("error")})
+            continue
+
+        if event_type in {"ExecutionStarted", "ExecutionSucceeded", "ExecutionFailed", "ExecutionTimedOut", "ExecutionAborted"}:
+            if event_type == "ExecutionStarted":
+                execution["status"] = "RUNNING"
+                execution["start"] = _event_time(timestamp)
+            elif event_type == "ExecutionSucceeded":
+                execution["status"] = "SUCCEEDED"
+                execution["stop"] = _event_time(timestamp)
+            elif event_type == "ExecutionTimedOut":
+                execution["status"] = "TIMED_OUT"
+                execution["stop"] = _event_time(timestamp)
+            elif event_type == "ExecutionAborted":
+                execution["status"] = "ABORTED"
+                execution["stop"] = _event_time(timestamp)
+            else:
+                execution["status"] = "FAILED"
+                execution["stop"] = _event_time(timestamp)
+                execution["error"] = detail.get("error")
+                execution["cause"] = detail.get("cause")
+                if last_state_name:
+                    state = ensure_state(last_state_name)
+                    state["status"] = "failed"
+                    state["error"] = detail.get("error")
+                    state["cause"] = detail.get("cause")
+            normalized_events.append({"id": event.get("id"), "type": event_type, "timestamp": _event_time(timestamp)})
+
+    return {
+        "execution": execution,
+        "states": states,
+        "events": normalized_events[-200:],
+    }
+
+
+def _apply_cost_anomalies_with_thresholds(
+    report: Any,
+    actuals: dict[str, Any],
+    thresholds: tuple[float, float, float],
+) -> None:
+    low, medium, high = thresholds
+    for node_id, actual_value in actuals.items():
+        estimate = report.by_node.get(node_id)
+        if not estimate:
+            continue
+        try:
+            actual = float(actual_value)
+        except (TypeError, ValueError):
+            continue
+        forecast = float(estimate.monthly_estimate or 0)
+        if forecast <= 0:
+            continue
+        ratio = actual / forecast
+        if ratio < low:
+            continue
+        severity = "high" if ratio >= high else "medium" if ratio >= medium else "low"
+        estimate.breakdown = {
+            **(estimate.breakdown or {}),
+            "monthly_actual": round(actual, 2),
+            "anomaly": {
+                "delta": round(actual - forecast, 2),
+                "ratio": round(ratio, 2),
+                "severity": severity,
+            },
+        }
+
+
+def _cost_anomaly_findings(report: Any) -> list[Any]:
+    """Represent medium/high cost anomalies as normal findings."""
+    from stackmap.analysis.patterns import Finding, Severity, _finding_id
+
+    findings: list[Finding] = []
+    for node_id, estimate in getattr(report, "by_node", {}).items():
+        anomaly = (estimate.breakdown or {}).get("anomaly") if estimate.breakdown else None
+        if not anomaly or anomaly.get("severity") not in {"medium", "high"}:
+            continue
+        severity = Severity.WARNING if anomaly["severity"] == "medium" else Severity.CRITICAL
+        findings.append(Finding(
+            id=_finding_id("cost.anomaly", node_id),
+            pattern_id="cost.anomaly",
+            title=f"Cost anomaly on {estimate.resource_name}",
+            description=(
+                f"Actual monthly cost is {anomaly.get('ratio')}x the forecast "
+                f"for {estimate.resource_name}."
+            ),
+            severity=severity,
+            node_ids=[node_id],
+            recommendation="Review usage metrics, autoscaling, and forecast assumptions for this resource.",
+            category="cost-anomaly",
+        ))
+    return findings
+
+
 def _parse_live_services(services: str) -> set[str]:
     normalized = {value.strip().lower() for value in services.split(",") if value.strip()}
     if not normalized or normalized == {"all"}:
@@ -354,16 +612,16 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
         directory: str,
         state: _LiveGraphState,
         source_type: str,
-        aws_session: Any | None = None,
-        live_logs_enabled: bool = False,
-        live_billing_enabled: bool = False,
+        aws_features: _LiveAWSFeatureState | None = None,
+        security_findings_enabled: bool = True,
+        anomaly_thresholds: tuple[float, float, float] = (1.3, 1.6, 2.0),
         **kwargs: Any,
     ) -> None:
         self._state = state
         self._source_type = source_type
-        self._aws_session = aws_session
-        self._live_logs_enabled = live_logs_enabled
-        self._live_billing_enabled = live_billing_enabled
+        self._aws_features = aws_features or _LiveAWSFeatureState(None, None, False, False)
+        self._security_findings_enabled = security_findings_enabled
+        self._anomaly_thresholds = anomaly_thresholds
         super().__init__(*args, directory=directory, **kwargs)
 
     def _send_json(self, payload: dict[str, Any], status: int = 200) -> None:
@@ -401,10 +659,14 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
             self._send_json({"status": "ok", "source_type": self._source_type})
             return
         if path == "/api/live-features":
-            self._send_json({
-                "logs": bool(self._aws_session and self._live_logs_enabled),
-                "billing": bool(self._aws_session and self._live_billing_enabled),
-            })
+            _, active_profile, _, _ = self._aws_features.snapshot()
+            self._send_json({**self._aws_features.features(), "active_profile": active_profile})
+            return
+        if path == "/api/timeline":
+            self._handle_timeline(parsed_url.query)
+            return
+        if path == "/api/profiles":
+            self._handle_profiles()
             return
         if path == "/api/trace":
             self._handle_trace(parsed_url.query)
@@ -440,6 +702,18 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
         if path == "/api/cost":
             self._handle_cost_post()
             return
+        if path == "/api/profiles/activate":
+            self._handle_profile_activate()
+            return
+        if path == "/api/nl-query":
+            self._handle_nl_query()
+            return
+        if path == "/api/sfn-executions":
+            self._handle_sfn_executions_post()
+            return
+        if path == "/api/sfn-execution-history":
+            self._handle_sfn_execution_history_post()
+            return
         self.send_response(404)
         self.end_headers()
 
@@ -459,11 +733,231 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
         try:
             body = self._read_json_body()
             overrides = body.get("overrides") or {}
+            actuals = body.get("actuals") or {}
             if not isinstance(overrides, dict):
                 overrides = {}
+            if not isinstance(actuals, dict):
+                actuals = {}
             ir = self._get_ir()
             report = estimate_costs(ir, overrides=overrides)
+            if actuals:
+                _apply_cost_anomalies_with_thresholds(report, actuals, self._anomaly_thresholds)
             self._send_json(report.to_dict())
+        except Exception as exc:
+            self._send_json({"error": str(exc)}, status=500)
+
+    def _handle_sfn_executions_post(self) -> None:
+        body = self._read_json_body()
+        node_id = str(body.get("node_id") or "").strip()
+        if not node_id:
+            self._send_json({"error": "node_id is required."}, status=400)
+            return
+
+        aws_session, active_profile, _, _ = self._aws_features.snapshot()
+        if aws_session is None:
+            self._send_json(
+                {
+                    "error": "AWS session is unavailable. Serve with --aws-profile, or launch from scan-aws --profile ... --serve.",
+                },
+                status=403,
+            )
+            return
+
+        ir = self._get_ir()
+        node = next((candidate for candidate in ir.nodes if candidate.id == node_id), None)
+        if node is None:
+            self._send_json({"error": f"Node not found: {node_id}"}, status=404)
+            return
+
+        arn = str(node.properties.get("arn") or node.properties.get("state_machine_arn") or "").strip()
+        if not arn:
+            self._send_json({"error": "Selected state machine has no ARN to query."}, status=400)
+            return
+
+        region = (
+            node.metadata.get("region")
+            or node.position_hint.get("region")
+            or node.properties.get("region")
+            or _region_from_arn(arn)
+            or getattr(aws_session, "region_name", None)
+            or "us-east-1"
+        )
+        try:
+            client = aws_session.client("stepfunctions", region_name=region)
+            response = client.list_executions(stateMachineArn=arn, maxResults=25)
+        except Exception as exc:
+            self._send_json(
+                {
+                    "error": (
+                        "Could not load recent Step Functions executions. "
+                        "The AWS profile needs states:ListExecutions for this state machine."
+                    ),
+                    "detail": f"{type(exc).__name__}: {exc}",
+                },
+                status=502,
+            )
+            return
+
+        executions = response.get("executions", [])
+        if not isinstance(executions, list):
+            executions = []
+        summaries = _summarize_sfn_executions(executions)
+
+        graph = node.properties.get("asl_graph")
+        if isinstance(graph, dict):
+            graph["recent_executions"] = summaries
+            version = self._state.update(ir)
+        else:
+            version, _ = self._state.snapshot()
+
+        self._send_json({
+            "node_id": node_id,
+            "active_profile": active_profile,
+            "region": region,
+            "executions": summaries,
+            "version": version,
+        })
+
+    def _handle_sfn_execution_history_post(self) -> None:
+        body = self._read_json_body()
+        node_id = str(body.get("node_id") or "").strip()
+        execution_arn = str(body.get("execution_arn") or "").strip()
+        if not node_id:
+            self._send_json({"error": "node_id is required."}, status=400)
+            return
+        if not execution_arn:
+            self._send_json({"error": "execution_arn is required."}, status=400)
+            return
+
+        aws_session, active_profile, _, _ = self._aws_features.snapshot()
+        if aws_session is None:
+            self._send_json(
+                {
+                    "error": "AWS session is unavailable. Serve with --aws-profile, or launch from scan-aws --profile ... --serve.",
+                },
+                status=403,
+            )
+            return
+
+        ir = self._get_ir()
+        node = next((candidate for candidate in ir.nodes if candidate.id == node_id), None)
+        if node is None:
+            self._send_json({"error": f"Node not found: {node_id}"}, status=404)
+            return
+
+        arn = str(node.properties.get("arn") or node.properties.get("state_machine_arn") or "").strip()
+        if not arn:
+            self._send_json({"error": "Selected state machine has no ARN to query."}, status=400)
+            return
+        if ":stateMachine:" not in arn:
+            self._send_json({"error": "Selected node is not a Step Functions state machine."}, status=400)
+            return
+
+        region = (
+            node.metadata.get("region")
+            or node.position_hint.get("region")
+            or node.properties.get("region")
+            or _region_from_arn(execution_arn)
+            or _region_from_arn(arn)
+            or getattr(aws_session, "region_name", None)
+            or "us-east-1"
+        )
+        try:
+            client = aws_session.client("stepfunctions", region_name=region)
+            events: list[dict[str, Any]] = []
+            paginator = client.get_paginator("get_execution_history")
+            for page in paginator.paginate(
+                executionArn=execution_arn,
+                reverseOrder=False,
+                PaginationConfig={"MaxItems": 1000},
+            ):
+                page_events = page.get("events", [])
+                if isinstance(page_events, list):
+                    events.extend(page_events)
+        except Exception as exc:
+            self._send_json(
+                {
+                    "error": (
+                        "Your AWS profile can view the state machine definition, but not execution history. "
+                        "Add states:ListExecutions and states:GetExecutionHistory to use debugging overlays."
+                    ),
+                    "detail": f"{type(exc).__name__}: {exc}",
+                },
+                status=502,
+            )
+            return
+
+        normalized = _normalize_sfn_execution_history(events)
+        graph = node.properties.get("asl_graph")
+        if isinstance(graph, dict):
+            graph["selected_execution"] = {
+                "execution_arn": execution_arn,
+                "status": normalized.get("execution", {}).get("status"),
+                "states": normalized.get("states", {}),
+            }
+            version = self._state.update(ir)
+        else:
+            version, _ = self._state.snapshot()
+
+        self._send_json({
+            "node_id": node_id,
+            "execution_arn": execution_arn,
+            "active_profile": active_profile,
+            "region": region,
+            "version": version,
+            **normalized,
+        })
+
+    def _handle_timeline(self, query: str) -> None:
+        from urllib.parse import parse_qs
+
+        ir = self._get_ir()
+        timeline = ir.timeline or {}
+        params = parse_qs(query)
+        snapshot_id = params.get("id", [None])[0]
+        if snapshot_id:
+            for snapshot in timeline.get("snapshots", []):
+                if snapshot.get("id") == snapshot_id:
+                    self._send_json(snapshot.get("graph", {}))
+                    return
+            self._send_json({"error": f"Snapshot '{snapshot_id}' not found"}, status=404)
+            return
+        self._send_json({
+            "snapshots": [
+                {key: value for key, value in snapshot.items() if key != "graph"}
+                for snapshot in timeline.get("snapshots", [])
+            ],
+            "diffs": timeline.get("diffs", []),
+        })
+
+    def _handle_profiles(self) -> None:
+        try:
+            from stackmap.aws_live.profiles import discover_aws_profiles
+
+            _, active_profile, _, _ = self._aws_features.snapshot()
+            self._send_json({"available": discover_aws_profiles(), "active": active_profile})
+        except Exception as exc:
+            self._send_json({"error": str(exc)}, status=500)
+
+    def _handle_profile_activate(self) -> None:
+        body = self._read_json_body()
+        profile = str(body.get("profile") or "").strip()
+        if not profile:
+            self._send_json({"ok": False, "error": "Missing profile"}, status=400)
+            return
+        try:
+            self._aws_features.activate_profile(profile)
+            self._send_json({"ok": True, "active": profile, **self._aws_features.features()})
+        except Exception as exc:
+            self._send_json({"ok": False, "error": str(exc)}, status=400)
+
+    def _handle_nl_query(self) -> None:
+        body = self._read_json_body()
+        query = str(body.get("query") or "")
+        try:
+            from stackmap.nl_query import query_ir
+
+            self._send_json(query_ir(self._get_ir(), query))
         except Exception as exc:
             self._send_json({"error": str(exc)}, status=500)
 
@@ -488,10 +982,13 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
 
     def _handle_findings(self) -> None:
         from stackmap.analysis.patterns import analyze_patterns
+        from stackmap.cost.estimator import estimate_costs
 
         try:
             ir = self._get_ir()
-            findings = analyze_patterns(ir)
+            findings = analyze_patterns(ir, include_security=self._security_findings_enabled)
+            cost_report = estimate_costs(ir)
+            findings.extend(_cost_anomaly_findings(cost_report))
             self._send_json([f.to_dict() for f in findings])
         except Exception as exc:
             self._send_json({"error": str(exc)})
@@ -512,11 +1009,12 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
     def _handle_logs(self, query: str) -> None:
         from urllib.parse import parse_qs
 
-        if not self._live_logs_enabled:
+        aws_session, _, live_logs_enabled, _ = self._aws_features.snapshot()
+        if not live_logs_enabled:
             self._send_json({"error": "Live logs are disabled. Use --live-logs when serving."}, status=403)
             return
 
-        if not self._aws_session:
+        if not aws_session:
             self._send_json({"error": "Logs require an AWS session. Use --aws-profile when serving."}, status=400)
             return
 
@@ -545,7 +1043,7 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
                     return
                 region = node.metadata.get("region", "us-east-1")
                 result = fetch_resource_logs(
-                    self._aws_session,
+                    aws_session,
                     node.resource_type,
                     node.properties,
                     node.name,
@@ -572,7 +1070,7 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
                 for node in nodes_to_scan:
                     region = node.metadata.get("region", "us-east-1")
                     result = _fetch_logs(
-                        self._aws_session,
+                        aws_session,
                         node.resource_type,
                         node.properties,
                         node.name,
@@ -606,18 +1104,19 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
             self._send_json({"error": str(exc)}, status=500)
 
     def _handle_billing(self) -> None:
-        if not self._live_billing_enabled:
+        aws_session, _, _, live_billing_enabled = self._aws_features.snapshot()
+        if not live_billing_enabled:
             self._send_json({"error": "Live billing is disabled. Use --live-billing when serving."}, status=403)
             return
 
-        if not self._aws_session:
+        if not aws_session:
             self._send_json({"error": "Billing requires an AWS session. Use --aws-profile when serving."}, status=400)
             return
 
         try:
             from stackmap.cost.billing import fetch_billing_data
 
-            report = fetch_billing_data(self._aws_session)
+            report = fetch_billing_data(aws_session)
             self._send_json(report.to_dict())
         except Exception as exc:
             self._send_json({"error": str(exc)}, status=500)
@@ -625,11 +1124,12 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
     def _handle_billing_usage(self, query: str) -> None:
         from urllib.parse import parse_qs
 
-        if not self._live_billing_enabled:
+        aws_session, _, _, live_billing_enabled = self._aws_features.snapshot()
+        if not live_billing_enabled:
             self._send_json({"error": "Live billing is disabled. Use --live-billing when serving."}, status=403)
             return
 
-        if not self._aws_session:
+        if not aws_session:
             self._send_json({"error": "Usage metrics require an AWS session. Use --aws-profile when serving."}, status=400)
             return
 
@@ -658,7 +1158,7 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
                 region = node.metadata.get("region", "us-east-1")
 
                 usage = fetch_usage_metrics(
-                    self._aws_session,
+                    aws_session,
                     node.resource_type,
                     resource_name,
                     region=region,
@@ -666,7 +1166,7 @@ class _StackMapRequestHandler(SimpleHTTPRequestHandler):
                 self._send_json({"node_id": node_id, "usage": usage})
             else:
                 from stackmap.cost.billing import fetch_all_usage_metrics
-                overrides = fetch_all_usage_metrics(self._aws_session, ir)
+                overrides = fetch_all_usage_metrics(aws_session, ir)
                 self._send_json({"overrides": overrides})
 
         except Exception as exc:
@@ -693,6 +1193,11 @@ def scan(
     ),
     output: str = typer.Option("stackmap-output.json", help="Output file path"),
     format: str = typer.Option("json", help="Output format: json or html"),
+    snapshot_dir: str | None = typer.Option(
+        None,
+        "--snapshot-dir",
+        help="Also write this scan as a dated JSON snapshot for `stackmap timeline`.",
+    ),
 ) -> None:
     """Scan infrastructure source and generate an architecture map."""
     output_format = format.lower()
@@ -725,6 +1230,7 @@ def scan(
 
     try:
         _write_ir_output(ir, output, output_format)
+        snapshot_path = _maybe_write_snapshot(ir, snapshot_dir)
     except RuntimeError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(1)
@@ -738,6 +1244,8 @@ def scan(
     table.add_row("Connections", str(len(ir.edges)))
     table.add_row("Groups", str(len(ir.groups)))
     table.add_row("Output", output)
+    if snapshot_path:
+        table.add_row("Snapshot", str(snapshot_path))
 
     if ir.metadata.get("terraform_version"):
         table.add_row("Terraform", ir.metadata["terraform_version"])
@@ -786,6 +1294,11 @@ def scan_repo(
     ),
     output: str = typer.Option("stackmap-repo-output.json", help="Output file path"),
     format: str = typer.Option("json", help="Output format: json or html"),
+    snapshot_dir: str | None = typer.Option(
+        None,
+        "--snapshot-dir",
+        help="Also write this repository scan as a dated JSON snapshot for `stackmap timeline`.",
+    ),
 ) -> None:
     """Scan a repository for Terraform/CloudFormation/SAM sources and merge into one map."""
     output_format = format.lower()
@@ -833,6 +1346,7 @@ def scan_repo(
 
     try:
         _write_ir_output(merged_ir, output, output_format)
+        snapshot_path = _maybe_write_snapshot(merged_ir, snapshot_dir)
     except RuntimeError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(1)
@@ -871,6 +1385,8 @@ def scan_repo(
         table.add_row("Cross-account", str(merged_ir.metadata.get("cross_account_edges", 0)))
     table.add_row("Link policy", "strict" if strict_linking else "loose")
     table.add_row("Output", output)
+    if snapshot_path:
+        table.add_row("Snapshot", str(snapshot_path))
     console.print()
     console.print(table)
 
@@ -922,6 +1438,53 @@ def org_import(
     )
 
 
+@app.command("timeline")
+def timeline(
+    history: str = typer.Option(..., "--history", help="Directory containing StackMap JSON snapshots"),
+    output: str = typer.Option("stackmap-timeline.json", help="Output file path"),
+    format: str = typer.Option("json", help="Output format: json or html"),
+) -> None:
+    """Merge dated scan snapshots into a time-travel StackMap IR."""
+    output_format = format.lower()
+    if output_format not in {"json", "html"}:
+        console.print(
+            f"[red]Error:[/red] Format '{format}' not supported. Use 'json' or 'html'."
+        )
+        raise typer.Exit(1)
+
+    history_path = Path(history)
+    if not history_path.exists() or not history_path.is_dir():
+        console.print(f"[red]Error:[/red] History directory not found: {history_path}")
+        raise typer.Exit(1)
+
+    with mascot_status(console, "[bold]Building timeline...[/bold]"):
+        try:
+            from stackmap.timeline import build_timeline_ir
+
+            ir = build_timeline_ir(history_path)
+        except Exception as exc:
+            console.print(f"[red]Error:[/red] {exc}")
+            raise typer.Exit(1)
+
+    try:
+        _write_ir_output(ir, output, output_format)
+    except RuntimeError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(1)
+
+    table = Table(title="StackMap Timeline", show_header=False)
+    table.add_column("Metric", style="bold")
+    table.add_column("Value", style="cyan")
+    table.add_row("History", str(history_path))
+    table.add_row("Snapshots", str(ir.metadata.get("timeline_snapshot_count", 0)))
+    table.add_row("Resources", str(len(ir.nodes)))
+    table.add_row("Connections", str(len(ir.edges)))
+    table.add_row("Output", output)
+    console.print()
+    console.print(table)
+    console.print(f"\n[green]✓[/green] Timeline written to [cyan]{output}[/cyan].")
+
+
 @app.command("aws-policy")
 def aws_policy(
     service_set: str = typer.Option(
@@ -931,18 +1494,18 @@ def aws_policy(
     addon: str | None = typer.Option(
         None,
         "--addon",
-        help="Print a standalone optional policy instead of the base scan policy. Supported: logs, billing.",
+        help="Print a standalone optional policy instead of the base scan policy. Supported: logs, billing, stepfunctions.",
     ),
     extras: str = typer.Option(
         "",
-        help="Deprecated: merge optional permissions into the base policy. Prefer --addon logs or --addon billing.",
+        help="Deprecated: merge optional permissions into the base policy. Prefer --addon logs, --addon billing, or --addon stepfunctions.",
     ),
 ) -> None:
     """Print the least-privilege AWS read-only policy StackMap expects."""
     if addon:
         normalized_addon = addon.lower()
-        if normalized_addon not in {"billing", "logs"}:
-            console.print("[red]Error:[/red] --addon must be 'billing' or 'logs'.")
+        if normalized_addon not in {"billing", "logs", "stepfunctions"}:
+            console.print("[red]Error:[/red] --addon must be 'billing', 'logs', or 'stepfunctions'.")
             raise typer.Exit(1)
         console.print_json(json.dumps(build_addon_policy_document(normalized_addon)))
         return
@@ -952,9 +1515,9 @@ def aws_policy(
         console.print("[red]Error:[/red] --service-set must be 'core' or 'broad'.")
         raise typer.Exit(1)
     extra_list = [e.strip() for e in extras.split(",") if e.strip()] if extras else []
-    invalid = [e for e in extra_list if e not in {"billing", "logs"}]
+    invalid = [e for e in extra_list if e not in {"billing", "logs", "stepfunctions"}]
     if invalid:
-        console.print(f"[red]Error:[/red] Unknown extras: {', '.join(invalid)}. Supported: billing, logs")
+        console.print(f"[red]Error:[/red] Unknown extras: {', '.join(invalid)}. Supported: billing, logs, stepfunctions")
         raise typer.Exit(1)
     if extra_list:
         console.print(f"[dim]Including optional permissions: {', '.join(extra_list)}[/dim]")
@@ -1081,6 +1644,11 @@ def scan_aws(
     ),
     accounts: str | None = typer.Option(None, help="Comma-separated account:role_arn pairs for multi-account scan (e.g. '123456789012:arn:aws:iam::123456789012:role/StackMapReadOnly,987654321098:arn:aws:iam::987654321098:role/StackMapReadOnly')"),
     account_profiles: str | None = typer.Option(None, help="Comma-separated AWS profile names for multi-account scan (e.g. 'dev,sandbox,prod')"),
+    snapshot_dir: str | None = typer.Option(
+        None,
+        "--snapshot-dir",
+        help="Also write this AWS scan as a dated JSON snapshot for `stackmap timeline`.",
+    ),
 ) -> None:
     """Scan live AWS infrastructure using read-only AWS APIs."""
     output_format = format.lower()
@@ -1171,6 +1739,7 @@ def scan_aws(
 
         try:
             _write_ir_output(ir, output, output_format)
+            snapshot_path = _maybe_write_snapshot(ir, snapshot_dir)
         except RuntimeError as exc:
             console.print(f"[red]Error:[/red] {exc}")
             raise typer.Exit(1)
@@ -1187,6 +1756,8 @@ def scan_aws(
         if ir.metadata.get("cross_account_edges") is not None:
             table.add_row("Cross-account", str(ir.metadata.get("cross_account_edges", 0)))
         table.add_row("Output", output)
+        if snapshot_path:
+            table.add_row("Snapshot", str(snapshot_path))
         console.print()
         console.print(table)
 
@@ -1214,9 +1785,11 @@ def scan_aws(
                 watch_interval=1.0,
                 open_browser=True,
                 auto_group=True,
-                aws_profile=profile if (live_logs or live_billing) else None,
+                aws_profile=profile,
                 live_logs=live_logs,
                 live_billing=live_billing,
+                security_findings=True,
+                anomaly_thresholds="1.3,1.6,2.0",
             )
         return
 
@@ -1252,6 +1825,7 @@ def scan_aws(
 
         try:
             _write_ir_output(ir, output, output_format)
+            snapshot_path = _maybe_write_snapshot(ir, snapshot_dir)
         except RuntimeError as exc:
             console.print(f"[red]Error:[/red] {exc}")
             raise typer.Exit(1)
@@ -1269,6 +1843,8 @@ def scan_aws(
         if ir.metadata.get("cross_account_edges") is not None:
             table.add_row("Cross-account", str(ir.metadata.get("cross_account_edges", 0)))
         table.add_row("Output", output)
+        if snapshot_path:
+            table.add_row("Snapshot", str(snapshot_path))
         console.print()
         console.print(table)
 
@@ -1296,9 +1872,11 @@ def scan_aws(
                 watch_interval=1.0,
                 open_browser=True,
                 auto_group=True,
-                aws_profile=profile if (live_logs or live_billing) else None,
+                aws_profile=profile,
                 live_logs=live_logs,
                 live_billing=live_billing,
+                security_findings=True,
+                anomaly_thresholds="1.3,1.6,2.0",
             )
         return
 
@@ -1332,6 +1910,7 @@ def scan_aws(
 
     try:
         _write_ir_output(ir, output, output_format)
+        snapshot_path = _maybe_write_snapshot(ir, snapshot_dir)
     except RuntimeError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(1)
@@ -1350,6 +1929,8 @@ def scan_aws(
     if ir.metadata.get("cross_account_edges") is not None:
         table.add_row("Cross-account", str(ir.metadata.get("cross_account_edges", 0)))
     table.add_row("Output", output)
+    if snapshot_path:
+        table.add_row("Snapshot", str(snapshot_path))
     console.print()
     console.print(table)
 
@@ -1455,9 +2036,11 @@ def scan_aws(
             watch_interval=1.0,
             open_browser=True,
             auto_group=True,
-            aws_profile=profile if (live_logs or live_billing) else None,
+            aws_profile=profile,
             live_logs=live_logs,
             live_billing=live_billing,
+            security_findings=True,
+            anomaly_thresholds="1.3,1.6,2.0",
         )
 
 
@@ -1506,6 +2089,16 @@ def serve(
         "--live-billing",
         help="Enable /api/billing and CloudWatch usage metric imports. Requires --aws-profile and the billing add-on policy.",
     ),
+    security_findings: bool = typer.Option(
+        True,
+        "--security-findings/--no-security-findings",
+        help="Enable security-specific findings in /api/findings.",
+    ),
+    anomaly_thresholds: str = typer.Option(
+        "1.3,1.6,2.0",
+        "--anomaly-thresholds",
+        help="Cost anomaly ratio thresholds as low,medium,high.",
+    ),
 ) -> None:
     """Serve an interactive local StackMap viewer.
 
@@ -1532,8 +2125,14 @@ def serve(
 
     with mascot_status(console, "[bold]Preparing local viewer...[/bold]"):
         try:
-            source_type, ir = _parse_source(str(source_path))
-            _annotate_scan_metadata(ir, source_path)
+            if source_path.exists() and source_path.is_dir():
+                from stackmap.timeline import build_timeline_ir
+
+                source_type = "timeline"
+                ir = build_timeline_ir(source_path)
+            else:
+                source_type, ir = _parse_source(str(source_path))
+                _annotate_scan_metadata(ir, source_path)
         except typer.BadParameter as exc:
             console.print(f"[red]Error:[/red] {exc}")
             raise typer.Exit(1)
@@ -1545,13 +2144,18 @@ def serve(
         # logical service groups in the UI without needing a config file.
         if auto_group:
             try:
-                from stackmap.grouping.engine import AutoDetectConfig, auto_detect_groups
+                from stackmap.grouping.engine import (
+                    AutoDetectConfig,
+                    auto_detect_groups,
+                    build_group_aggregates,
+                )
                 detected = auto_detect_groups(ir, AutoDetectConfig())
                 # Append (rather than replace) so any existing parser-supplied groups remain.
                 existing_ids = {g.id for g in ir.groups}
                 for g in detected:
                     if g.id not in existing_ids:
                         ir.groups.append(g)
+                ir.aggregates = build_group_aggregates(ir)
             except Exception:
                 # Smart grouping is best-effort; never block serving.
                 pass
@@ -1577,6 +2181,11 @@ def serve(
                 console.print(f"[yellow]Warning:[/yellow] Drift comparison failed: {exc}")
 
     state = _LiveGraphState(ir)
+    try:
+        parsed_anomaly_thresholds = _parse_anomaly_thresholds(anomaly_thresholds)
+    except typer.BadParameter as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(1)
     temp_dir: Path | None = None
     source_public_dir = get_preferred_public_dir()
     public_dir: Path
@@ -1605,27 +2214,52 @@ def serve(
     _, snapshot = state.snapshot()
     _write_graph_json(public_dir / "sample-data.json", snapshot)
 
-    # Set up optional AWS session for explicitly enabled live features.
+    # Set up optional AWS session for on-demand live features. Logs and billing
+    # still require their explicit flags; Step Functions execution summaries
+    # are loaded only when the user clicks the button in the viewer.
     aws_session = None
-    if aws_profile and (live_logs or live_billing):
+    if aws_profile:
         try:
             import boto3
-            aws_session = boto3.Session(profile_name=aws_profile)
-            enabled = ", ".join(
-                name for name, is_enabled in (("logs", live_logs), ("billing", live_billing)) if is_enabled
+        except ImportError as exc:
+            console.print(
+                f"[red]Error:[/red] boto3 is required for AWS live features but could not be imported: {exc}\n"
+                "        Live features will be disabled. Reinstall stackmap or run `pip install boto3`."
             )
-            console.print(f"[green]✓[/green] AWS session active (profile: {aws_profile}) — live {enabled} enabled")
-        except Exception as exc:
-            console.print(f"[yellow]Warning:[/yellow] Could not create AWS session: {exc}")
+        else:
+            try:
+                aws_session = boto3.Session(profile_name=aws_profile)
+                # Force credential resolution now so we don't silently serve with a broken session.
+                aws_session.client("sts").get_caller_identity()
+                enabled = [
+                    name for name, is_enabled in (
+                        ("logs", live_logs),
+                        ("billing", live_billing),
+                        ("Step Functions executions on demand", True),
+                    ) if is_enabled
+                ]
+                console.print(f"[green]✓[/green] AWS session active (profile: {aws_profile}) — {', '.join(enabled)}")
+            except Exception as exc:
+                aws_session = None
+                console.print(
+                    f"[red]Error:[/red] AWS session failed for profile '{aws_profile}': {type(exc).__name__}: {exc}\n"
+                    "        Live features will be disabled. Check your AWS credentials/profile."
+                )
+    aws_features = _LiveAWSFeatureState(
+        session=aws_session,
+        active_profile=aws_profile,
+        live_logs_enabled=live_logs,
+        live_billing_enabled=live_billing,
+    )
 
     handler_cls = partial(
         _StackMapRequestHandler,
         directory=str(public_dir),
         state=state,
         source_type=source_type,
-        aws_session=aws_session,
-        live_logs_enabled=live_logs,
-        live_billing_enabled=live_billing,
+        aws_features=aws_features,
+        security_findings_enabled=security_findings,
+        anomaly_thresholds=parsed_anomaly_thresholds,
     )
     try:
         server = ThreadingHTTPServer((host, port), handler_cls)

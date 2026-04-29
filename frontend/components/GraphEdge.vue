@@ -56,7 +56,7 @@
         :x="labelPosition.x"
         :y="labelPosition.y + 2"
         text-anchor="middle"
-        fill="#6b7280"
+        :fill="workflowKind ? edgeColor : '#6b7280'"
         font-size="8"
         font-family="'JetBrains Mono', 'SF Mono', monospace"
       >{{ edgeLabelText }}</text>
@@ -131,10 +131,19 @@ const isUserLink = computed(() =>
 const edgeDiffStatus = computed(() => store.edgeDiffStatus[props.edge.id] as string | undefined)
 const userLinkColors = ['#4ADE80', '#38BDF8', '#C084FC', '#FB923C', '#F87171']
 
+const workflowKind = computed(() => {
+  if (props.edge.metadata?.source !== 'sfn_workflow') return ''
+  const transition = props.edge.metadata?.asl_transition as { kind?: string } | undefined
+  return String(transition?.kind || '').toLowerCase()
+})
+
 const edgeColor = computed(() => {
   if (store.diffMode && edgeDiffStatus.value === 'added') return '#22c55e'
   if (store.diffMode && edgeDiffStatus.value === 'removed') return '#ef4444'
   if (isUserLink.value) return props.edge.color || EDGE_COLORS.user_link
+  if (workflowKind.value === 'catch') return '#f87171'
+  if (workflowKind.value === 'choice') return '#a78bfa'
+  if (workflowKind.value === 'default') return '#94a3b8'
   return EDGE_COLORS[props.edge.edge_type] || '#64748b'
 })
 
@@ -179,6 +188,9 @@ const computedOpacity = computed(() => {
     if (edgeDiffStatus.value === 'unchanged') return 0.15
   }
   const type = props.edge.edge_type
+  if (workflowKind.value === 'catch') return 0.85
+  if (workflowKind.value === 'choice' || workflowKind.value === 'default') return 0.7
+  if (workflowKind.value === 'next') return 0.8
   if (isUserLink.value) return 0.82
   if (type === 'triggers') return 0.85
   if (type === 'writes_to' || type === 'reads_from') return 0.7
@@ -206,6 +218,8 @@ const dashPattern = computed(() => {
   if (store.diffMode && edgeDiffStatus.value === 'added') return '6 3'
   if (store.diffMode && edgeDiffStatus.value === 'removed') return '3 4'
   if (isUserLink.value) return 'none'
+  if (workflowKind.value === 'catch') return '6 3'
+  if (workflowKind.value === 'default') return '4 3'
   if (props.edge.edge_type === 'cross_account_reference') return '8 4'
   if (props.edge.edge_type === 'references') return '4 3'
   if (props.edge.edge_type === 'contains') return '1 3'
@@ -257,12 +271,14 @@ const labelPosition = computed(() => {
 
 const edgeLabelText = computed(() => {
   if (isUserLink.value && props.edge.label) return props.edge.label
+  if (props.edge.metadata?.source === 'sfn_workflow' && props.edge.label) return props.edge.label
   return MANUAL_EDGE_TYPES.find(type => type.id === props.edge.edge_type)?.label || props.edge.edge_type
 })
 const labelWidth = computed(() => Math.max(36, edgeLabelText.value.length * 5.4 + 8))
 const showLabel = computed(() => {
   if (props.zoomScale <= 0.6) return false
-  return ['triggers', 'reads_from', 'writes_to', 'cross_account_reference', 'user_link', 'manual_generic', 'manual_request', 'manual_event', 'manual_data', 'manual_auth'].includes(props.edge.edge_type)
+  if (props.edge.metadata?.source === 'sfn_workflow') return !!(props.edge.label && props.edge.label.trim())
+  return ['triggers', 'reads_from', 'writes_to', 'routes_to', 'cross_account_reference', 'user_link', 'manual_generic', 'manual_request', 'manual_event', 'manual_data', 'manual_auth'].includes(props.edge.edge_type)
 })
 
 const midpoint = computed(() => {

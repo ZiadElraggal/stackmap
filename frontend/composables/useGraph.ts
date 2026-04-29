@@ -129,6 +129,39 @@ export const CATEGORY_ICONS: Record<string, string> = {
 // AWS Architecture Icon-inspired SVG icons — designed for light-on-dark rendering.
 // Each icon uses stroke-based rendering at 24x24 viewBox to match the official style.
 const RESOURCE_TYPE_ICONS: Array<{ match: (resourceType: string) => boolean; icon: string }> = [
+  // ── Step Functions state nodes ──────────────────────────────────
+  {
+    match: rt => rt === 'aws_sfn_pass_state',
+    icon: '<path d="M5 12h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M13 8l4 4-4 4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="5" cy="12" r="2" fill="currentColor" opacity="0.55"/>',
+  },
+  {
+    match: rt => rt === 'aws_sfn_choice_state',
+    icon: '<path d="M12 3.5l8.5 8.5-8.5 8.5L3.5 12 12 3.5z" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/><path d="M9 12h6M12 9v6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
+  },
+  {
+    match: rt => rt.startsWith('aws_sfn_task_'),
+    icon: '<rect x="4" y="5" width="16" height="14" rx="3" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M8 10h8M8 14h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M17 3.5v3M20.5 7h-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  },
+  {
+    match: rt => rt === 'aws_sfn_map_state',
+    icon: '<rect x="4" y="5" width="5" height="5" rx="1.2" stroke="currentColor" stroke-width="1.7" fill="none"/><rect x="15" y="5" width="5" height="5" rx="1.2" stroke="currentColor" stroke-width="1.7" fill="none"/><rect x="4" y="14" width="5" height="5" rx="1.2" stroke="currentColor" stroke-width="1.7" fill="none"/><rect x="15" y="14" width="5" height="5" rx="1.2" stroke="currentColor" stroke-width="1.7" fill="none"/><path d="M10 7.5h4M10 16.5h4M6.5 11v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+  },
+  {
+    match: rt => rt === 'aws_sfn_parallel_state',
+    icon: '<path d="M6 4v16M18 4v16M6 8h5c2 0 3 1 3 3v2c0 2 1 3 3 3h1M6 16h5c2 0 3-1 3-3v-2c0-2 1-3 3-3h1" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/>',
+  },
+  {
+    match: rt => rt === 'aws_sfn_wait_state',
+    icon: '<circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M12 7v5l3 2" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
+  },
+  {
+    match: rt => rt === 'aws_sfn_succeed_state',
+    icon: '<circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M8.2 12.2l2.5 2.5 5.1-5.3" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
+  },
+  {
+    match: rt => rt === 'aws_sfn_fail_state',
+    icon: '<circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  },
   // ── Serverless / Lambda ─────────────────────────────────────────
   {
     match: rt => rt.includes('lambda') || rt.includes('Lambda'),
@@ -694,6 +727,7 @@ export function getNodeIconPath(node: Pick<StackMapNode, 'resource_type' | 'cate
 
 export function getResourceIconAsset(resourceType: string): string | null {
   const normalized = resourceType.toLowerCase()
+  if (normalized.startsWith('aws_sfn_') && normalized.endsWith('_state')) return null
   const match = RESOURCE_TYPE_ICON_ASSETS.find(entry => entry.match(normalized))
   return match?.asset || null
 }

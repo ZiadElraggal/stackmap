@@ -26,6 +26,12 @@
             <div class="text-[10px] font-mono uppercase tracking-[0.24em] text-gray-600">Visible Scope</div>
             <div class="mt-2 text-sm font-medium text-white">{{ scopeLabel }}</div>
             <div class="mt-1 text-xs font-mono text-gray-500">{{ totalResources }} resources · {{ totalConnections }} connections</div>
+            <button
+              class="mt-3 rounded-lg border border-cyan-400/20 bg-cyan-500/10 px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.18em] text-cyan-200 transition hover:border-cyan-300/35 hover:bg-cyan-500/16"
+              @click="store.viewAllComponents()"
+            >
+              View all
+            </button>
           </div>
         </div>
 
@@ -45,12 +51,26 @@
       <section class="mb-10">
         <div class="mb-4 flex items-end justify-between gap-6">
           <div>
-            <p class="text-[10px] font-mono uppercase tracking-[0.24em] text-gray-600">Service Components</p>
-            <h3 class="mt-2 text-xl font-semibold text-white">Open the part of the map that matters</h3>
+            <p class="text-[10px] font-mono uppercase tracking-[0.24em] text-gray-600">Smart Components</p>
+            <h3 class="mt-2 text-xl font-semibold text-white">Open a group, or view everything together</h3>
           </div>
           <div class="text-right text-xs font-mono text-gray-500">
-            {{ primarySummaries.length }} service island{{ primarySummaries.length === 1 ? '' : 's' }}
+            {{ filteredPrimarySummaries.length }} of {{ primarySummaries.length }} service island{{ primarySummaries.length === 1 ? '' : 's' }}
           </div>
+        </div>
+
+        <div v-if="parentFilterOptions.length > 1" class="mb-4 flex flex-wrap gap-2">
+          <button
+            v-for="option in parentFilterOptions"
+            :key="option.id"
+            class="rounded-lg border px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.16em] transition"
+            :class="selectedParentId === option.id
+              ? 'border-emerald-300/30 bg-emerald-500/12 text-emerald-200'
+              : 'border-white/[0.08] bg-white/[0.03] text-gray-400 hover:border-white/15 hover:text-white'"
+            @click="selectedParentId = option.id"
+          >
+            {{ option.label }} · {{ option.count }}
+          </button>
         </div>
 
         <button
@@ -65,6 +85,12 @@
                   Recommended
                 </span>
                 <span
+                  v-if="featuredSummary.confidence !== undefined"
+                  class="rounded-full border border-cyan-400/15 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.18em] text-cyan-200"
+                >
+                  {{ confidenceLabel(featuredSummary.confidence) }}
+                </span>
+                <span
                   v-if="featuredSummary.entrypoints.length"
                   class="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.18em] text-gray-400"
                 >
@@ -76,6 +102,9 @@
               </h4>
               <p class="mt-3 max-w-2xl text-sm leading-6 text-gray-400">
                 {{ featuredSummary.summary }}
+              </p>
+              <p v-if="featuredSummary.reason" class="mt-2 max-w-2xl text-xs leading-5 text-emerald-100/70">
+                {{ featuredSummary.reason }}
               </p>
               <div class="mt-4 flex flex-wrap gap-1.5">
                 <span
@@ -103,56 +132,76 @@
           </div>
         </button>
 
-        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <button
-            v-for="component in secondarySummaries"
-            :key="component.id"
-            class="group rounded-[24px] border bg-[#11151d]/84 p-4 text-left shadow-[0_18px_60px_rgba(0,0,0,0.18)] transition hover:-translate-y-0.5 hover:shadow-[0_24px_70px_rgba(0,0,0,0.24)]"
-            :class="component.kind === 'weakly_linked'
-              ? 'border-white/[0.06] hover:border-indigo-400/20'
-              : 'border-white/[0.08] hover:border-emerald-400/24'"
-            @click="store.openComponent(component.id)"
-          >
-            <div class="mb-3 flex items-center justify-between gap-3">
-              <span
-                class="rounded-full px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.18em]"
+        <div class="space-y-5">
+          <div v-for="section in secondarySections" :key="section.id">
+            <div v-if="secondarySections.length > 1" class="mb-2 flex items-center justify-between text-[10px] font-mono uppercase tracking-[0.18em] text-gray-500">
+              <span>{{ section.label }}</span>
+              <span>{{ section.items.length }} group{{ section.items.length === 1 ? '' : 's' }}</span>
+            </div>
+            <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <button
+                v-for="component in section.items"
+                :key="component.id"
+                class="group rounded-[24px] border bg-[#11151d]/84 p-4 text-left shadow-[0_18px_60px_rgba(0,0,0,0.18)] transition hover:-translate-y-0.5 hover:shadow-[0_24px_70px_rgba(0,0,0,0.24)]"
                 :class="component.kind === 'weakly_linked'
-                  ? 'bg-indigo-500/10 text-indigo-300'
-                  : 'bg-emerald-500/10 text-emerald-300'"
+                  ? 'border-white/[0.06] hover:border-indigo-400/20'
+                  : 'border-white/[0.08] hover:border-emerald-400/24'"
+                @click="store.openComponent(component.id)"
               >
-                {{ component.kind === 'weakly_linked' ? 'Weakly linked' : 'Service component' }}
-              </span>
-              <span class="text-[11px] font-mono text-gray-500">{{ component.resourceCount }} res</span>
-            </div>
+                <div class="mb-3 flex items-center justify-between gap-3">
+                  <span
+                    class="rounded-full px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.18em]"
+                    :class="component.kind === 'weakly_linked'
+                      ? 'bg-indigo-500/10 text-indigo-300'
+                      : 'bg-emerald-500/10 text-emerald-300'"
+                  >
+                    {{ componentLabel(component) }}
+                  </span>
+                  <span class="text-[11px] font-mono text-gray-500">{{ component.resourceCount }} res</span>
+                </div>
 
-            <h4 class="text-lg font-semibold tracking-tight text-white transition group-hover:text-emerald-100">
-              {{ displayName(component.name) }}
-            </h4>
-            <p class="mt-2 text-sm leading-6 text-gray-400">
-              {{ component.summary }}
-            </p>
+                <div class="mb-2 flex items-center gap-2">
+                  <span v-if="component.confidence !== undefined" class="rounded-full bg-cyan-500/10 px-2 py-0.5 text-[10px] font-mono uppercase tracking-[0.14em] text-cyan-200">
+                    {{ confidenceLabel(component.confidence) }}
+                  </span>
+                  <span v-if="component.parentGroupId" class="truncate text-[10px] font-mono uppercase tracking-[0.14em] text-gray-500">
+                    {{ parentLabel(component.parentGroupId) }}
+                  </span>
+                </div>
 
-            <div class="mt-4 flex flex-wrap gap-1.5">
-              <span
-                v-for="category in component.dominantCategories.slice(0, 3)"
-                :key="`${component.id}-${category}`"
-                class="rounded-full px-2 py-0.5 text-[10px] font-mono"
-                :style="{ backgroundColor: `${colorForCategory(category)}20`, color: colorForCategory(category) }"
-              >
-                {{ displayCategory(category) }}
-              </span>
-            </div>
+                <h4 class="text-lg font-semibold tracking-tight text-white transition group-hover:text-emerald-100">
+                  {{ displayName(component.name) }}
+                </h4>
+                <p class="mt-2 text-sm leading-6 text-gray-400">
+                  {{ component.summary }}
+                </p>
+                <p v-if="component.reason" class="mt-2 text-xs leading-5 text-gray-500">
+                  {{ component.reason }}
+                </p>
 
-            <div v-if="component.entrypoints.length" class="mt-4 text-xs text-gray-300">
-              <span class="font-mono uppercase tracking-[0.18em] text-gray-600">Entrypoint</span>
-              <span class="ml-2">{{ component.entrypoints[0] }}</span>
-            </div>
+                <div class="mt-4 flex flex-wrap gap-1.5">
+                  <span
+                    v-for="category in component.dominantCategories.slice(0, 3)"
+                    :key="`${component.id}-${category}`"
+                    class="rounded-full px-2 py-0.5 text-[10px] font-mono"
+                    :style="{ backgroundColor: `${colorForCategory(category)}20`, color: colorForCategory(category) }"
+                  >
+                    {{ displayCategory(category) }}
+                  </span>
+                </div>
 
-            <div class="mt-5 flex items-center justify-between border-t border-white/[0.06] pt-3 text-[11px] font-mono text-gray-500">
-              <span>{{ metaLine(component) }}</span>
-              <span class="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-emerald-300 transition group-hover:border-emerald-300/20 group-hover:text-emerald-200">Open</span>
+                <div v-if="component.entrypoints.length" class="mt-4 text-xs text-gray-300">
+                  <span class="font-mono uppercase tracking-[0.18em] text-gray-600">Entrypoint</span>
+                  <span class="ml-2">{{ component.entrypoints[0] }}</span>
+                </div>
+
+                <div class="mt-5 flex items-center justify-between border-t border-white/[0.06] pt-3 text-[11px] font-mono text-gray-500">
+                  <span>{{ metaLine(component) }}</span>
+                  <span class="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-emerald-300 transition group-hover:border-emerald-300/20 group-hover:text-emerald-200">Open</span>
+                </div>
+              </button>
             </div>
-          </button>
+          </div>
         </div>
       </section>
 
@@ -165,7 +214,7 @@
             <p class="text-[10px] font-mono uppercase tracking-[0.24em] text-gray-600">Unlinked Resources</p>
             <h3 class="mt-2 text-lg font-semibold text-white">Resources that still need stronger grouping</h3>
             <p class="mt-2 max-w-3xl text-sm leading-6 text-gray-400">
-              These resources were detected successfully, but they do not yet form a strong component or service boundary.
+              These resources were detected successfully, but no smart group claimed them yet.
             </p>
           </div>
           <div class="text-right text-xs font-mono text-gray-500">
@@ -214,7 +263,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { CATEGORY_COLORS } from '~/composables/useGraph'
 import { useGraphStore, type ComponentSummary } from '~/stores/graph'
 
@@ -222,8 +271,13 @@ const store = useGraphStore()
 
 const allSummaries = computed(() => store.componentSummaries)
 const primarySummaries = computed(() => allSummaries.value.filter(summary => summary.kind !== 'unlinked_bucket'))
-const featuredSummary = computed(() => primarySummaries.value[0] || null)
-const secondarySummaries = computed(() => primarySummaries.value.slice(1))
+const selectedParentId = ref('all')
+const filteredPrimarySummaries = computed(() => {
+  if (selectedParentId.value === 'all') return primarySummaries.value
+  return primarySummaries.value.filter(summary => (summary.parentGroupId || 'unscoped') === selectedParentId.value)
+})
+const featuredSummary = computed(() => filteredPrimarySummaries.value[0] || null)
+const secondarySummaries = computed(() => filteredPrimarySummaries.value.slice(1))
 const unlinkedSummary = computed(() => allSummaries.value.find(summary => summary.kind === 'unlinked_bucket') || null)
 const totalResources = computed(() => store.architectureSourceNodes.length)
 const totalConnections = computed(() => store.architectureSourceEdges.length)
@@ -262,6 +316,31 @@ const topEntrypoints = computed(() => {
     for (const entrypoint of summary.entrypoints.slice(0, 2)) names.add(entrypoint)
   }
   return [...names].slice(0, 3)
+})
+
+const parentFilterOptions = computed(() => {
+  const counts = new Map<string, number>()
+  for (const summary of primarySummaries.value) {
+    const id = summary.parentGroupId || 'unscoped'
+    counts.set(id, (counts.get(id) || 0) + 1)
+  }
+  const options = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([id, count]) => ({ id, label: parentLabel(id), count }))
+  return [{ id: 'all', label: 'All', count: primarySummaries.value.length }, ...options]
+})
+
+const secondarySections = computed(() => {
+  if (selectedParentId.value !== 'all') {
+    return [{ id: selectedParentId.value, label: parentLabel(selectedParentId.value), items: secondarySummaries.value }]
+  }
+  const sections = new Map<string, ComponentSummary[]>()
+  for (const summary of secondarySummaries.value) {
+    const id = summary.parentGroupId || 'unscoped'
+    if (!sections.has(id)) sections.set(id, [])
+    sections.get(id)!.push(summary)
+  }
+  return [...sections.entries()].map(([id, items]) => ({ id, label: parentLabel(id), items }))
 })
 
 const overviewItems = computed(() => [
@@ -307,6 +386,23 @@ function displayCategory(category: string): string {
 
 function metaLine(component: ComponentSummary): string {
   return `${component.accountIds.length} account${component.accountIds.length === 1 ? '' : 's'} · ${component.regions.length} region${component.regions.length === 1 ? '' : 's'} · ${component.edgeCount} connection${component.edgeCount === 1 ? '' : 's'}`
+}
+
+function parentLabel(parentGroupId: string): string {
+  if (parentGroupId === 'all') return 'All'
+  if (parentGroupId === 'unscoped') return 'Landscape'
+  const group = store.groups.find(item => item.id === parentGroupId)
+  return group?.name ? displayName(group.name) : 'Landscape'
+}
+
+function confidenceLabel(value: number): string {
+  return `${Math.round(value * 100)}% match`
+}
+
+function componentLabel(component: ComponentSummary): string {
+  if (component.source === 'smart_group') return 'Smart group'
+  if (component.kind === 'weakly_linked') return 'Weakly linked'
+  return 'Service component'
 }
 
 function colorForCategory(category: string): string {

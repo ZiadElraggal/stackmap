@@ -13,6 +13,7 @@ from stackmap.aws_live.scanner import (
     AWSLiveScanner,
     APIRecorder,
     AccountScanContext,
+    build_addon_policy_document,
     build_policy_document,
 )
 from stackmap.organizations import OrganizationDocument
@@ -64,6 +65,16 @@ def test_build_policy_document_broad_includes_extended_actions() -> None:
     assert "ec2:Describe*" in core["Statement"][0]["Action"]
     assert "config:ListDiscoveredResources" not in core["Statement"][0]["Action"]
     assert "config:ListDiscoveredResources" in broad["Statement"][0]["Action"]
+    assert "states:DescribeStateMachine" in broad["Statement"][0]["Action"]
+    assert "states:ListExecutions" not in broad["Statement"][0]["Action"]
+
+
+def test_stepfunctions_addon_policy_includes_execution_debug_permissions() -> None:
+    addon = build_addon_policy_document("stepfunctions")
+    actions = addon["Statement"][0]["Action"]
+
+    assert "states:ListExecutions" in actions
+    assert "states:GetExecutionHistory" in actions
 
 
 def test_dry_run_plan_single_account_records_expected_calls() -> None:

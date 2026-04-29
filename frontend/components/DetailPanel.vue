@@ -105,6 +105,167 @@
         </dl>
       </div>
 
+      <div v-if="selectedNodeFindings.length > 0" class="border-b border-red-500/20 bg-red-500/[0.025] p-4">
+        <h3 class="mb-2 flex items-center gap-1.5 text-xs uppercase tracking-wider text-red-300/80">
+          Security & findings
+        </h3>
+        <div class="space-y-2">
+          <div
+            v-for="finding in selectedNodeFindings"
+            :key="finding.id"
+            class="rounded-lg border border-white/10 bg-white/[0.03] p-3"
+          >
+            <div class="flex items-center justify-between gap-2">
+              <div class="text-xs font-semibold text-white">{{ finding.title }}</div>
+              <span class="rounded bg-red-500/15 px-2 py-0.5 text-[9px] font-mono uppercase text-red-200">{{ finding.severity }}</span>
+            </div>
+            <p class="mt-1 text-[11px] leading-5 text-gray-400">{{ finding.description }}</p>
+            <details v-if="finding.remediation || finding.recommendation" class="mt-2">
+              <summary class="cursor-pointer text-[10px] font-mono uppercase tracking-wider text-emerald-300">Remediation</summary>
+              <p class="mt-1 text-[11px] leading-5 text-gray-400">{{ finding.remediation || finding.recommendation }}</p>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="isWorkflowState" class="border-b border-cyan-500/20 bg-cyan-500/[0.025] p-4">
+        <h3 class="mb-2 text-xs uppercase tracking-wider text-cyan-300/80">Workflow State</h3>
+        <div class="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+          <div class="flex items-center justify-between gap-2">
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-semibold text-white">{{ workflowState?.type || 'State' }}</span>
+                <span
+                  v-if="workflowStateIntegrationBadge"
+                  class="rounded bg-cyan-500/15 px-1.5 py-0.5 text-[9px] font-mono uppercase text-cyan-200"
+                >{{ workflowStateIntegrationBadge }}</span>
+                <span
+                  v-if="workflowState?.pattern"
+                  class="rounded bg-white/5 px-1.5 py-0.5 text-[9px] font-mono uppercase text-gray-400"
+                >{{ workflowState.pattern }}</span>
+              </div>
+              <div class="mt-1 text-[11px] font-mono text-gray-500 truncate">{{ workflowState?.qualified_name || workflowState?.name }}</div>
+            </div>
+            <span
+              v-if="workflowExecutionStatus"
+              class="rounded px-2 py-0.5 text-[9px] font-mono uppercase"
+              :class="workflowExecutionStatusClass"
+            >{{ workflowExecutionStatus }}</span>
+          </div>
+          <div v-if="workflowState?.comment" class="mt-2 text-xs leading-relaxed text-gray-400">{{ workflowState.comment }}</div>
+
+          <!-- I/O path chain: the ASL data flow pipeline -->
+          <div v-if="workflowIoChain.length > 0" class="mt-3 rounded-md border border-white/8 bg-black/30 p-2">
+            <div class="mb-1 text-[9px] font-mono uppercase tracking-wider text-cyan-300/60">I/O path</div>
+            <div class="flex flex-wrap items-center gap-1 text-[10px] font-mono">
+              <template v-for="(step, i) in workflowIoChain" :key="i">
+                <span
+                  class="rounded px-1.5 py-0.5"
+                  :class="step.kind === 'literal' ? 'bg-white/5 text-gray-500' : 'bg-cyan-500/10 text-cyan-200'"
+                >{{ step.label }}</span>
+                <span v-if="i < workflowIoChain.length - 1" class="text-gray-600">→</span>
+              </template>
+            </div>
+          </div>
+
+          <div class="mt-3 grid grid-cols-2 gap-2 text-[11px] font-mono">
+            <div v-if="workflowState?.next" class="rounded-md border border-white/8 bg-black/20 px-2 py-1.5 text-gray-400">next <span class="text-white">{{ workflowState.next }}</span></div>
+            <div v-if="workflowState?.end" class="rounded-md border border-white/8 bg-black/20 px-2 py-1.5 text-gray-400">terminal <span class="text-white">yes</span></div>
+            <div v-if="workflowState?.integration" class="rounded-md border border-white/8 bg-black/20 px-2 py-1.5 text-gray-400">integration <span class="text-white">{{ workflowState.integration }}</span></div>
+            <div v-if="workflowState?.timeout_seconds != null" class="rounded-md border border-white/8 bg-black/20 px-2 py-1.5 text-gray-400">timeout <span class="text-white">{{ workflowState.timeout_seconds }}s</span></div>
+            <div v-if="workflowState?.heartbeat_seconds != null" class="rounded-md border border-white/8 bg-black/20 px-2 py-1.5 text-gray-400">heartbeat <span class="text-white">{{ workflowState.heartbeat_seconds }}s</span></div>
+            <div v-if="workflowState?.max_concurrency != null" class="rounded-md border border-white/8 bg-black/20 px-2 py-1.5 text-gray-400">concurrency <span class="text-white">{{ workflowState.max_concurrency }}</span></div>
+            <div v-if="workflowState?.wait_seconds != null" class="rounded-md border border-white/8 bg-black/20 px-2 py-1.5 text-gray-400">wait <span class="text-white">{{ workflowState.wait_seconds }}s</span></div>
+            <div v-if="workflowOverlay?.duration_ms != null" class="rounded-md border border-white/8 bg-black/20 px-2 py-1.5 text-gray-400">duration <span class="text-white">{{ workflowOverlay.duration_ms }}ms</span></div>
+          </div>
+
+          <!-- Retry policy -->
+          <div v-if="workflowState?.retry?.length" class="mt-3">
+            <div class="mb-1 text-[9px] font-mono uppercase tracking-wider text-amber-300/70">Retry policy</div>
+            <div class="space-y-1.5">
+              <div
+                v-for="(retry, i) in workflowState.retry"
+                :key="`retry-${i}`"
+                class="rounded-md border border-amber-400/15 bg-amber-500/[0.04] px-2 py-1.5 text-[10px] font-mono"
+              >
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-amber-200 truncate">{{ (retry.error_equals || []).join(', ') || 'States.ALL' }}</span>
+                  <span class="text-gray-400">↻ {{ retry.max_attempts ?? 3 }}×</span>
+                </div>
+                <div class="mt-0.5 text-[9px] text-gray-500">
+                  interval {{ retry.interval_seconds ?? 1 }}s · backoff {{ retry.backoff_rate ?? 2.0 }}x{{ retry.max_delay_seconds ? ` · max ${retry.max_delay_seconds}s` : '' }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Catch handlers -->
+          <div v-if="workflowState?.catch?.length" class="mt-3">
+            <div class="mb-1 text-[9px] font-mono uppercase tracking-wider text-red-300/70">Error catches</div>
+            <div class="space-y-1.5">
+              <div
+                v-for="(catchRule, i) in workflowState.catch"
+                :key="`catch-${i}`"
+                class="rounded-md border border-red-400/20 bg-red-500/[0.05] px-2 py-1.5 text-[10px] font-mono"
+              >
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-red-200 truncate">{{ (catchRule.error_equals || []).join(', ') || 'States.ALL' }}</span>
+                  <span v-if="catchRule.next" class="text-gray-400">→ {{ catchRule.next }}</span>
+                </div>
+                <div v-if="catchRule.result_path" class="mt-0.5 text-[9px] text-gray-500">result {{ catchRule.result_path }}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Choice branches -->
+          <div v-if="workflowState?.choices?.length" class="mt-3">
+            <div class="mb-1 text-[9px] font-mono uppercase tracking-wider text-violet-300/70">Choice rules</div>
+            <div class="space-y-1">
+              <div
+                v-for="(choice, i) in workflowState.choices"
+                :key="`choice-${i}`"
+                class="rounded-md border border-violet-400/20 bg-violet-500/[0.05] px-2 py-1 text-[10px] font-mono"
+              >
+                <div class="text-violet-100 truncate">{{ choice.condition_summary || 'condition' }}</div>
+                <div v-if="choice.next" class="text-[9px] text-gray-500">→ {{ choice.next }}</div>
+              </div>
+              <div
+                v-if="workflowState.default"
+                class="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-mono text-gray-300"
+              >default → {{ workflowState.default }}</div>
+            </div>
+          </div>
+
+          <!-- Parameters tree -->
+          <details v-if="workflowState?.parameters_summary" class="mt-3">
+            <summary class="cursor-pointer text-[9px] font-mono uppercase tracking-wider text-cyan-300/60 hover:text-cyan-300">Parameters</summary>
+            <div class="mt-1 rounded-md border border-white/8 bg-black/30 px-2 py-1.5 text-[10px] font-mono text-gray-400 break-all">
+              {{ workflowState.parameters_summary }}
+            </div>
+          </details>
+
+          <div v-if="workflowState?.resource_arn" class="mt-3 rounded-md border border-white/8 bg-black/20 px-2 py-1.5 text-[10px] font-mono text-gray-400 break-all">
+            <span class="text-gray-500">target</span> {{ workflowState.resource_arn }}
+          </div>
+          <div v-if="workflowOverlay?.error || workflowOverlay?.cause" class="mt-3 rounded-md border border-red-400/20 bg-red-500/[0.06] px-2 py-1.5 text-[11px] text-red-100">
+            <div v-if="workflowOverlay.error" class="font-mono">{{ workflowOverlay.error }}</div>
+            <div v-if="workflowOverlay.cause" class="mt-1 leading-relaxed text-red-100/75">{{ workflowOverlay.cause }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="isWorkflowTarget" class="border-b border-emerald-500/20 bg-emerald-500/[0.025] p-4">
+        <h3 class="mb-2 text-xs uppercase tracking-wider text-emerald-300/80">Mirrored Target</h3>
+        <p class="text-xs leading-relaxed text-gray-400">This is the real infrastructure resource referenced by a Task state. Jump back to the architecture graph to inspect its normal relationships.</p>
+        <button
+          v-if="workflowTargetRealId"
+          class="mt-3 rounded-md border border-emerald-400/20 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.16em] text-emerald-200 transition hover:border-emerald-300/35 hover:bg-emerald-500/15"
+          @click="store.jumpFromMirroredTarget(workflowTargetRealId)"
+        >
+          Jump to architecture node
+        </button>
+      </div>
+
       <div class="p-4 border-b border-white/10 space-y-3">
         <div v-if="store.editMode && node" class="rounded-xl border border-white/[0.08] bg-white/[0.02]">
           <button class="section-toggle" @click="toggleSection('nodeEditor')">
@@ -285,6 +446,15 @@
               <div v-if="smartGroupReason" class="mb-3 rounded-lg border border-blue-400/15 bg-blue-500/[0.05] px-3 py-2">
                 <div class="text-[10px] uppercase tracking-widest text-blue-300">Smart group reason</div>
                 <div class="mt-1 text-xs font-mono text-gray-300">{{ smartGroupReason }}</div>
+                <div v-if="smartGroupSignals.length" class="mt-2 flex flex-wrap gap-1.5">
+                  <span
+                    v-for="signal in smartGroupSignals"
+                    :key="signal"
+                    class="rounded-md border border-blue-300/10 bg-blue-400/10 px-2 py-0.5 text-[10px] font-mono uppercase tracking-[0.14em] text-blue-200"
+                  >
+                    {{ signal.replace(/_/g, ' ') }}
+                  </span>
+                </div>
               </div>
               <dl>
                 <div
@@ -299,6 +469,44 @@
                   </dd>
                 </div>
               </dl>
+            </div>
+          </Transition>
+        </div>
+
+        <div v-if="isStateMachine" class="rounded-xl border border-white/[0.08] bg-white/[0.02]">
+          <button class="section-toggle" @click="toggleSection('stateMachine')">
+            <span>State Machine</span>
+            <span class="section-toggle__meta">
+              <template v-if="stateMachineStateCount">{{ stateMachineStateCount }} states</template>
+              <template v-if="stateMachineWarningCount"> · {{ stateMachineWarningCount }} ⚠</template>
+              · {{ sectionOpen.stateMachine ? 'Hide' : 'Show' }}
+            </span>
+          </button>
+          <Transition name="expand">
+            <div v-if="sectionOpen.stateMachine" class="section-body">
+              <div class="mb-3 rounded-lg border border-cyan-400/15 bg-cyan-500/[0.06] px-3 py-3">
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <div class="text-[10px] font-mono uppercase tracking-wider text-cyan-200/80">Workflow graph</div>
+                    <div class="mt-1 text-xs leading-relaxed text-gray-300">
+                      {{ stateMachineDefinitionStatus }}
+                    </div>
+                  </div>
+                  <button
+                    class="rounded-md border border-cyan-400/20 bg-cyan-500/10 px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.16em] text-cyan-200 transition hover:border-cyan-300/35 hover:bg-cyan-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="!stateMachineStateCount"
+                    @click="openWorkflowGraph"
+                  >
+                    Open workflow graph
+                  </button>
+                </div>
+                <div class="mt-2 text-[10px] font-mono leading-relaxed text-amber-100/75">
+                  Workflow structure is available from the scan. Recent executions require states:ListExecutions; per-step debugging requires states:GetExecutionHistory.
+                </div>
+              </div>
+              <div class="rounded-lg border border-white/[0.06] bg-black/20 px-3 py-3 text-xs leading-relaxed text-gray-400">
+                The old stacked Step Functions card view has been replaced by the main workflow graph. Open it to inspect branches, iterators, warnings, target resources, and execution overlays in one canvas.
+              </div>
             </div>
           </Transition>
         </div>
@@ -330,7 +538,7 @@
               </div>
 
               <div class="rounded-lg border border-white/[0.06] bg-black/20 px-3 py-3 text-xs leading-relaxed text-gray-400">
-                Add usage assumptions for better per-resource forecasts. Current AWS billing import is not wired yet, so this compares built-in baseline estimates against your edits.
+                {{ costInputHelpText }}
               </div>
 
               <div
@@ -407,6 +615,104 @@
                   placeholder="100"
                 />
               </label>
+
+              <template v-if="supportsEc2Inputs">
+                <div class="grid grid-cols-2 gap-2">
+                  <label class="block">
+                    <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Instance type</span>
+                    <input
+                      v-model="costInputs.instance_type"
+                      type="text"
+                      class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+                      :placeholder="ec2InstanceTypePlaceholder"
+                    />
+                  </label>
+                  <label class="block">
+                    <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Hours / month</span>
+                    <input
+                      v-model="costInputs.hours_per_month"
+                      type="number"
+                      min="0"
+                      max="730"
+                      step="1"
+                      class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+                      placeholder="730"
+                    />
+                  </label>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <label class="block">
+                    <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">EBS GB</span>
+                    <input
+                      v-model="costInputs.ebs_gb"
+                      type="number"
+                      min="0"
+                      step="1"
+                      class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+                      placeholder="30"
+                    />
+                  </label>
+                  <label class="flex h-full items-end gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-mono text-gray-300">
+                    <input
+                      type="checkbox"
+                      class="h-4 w-4 rounded border-white/20 bg-black/30 text-emerald-400 focus:ring-emerald-400/30"
+                      :checked="costInputs.spot === 'true'"
+                      @change="setSpotInput"
+                    />
+                    Spot pricing
+                  </label>
+                </div>
+              </template>
+
+              <template v-if="supportsEcsInputs">
+                <label class="block">
+                  <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Launch type</span>
+                  <select
+                    v-model="costInputs.launch_type"
+                    class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+                  >
+                    <option value="">Scanned / default</option>
+                    <option value="FARGATE">Fargate</option>
+                    <option value="FARGATE_SPOT">Fargate Spot</option>
+                    <option value="EC2">EC2 backed</option>
+                  </select>
+                </label>
+                <div class="grid grid-cols-3 gap-2">
+                  <label class="block">
+                    <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">CPU units</span>
+                    <input
+                      v-model="costInputs.cpu"
+                      type="number"
+                      min="0"
+                      step="1"
+                      class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+                      :placeholder="ecsCpuPlaceholder"
+                    />
+                  </label>
+                  <label class="block">
+                    <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Memory MB</span>
+                    <input
+                      v-model="costInputs.memory"
+                      type="number"
+                      min="0"
+                      step="1"
+                      class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+                      :placeholder="ecsMemoryPlaceholder"
+                    />
+                  </label>
+                  <label class="block">
+                    <span class="mb-1 block text-[10px] font-mono uppercase tracking-wider text-gray-500">Tasks</span>
+                    <input
+                      v-model="costInputs.desired_count"
+                      type="number"
+                      min="0"
+                      step="1"
+                      class="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white font-mono outline-none focus:border-emerald-400/40"
+                      :placeholder="ecsDesiredCountPlaceholder"
+                    />
+                  </label>
+                </div>
+              </template>
 
               <div v-if="hasSupportedCostInputs" class="flex gap-2">
                 <button
@@ -830,6 +1136,7 @@
       </template>
     </div>
   </Transition>
+
 </template>
 
 <script setup lang="ts">
@@ -851,6 +1158,7 @@ const sectionOpen = ref<Record<string, boolean>>({
   neighborhood: false,
   edgeEditor: true,
   trace: false,
+  stateMachine: true,
   emptyGuidance: true,
   emptyChanges: true,
   emptyStatus: false,
@@ -861,12 +1169,80 @@ const costInputs = ref<Record<string, string>>({
   avg_duration_ms: '',
   storage_gb: '',
   data_transfer_gb: '',
+  instance_type: '',
+  ebs_gb: '',
+  hours_per_month: '',
+  spot: '',
+  cpu: '',
+  memory: '',
+  desired_count: '',
+  launch_type: '',
 })
 const costFeedback = ref('')
 const costFeedbackTone = ref<'success' | 'warning'>('success')
 
 const node = computed(() => store.selectedNode)
 const edge = computed(() => store.selectedEdge)
+const isStateMachine = computed(() => {
+  const rt = node.value?.resource_type || ''
+  return rt === 'aws_sfn_state_machine'
+    || rt === 'AWS::StepFunctions::StateMachine'
+    || rt === 'AWS::Serverless::StateMachine'
+})
+const isWorkflowState = computed(() => node.value?.metadata?.view_kind === 'sfn_state')
+const isWorkflowTarget = computed(() => node.value?.metadata?.view_kind === 'sfn_target')
+const workflowState = computed(() => node.value?.properties?.asl_state || null)
+const workflowOverlay = computed(() => node.value?.properties?.execution_overlay || null)
+const workflowExecutionStatus = computed(() => String(workflowOverlay.value?.status || node.value?.metadata?.execution_status || ''))
+const workflowExecutionStatusClass = computed(() => {
+  switch (workflowExecutionStatus.value.toLowerCase()) {
+    case 'succeeded':
+      return 'bg-emerald-500/15 text-emerald-200'
+    case 'failed':
+    case 'timed_out':
+    case 'aborted':
+      return 'bg-red-500/15 text-red-200'
+    case 'running':
+      return 'bg-amber-500/15 text-amber-200'
+    default:
+      return 'bg-cyan-500/15 text-cyan-200'
+  }
+})
+const workflowTargetRealId = computed(() => String(node.value?.metadata?.mirrored_from_node_id || node.value?.properties?.mirrored_from_node_id || ''))
+const workflowStateIntegrationBadge = computed(() => {
+  const s = workflowState.value as any
+  if (!s) return ''
+  if (s.resource_kind && s.resource_kind !== 'unknown') return String(s.resource_kind)
+  if (s.integration) return String(s.integration).split(':')[0]
+  return ''
+})
+const workflowIoChain = computed<Array<{ label: string; kind: 'literal' | 'path' }>>(() => {
+  const s = workflowState.value as any
+  if (!s) return []
+  const steps: Array<{ label: string; kind: 'literal' | 'path' }> = [{ label: '$', kind: 'literal' }]
+  if (s.input_path && s.input_path !== '$') steps.push({ label: `InputPath ${s.input_path}`, kind: 'path' })
+  if (s.parameters_summary) steps.push({ label: 'Parameters', kind: 'path' })
+  if (s.result_selector) steps.push({ label: 'ResultSelector', kind: 'path' })
+  if (s.result_path && s.result_path !== '$') steps.push({ label: `ResultPath ${s.result_path}`, kind: 'path' })
+  if (s.output_path && s.output_path !== '$') steps.push({ label: `OutputPath ${s.output_path}`, kind: 'path' })
+  steps.push({ label: '$', kind: 'literal' })
+  return steps.length > 2 ? steps : []
+})
+const stateMachineStateCount = computed(() => {
+  const asl = node.value?.properties?.asl_graph as { states?: unknown[] } | undefined
+  return Array.isArray(asl?.states) ? asl!.states!.length : 0
+})
+const stateMachineWarningCount = computed(() => {
+  const asl = node.value?.properties?.asl_graph as { warnings?: unknown[] } | undefined
+  return Array.isArray(asl?.warnings) ? asl!.warnings!.length : 0
+})
+const stateMachineDefinitionStatus = computed(() => {
+  if (!stateMachineStateCount.value) return 'No parsed ASL states are available for this state machine.'
+  const warningText = stateMachineWarningCount.value
+    ? `${stateMachineWarningCount.value} warning${stateMachineWarningCount.value === 1 ? '' : 's'}`
+    : 'no parser warnings'
+  return `${stateMachineStateCount.value} states parsed with ${warningText}.`
+})
 const edgeEvidence = computed(() => edge.value?.metadata?.evidence || '')
 const edgeInferenceRule = computed(() => String(edge.value?.metadata?.inference_rule || '').replace(/_/g, ' '))
 const edgeConfidence = computed(() => edge.value?.metadata?.confidence || '')
@@ -909,12 +1285,21 @@ const diffBadgeLabel = computed(() => {
       return ''
   }
 })
+const selectedNodeFindings = computed(() => {
+  if (!node.value) return []
+  return store.findings.filter(finding => finding.node_ids.includes(node.value!.id))
+})
 const categoryColor = computed(() => CATEGORY_COLORS[node.value?.category || ''] || '#9ca3af')
 const edgeColor = computed(() => edge.value?.color || CATEGORY_COLORS.integration)
 const iconAsset = computed(() => node.value ? getNodeIconAsset(node.value) : getResourceIconAsset('user_defined'))
 const iconPath = computed(() => node.value ? getNodeIconPath(node.value) : getResourceIconPath('user_defined', 'other'))
 const layerDefinitions = computed(() => buildLayerDefinitions(store.layoutLayers, store.customLayers))
 const userNodeTemplates = USER_NODE_TEMPLATES
+
+function openWorkflowGraph() {
+  if (!node.value) return
+  store.openStateMachineGraph(node.value.id)
+}
 
 const edges = computed(() => (node.value ? store.nodeEdges(node.value.id) : []))
 const outgoing = computed(() => edges.value.filter(e => e.source === node.value?.id))
@@ -937,7 +1322,15 @@ const smartGroupReason = computed(() => {
     && candidate.metadata?.auto_strategy
   )
   if (!group) return ''
-  return String(group.metadata?.evidence || `Grouped by ${String(group.metadata?.auto_strategy).replace(/_/g, ' ')}`)
+  return String(group.metadata?.reason || group.metadata?.evidence || `Grouped by ${String(group.metadata?.auto_strategy).replace(/_/g, ' ')}`)
+})
+const smartGroupSignals = computed(() => {
+  if (!node.value) return []
+  const group = store.graphGroups.find(candidate =>
+    candidate.children.includes(node.value!.id)
+    && candidate.metadata?.auto_strategy
+  )
+  return Array.isArray(group?.metadata?.signals) ? group!.metadata!.signals : []
 })
 const selectedNodeCost = computed(() => {
   if (!node.value) return null
@@ -958,6 +1351,14 @@ const TRANSFER_OVERRIDE_TYPES = new Set([
   'aws_nat_gateway',
   'AWS::EC2::NatGateway',
 ])
+const EC2_OVERRIDE_TYPES = new Set([
+  'aws_instance',
+  'AWS::EC2::Instance',
+])
+const ECS_OVERRIDE_TYPES = new Set([
+  'aws_ecs_service',
+  'AWS::ECS::Service',
+])
 const supportsLambdaInputs = computed(() => {
   if (!node.value) return false
   return node.value.resource_type.includes('lambda')
@@ -973,9 +1374,51 @@ const supportsTransferInput = computed(() => {
   if (!node.value) return false
   return TRANSFER_OVERRIDE_TYPES.has(node.value.resource_type)
 })
+const supportsEc2Inputs = computed(() => {
+  if (!node.value) return false
+  return EC2_OVERRIDE_TYPES.has(node.value.resource_type)
+})
+const supportsEcsInputs = computed(() => {
+  if (!node.value) return false
+  return ECS_OVERRIDE_TYPES.has(node.value.resource_type)
+})
 const hasSupportedCostInputs = computed(() =>
-  supportsMemoryInput.value || supportsInvocationInput.value || supportsDurationInput.value || supportsStorageInput.value || supportsTransferInput.value
+  supportsMemoryInput.value
+  || supportsInvocationInput.value
+  || supportsDurationInput.value
+  || supportsStorageInput.value
+  || supportsTransferInput.value
+  || supportsEc2Inputs.value
+  || supportsEcsInputs.value
 )
+const costInputHelpText = computed(() => {
+  if (supportsEc2Inputs.value) {
+    return 'Tune EC2 instance assumptions for the selected node. Leave fields blank to use scanned metadata and built-in defaults.'
+  }
+  if (supportsEcsInputs.value) {
+    return 'Tune ECS service assumptions for Fargate, Fargate Spot, or EC2-backed services. EC2-backed service compute is priced on the container instances.'
+  }
+  if (hasSupportedCostInputs.value) {
+    return 'Add usage assumptions for better per-resource forecasts. Current AWS billing import is not wired yet, so this compares built-in baseline estimates against your edits.'
+  }
+  return 'This resource uses a fixed estimate today. Editable assumptions are available for Lambda, storage and transfer resources, EC2 instances, and ECS services.'
+})
+const ec2InstanceTypePlaceholder = computed(() => {
+  const value = node.value?.properties?.instance_type
+  return typeof value === 'string' && value ? value : 't3.medium'
+})
+const ecsCpuPlaceholder = computed(() => {
+  const value = node.value?.properties?.cpu
+  return typeof value === 'number' || typeof value === 'string' ? String(value) : '256'
+})
+const ecsMemoryPlaceholder = computed(() => {
+  const value = node.value?.properties?.memory
+  return typeof value === 'number' || typeof value === 'string' ? String(value) : '512'
+})
+const ecsDesiredCountPlaceholder = computed(() => {
+  const value = node.value?.properties?.desired_count
+  return typeof value === 'number' || typeof value === 'string' ? String(value) : '1'
+})
 const emptyStateTitle = computed(() => {
   if (store.editSubmode === 'inspect') return 'Select a resource or link'
   if (store.editSubmode === 'structure') return 'Choose something to shape'
@@ -1178,6 +1621,14 @@ function toInputValue(value: number | undefined): string {
   return typeof value === 'number' && Number.isFinite(value) ? String(value) : ''
 }
 
+function toStringInputValue(value: string | undefined): string {
+  return typeof value === 'string' ? value : ''
+}
+
+function toBooleanInputValue(value: boolean | undefined): string {
+  return value === true ? 'true' : ''
+}
+
 function syncCostInputs() {
   const overrides = node.value ? store.costOverrides[node.value.id] || {} : {}
   costFeedback.value = ''
@@ -1187,6 +1638,14 @@ function syncCostInputs() {
     avg_duration_ms: toInputValue(overrides.avg_duration_ms),
     storage_gb: toInputValue(overrides.storage_gb),
     data_transfer_gb: toInputValue(overrides.data_transfer_gb),
+    instance_type: toStringInputValue(overrides.instance_type),
+    ebs_gb: toInputValue(overrides.ebs_gb),
+    hours_per_month: toInputValue(overrides.hours_per_month),
+    spot: toBooleanInputValue(overrides.spot),
+    cpu: toInputValue(overrides.cpu),
+    memory: toInputValue(overrides.memory),
+    desired_count: toInputValue(overrides.desired_count),
+    launch_type: toStringInputValue(overrides.launch_type),
   }
 }
 
@@ -1196,6 +1655,20 @@ function parseOptionalNumber(value: string | number): number | undefined {
   const parsed = Number(value)
   if (!Number.isFinite(parsed) || parsed < 0) return undefined
   return parsed
+}
+
+function parseOptionalString(value: string): string | undefined {
+  const trimmed = value.trim()
+  return trimmed ? trimmed : undefined
+}
+
+function parseOptionalBoolean(value: string): boolean | undefined {
+  return value === 'true' ? true : undefined
+}
+
+function setSpotInput(event: Event) {
+  const target = event.target as HTMLInputElement | null
+  costInputs.value.spot = target?.checked ? 'true' : ''
 }
 
 async function applyCostOverrides() {
@@ -1213,6 +1686,14 @@ async function applyCostOverrides() {
     avg_duration_ms: parseOptionalNumber(costInputs.value.avg_duration_ms),
     storage_gb: parseOptionalNumber(costInputs.value.storage_gb),
     data_transfer_gb: parseOptionalNumber(costInputs.value.data_transfer_gb),
+    instance_type: parseOptionalString(costInputs.value.instance_type),
+    ebs_gb: parseOptionalNumber(costInputs.value.ebs_gb),
+    hours_per_month: parseOptionalNumber(costInputs.value.hours_per_month),
+    spot: parseOptionalBoolean(costInputs.value.spot),
+    cpu: parseOptionalNumber(costInputs.value.cpu),
+    memory: parseOptionalNumber(costInputs.value.memory),
+    desired_count: parseOptionalNumber(costInputs.value.desired_count),
+    launch_type: parseOptionalString(costInputs.value.launch_type),
   })
   if (!result.ok) {
     costFeedbackTone.value = 'warning'

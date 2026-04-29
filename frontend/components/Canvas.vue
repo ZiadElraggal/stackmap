@@ -39,7 +39,7 @@
       <rect width="100%" height="100%" fill="#0a0a0f" @click="clearSelection" />
 
       <g ref="zoomGroupRef">
-        <g v-if="store.viewMode !== 'organization'">
+        <g v-if="showArchitectureLayers">
           <rect
             v-for="band in tierBands"
             :key="`tier-band-${band.id}`"
@@ -55,7 +55,7 @@
           />
         </g>
 
-        <g v-if="store.viewMode !== 'organization'">
+        <g v-if="showArchitectureLayers">
           <line
             v-for="divider in tierDividers"
             :key="`tier-divider-${divider.name}`"
@@ -78,7 +78,7 @@
           @click="clearSelection"
         />
 
-        <g v-if="store.viewMode !== 'organization'" v-for="band in tierBands" :key="`tier-${band.id}`">
+        <g v-if="showArchitectureLayers" v-for="band in tierBands" :key="`tier-${band.id}`">
           <rect
             :x="graphBounds.minX - 226"
             :y="band.yStart + 12"
@@ -125,7 +125,7 @@
           >{{ band.name.toUpperCase() }}</text>
         </g>
 
-        <g v-if="store.viewMode !== 'organization'" v-for="(band, idx) in tierBands" :key="`flow-arrow-${band.id}`">
+        <g v-if="showArchitectureLayers" v-for="(band, idx) in tierBands" :key="`flow-arrow-${band.id}`">
           <text
             v-if="idx < tierBands.length - 1"
             :x="graphBounds.minX + graphBounds.width / 2"
@@ -172,13 +172,82 @@
 
     <ComponentLanding v-if="store.viewMode === 'components'" />
 
-    <div v-if="!store.presentationMode" class="absolute left-1/2 top-4 z-40 -translate-x-1/2">
+    <Transition name="fade">
+      <div
+        v-if="store.viewMode === 'step_function' && !store.presentationMode"
+        class="absolute left-1/2 top-4 z-50 w-[min(960px,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-white/[0.08] bg-[#0e0e18]/95 px-4 py-3 backdrop-blur-md shadow-[0_18px_48px_rgba(0,0,0,0.45)]"
+      >
+        <div class="flex flex-wrap items-center gap-3">
+          <button
+            class="rounded-md border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.14em] text-gray-300 transition hover:bg-white/[0.06] hover:text-white"
+            @click="store.returnToArchitectureFromStateMachine()"
+          >
+            Back to architecture
+          </button>
+          <div class="min-w-0 flex-1">
+            <div class="truncate text-sm font-semibold text-white">{{ activeWorkflowTitle }}</div>
+            <div class="mt-0.5 text-[10px] font-mono text-gray-500">
+              Workflow structure is available from the scan. Recent executions require states:ListExecutions; per-step debugging requires states:GetExecutionHistory.
+            </div>
+          </div>
+          <label class="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.14em] text-gray-300">
+            <input
+              type="checkbox"
+              class="accent-cyan-400"
+              :checked="store.showStateMachineTargets"
+              @change="store.setShowStateMachineTargets(($event.target as HTMLInputElement).checked)"
+            />
+            Show target resources
+          </label>
+        </div>
+
+        <div class="mt-3 flex flex-wrap items-center gap-2 border-t border-white/[0.06] pt-3">
+          <button
+            class="rounded-md border border-cyan-400/20 bg-cyan-500/10 px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.14em] text-cyan-200 transition hover:border-cyan-300/35 hover:bg-cyan-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="workflowExecutionsLoading"
+            @click="loadWorkflowExecutions"
+          >
+            {{ workflowExecutionsLoading ? 'Loading executions' : workflowRecentExecutions.length ? 'Refresh executions' : 'Load recent executions' }}
+          </button>
+          <select
+            v-if="workflowRecentExecutions.length"
+            v-model="selectedWorkflowExecutionArn"
+            class="max-w-[360px] rounded-md border border-white/10 bg-[#090b12] px-2 py-1.5 text-[10px] font-mono text-gray-200 outline-none"
+          >
+            <option value="">Choose an execution</option>
+            <option
+              v-for="execution in workflowRecentExecutions"
+              :key="execution.execution_arn || execution.name"
+              :value="execution.execution_arn"
+            >
+              {{ execution.name || shortExecutionArn(execution.execution_arn || '') }} · {{ execution.status || 'unknown' }}
+            </option>
+          </select>
+          <button
+            v-if="workflowRecentExecutions.length"
+            class="rounded-md border border-emerald-400/20 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.14em] text-emerald-200 transition hover:border-emerald-300/35 hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="!selectedWorkflowExecutionArn || workflowHistoryLoading"
+            @click="loadWorkflowExecutionHistory"
+          >
+            {{ workflowHistoryLoading ? 'Loading history' : 'Overlay selected execution' }}
+          </button>
+          <span v-if="store.selectedStateMachineExecutionArn" class="text-[10px] font-mono text-emerald-300">
+            overlay active
+          </span>
+          <span v-if="workflowExecutionError" class="text-[10px] font-mono text-amber-200">
+            {{ workflowExecutionError }}
+          </span>
+        </div>
+      </div>
+    </Transition>
+
+    <div v-if="!store.presentationMode && store.viewMode !== 'step_function'" class="absolute left-1/2 top-4 z-40 -translate-x-1/2">
       <SearchBar ref="searchBarRef" @pan-to="panToNode" />
     </div>
 
     <Transition name="fade">
       <div
-        v-if="store.editMode && store.editSubmode === 'structure' && store.viewMode !== 'organization' && !store.presentationMode"
+        v-if="store.editMode && store.editSubmode === 'structure' && showArchitectureLayers && !store.presentationMode"
         class="absolute z-50 w-56 rounded-2xl border border-white/[0.08] bg-[#12121a]/92 p-3 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,0,0,0.45)]"
         :style="layerRailStyle"
       >
@@ -502,7 +571,7 @@
 
     <Transition name="fade">
       <div
-        v-if="store.activeBreadcrumb.length > 0 && !store.presentationMode"
+        v-if="store.activeBreadcrumb.length > 0 && !store.presentationMode && store.viewMode !== 'step_function'"
         class="absolute left-1/2 top-16 z-40 -translate-x-1/2 flex items-center gap-2 rounded-xl border border-white/[0.08] bg-[#0e0e18]/95 px-4 py-2 backdrop-blur-md shadow-xl"
       >
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="1.5" stroke-linecap="round" opacity="0.6">
@@ -617,7 +686,7 @@
       <span v-if="store.metadata.terraform_version" class="text-gray-600">TF v{{ store.metadata.terraform_version }}</span>
       <span v-if="store.showCrossAccountEdges && store.metadata.cross_account_edges" class="text-gray-600">{{ store.metadata.cross_account_edges }} cross-account</span>
       <span class="text-gray-600">{{ Math.round(zoomScale * 100) }}%</span>
-      <div class="flex items-center gap-0.5 rounded-md border border-white/[0.06] bg-white/[0.02] px-1 py-0.5">
+      <div v-if="store.viewMode !== 'step_function'" class="flex items-center gap-0.5 rounded-md border border-white/[0.06] bg-white/[0.02] px-1 py-0.5">
         <div
           v-for="lane in architectureStrip"
           :key="`strip-${lane.name}`"
@@ -641,7 +710,7 @@ import { useLayout } from '~/composables/useLayout'
 import { EDGE_COLORS, MANUAL_EDGE_TYPES, buildLayerDefinitions, getNodeHeight } from '~/composables/useGraph'
 
 const store = useGraphStore()
-const { computeLayout, sortByTier } = useLayout()
+const { computeLayout, computeWorkflowLayout, sortByTier } = useLayout()
 
 const svgRef = ref<SVGSVGElement>()
 const zoomGroupRef = ref<SVGGElement>()
@@ -659,6 +728,9 @@ let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null
 let svgSelection: d3.Selection<SVGSVGElement, unknown, null, undefined> | null = null
 
 const orderedVisibleNodes = computed(() => {
+  if (store.viewMode === 'step_function') {
+    return [...store.visibleNodes].sort((a, b) => (a.position_hint?.manual_order || 0) - (b.position_hint?.manual_order || 0))
+  }
   if (store.viewMode === 'organization') {
     return [...store.visibleNodes].sort((a, b) => a.name.localeCompare(b.name))
   }
@@ -670,6 +742,13 @@ const edgeTypesInGraph = computed(() => [...new Set(store.visibleEdges.map(edge 
 const visibleUserLinks = computed(() => store.visibleEdges.filter(edge => edge.edge_type === 'user_link' || edge.id.startsWith('user:')))
 const primaryResourceCount = computed(() => store.viewMode === 'components' ? store.architectureSourceNodes.length : store.visibleNodes.length)
 const primaryConnectionCount = computed(() => store.viewMode === 'components' ? store.architectureSourceEdges.length : store.visibleEdges.length)
+const showArchitectureLayers = computed(() => store.viewMode !== 'organization' && store.viewMode !== 'step_function')
+const selectedWorkflowExecutionArn = ref('')
+const workflowExecutionsLoading = ref(false)
+const workflowHistoryLoading = ref(false)
+const workflowExecutionError = ref('')
+const activeWorkflowTitle = computed(() => store.activeStateMachineNode?.name || 'Step Functions workflow')
+const workflowRecentExecutions = computed(() => store.activeStateMachineAsl?.recent_executions || [])
 
 const graphBounds = computed(() => {
   const points = Object.values(store.positions)
@@ -851,6 +930,7 @@ const modeHint = computed(() => {
 })
 
 const viewModeLabel = computed(() => {
+  if (store.viewMode === 'step_function') return 'Step Functions workflow'
   if (store.viewMode === 'architecture') return 'architecture view'
   if (store.viewMode === 'components') return 'component landing'
   if (store.viewMode === 'organization') return 'organization view'
@@ -859,6 +939,61 @@ const viewModeLabel = computed(() => {
   if (sourceType === 'terraform') return 'terraform raw view'
   return 'raw view'
 })
+
+function shortExecutionArn(arn: string): string {
+  return arn.split(':').pop()?.split('/').pop() || arn
+}
+
+async function loadWorkflowExecutions() {
+  const nodeId = store.activeStateMachineNodeId
+  if (!nodeId) return
+  workflowExecutionsLoading.value = true
+  workflowExecutionError.value = ''
+  try {
+    const res = await fetch('/api/sfn-executions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ node_id: nodeId }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.error || 'Could not load recent executions.')
+    const machine = store.activeStateMachineNode
+    if (machine?.properties?.asl_graph) {
+      machine.properties.asl_graph.recent_executions = Array.isArray(data.executions) ? data.executions : []
+    }
+    selectedWorkflowExecutionArn.value = data.executions?.[0]?.execution_arn || ''
+  } catch (err) {
+    workflowExecutionError.value = err instanceof Error
+      ? err.message
+      : 'Your AWS profile can view the state machine definition, but not execution history. Add states:ListExecutions and states:GetExecutionHistory to use debugging overlays.'
+  } finally {
+    workflowExecutionsLoading.value = false
+  }
+}
+
+async function loadWorkflowExecutionHistory() {
+  const nodeId = store.activeStateMachineNodeId
+  const executionArn = selectedWorkflowExecutionArn.value
+  if (!nodeId || !executionArn) return
+  workflowHistoryLoading.value = true
+  workflowExecutionError.value = ''
+  try {
+    const res = await fetch('/api/sfn-execution-history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ node_id: nodeId, execution_arn: executionArn }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.error || 'Could not load execution history.')
+    store.applyStateMachineExecutionHistory(nodeId, executionArn, data.states || {}, data.execution || {})
+  } catch (err) {
+    workflowExecutionError.value = err instanceof Error
+      ? err.message
+      : 'Your AWS profile can view the state machine definition, but not execution history. Add states:ListExecutions and states:GetExecutionHistory to use debugging overlays.'
+  } finally {
+    workflowHistoryLoading.value = false
+  }
+}
 
 const diffSummaryMeta = computed(() => {
   const summary = store.metadata?.diff_summary
@@ -966,6 +1101,11 @@ function edgeTargetPos(edge: StackMapEdge) {
   return { x: pos.x, y: pos.y + (dy > 0 ? h / 2 : -h / 2) }
 }
 
+function onPanToNodeEvent(event: Event) {
+  const nodeId = (event as CustomEvent<{ nodeId?: string }>).detail?.nodeId
+  if (nodeId) panToNode(nodeId)
+}
+
 onMounted(async () => {
   try {
     await store.loadFromJSON('/api/graph')
@@ -986,6 +1126,7 @@ onMounted(async () => {
       .on('zoom', event => {
         g.attr('transform', event.transform.toString())
         zoomScale.value = event.transform.k
+        store.setZoomScale(event.transform.k)
         updateViewport(event.transform)
       })
 
@@ -995,32 +1136,44 @@ onMounted(async () => {
 
   window.addEventListener('keydown', onKeydown)
   window.addEventListener('stackmap-fit-view', onFitViewEvent)
+  window.addEventListener('stackmap-pan-to-node', onPanToNodeEvent)
   initializeLayerRailPosition()
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('stackmap-fit-view', onFitViewEvent)
+  window.removeEventListener('stackmap-pan-to-node', onPanToNodeEvent)
   stopLayerRailDrag()
 })
 
 watch(
-  () => [
-    store.viewMode,
-    store.diffMode,
-    store.diffSlider,
-    store.visibleNodes.map(n => n.id).join('|'),
-    store.visibleEdges.map(e => e.id).join('|'),
-    store.graphGroups.map(g => g.id).join('|'),
-    store.activeAccountId,
-    store.activeComponentId,
-    store.layoutVersion,
-  ],
-  async () => {
+  () => ({
+    viewMode: store.viewMode,
+    diffMode: store.diffMode,
+    diffSlider: store.diffSlider,
+    zoomTier: store.zoomTier,
+    visibleNodeIds: store.visibleNodes.map(n => n.id).join('|'),
+    visibleEdgeIds: store.visibleEdges.map(e => e.id).join('|'),
+    groupIds: store.graphGroups.map(g => g.id).join('|'),
+    activeAccountId: store.activeAccountId,
+    activeComponentId: store.activeComponentId,
+    layoutVersion: store.layoutVersion,
+  }),
+  async (nextState, prevState) => {
     if (!store.loaded) return
     recomputeLayout()
     await nextTick()
-    fitToViewport()
+    const zoomTierOnly = Boolean(prevState)
+      && nextState.zoomTier !== prevState.zoomTier
+      && nextState.viewMode === prevState.viewMode
+      && nextState.diffMode === prevState.diffMode
+      && nextState.diffSlider === prevState.diffSlider
+      && nextState.groupIds === prevState.groupIds
+      && nextState.activeAccountId === prevState.activeAccountId
+      && nextState.activeComponentId === prevState.activeComponentId
+      && nextState.layoutVersion === prevState.layoutVersion
+    if (!zoomTierOnly) fitToViewport()
   }
 )
 
@@ -1169,7 +1322,9 @@ function activateConnectForSelectedNode() {
 function recomputeLayout() {
   const allNodes = store.visibleNodes
   const allEdges = store.visibleEdges
-  const positions = store.diffMode
+  const positions = store.viewMode === 'step_function'
+    ? computeWorkflowLayout(allNodes, allEdges)
+    : store.diffMode
     ? computeDiffLayout()
     : computeLayout(allNodes, allEdges, store.graphGroups, visibleLayerDefinitions.value.map(layer => layer.id), { mode: store.relayoutMode })
   store.setPositions(positions)

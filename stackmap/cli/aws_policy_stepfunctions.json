@@ -1,0 +1,14 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "StackMapStepFunctionsDebuggerReadOnly",
+      "Effect": "Allow",
+      "Action": [
+        "states:ListExecutions",
+        "states:GetExecutionHistory"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
