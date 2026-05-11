@@ -121,6 +121,41 @@ jobs:
         run: |
           Invoke-WebRequest -Uri "https://aka.ms/wingetcreate/latest" -OutFile wingetcreate.exe
 
+      - name: Sync winget-pkgs fork with upstream
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_PAT }}
+        run: |
+          if (-not $env:GH_TOKEN) {
+            Write-Host "WINGET_PAT secret not set; skipping fork sync."
+            exit 0
+          }
+          # Discover the fork owner (the user who owns the PAT)
+          $owner = (gh api user --jq '.login').Trim()
+          Write-Host "Fork owner: $owner"
+
+          # Ensure a fork exists; create it if missing
+          $forkExists = $true
+          try {
+            gh api "repos/$owner/winget-pkgs" --silent 2>$null
+            if ($LASTEXITCODE -ne 0) { $forkExists = $false }
+          } catch {
+            $forkExists = $false
+          }
+          if (-not $forkExists) {
+            Write-Host "Fork not found; creating fork of microsoft/winget-pkgs..."
+            gh repo fork microsoft/winget-pkgs --clone=false
+            Start-Sleep -Seconds 10
+          }
+
+          # Sync the fork's default branch with upstream
+          Write-Host "Syncing $owner/winget-pkgs with microsoft/winget-pkgs..."
+          gh repo sync "$owner/winget-pkgs" --source microsoft/winget-pkgs --force
+          if ($LASTEXITCODE -ne 0) {
+            Write-Warning "gh repo sync failed; attempting manual merge-upstream via API."
+            gh api -X POST "repos/$owner/winget-pkgs/merge-upstream" -f branch=master
+          }
+
       - name: Submit to winget-pkgs
         shell: pwsh
         env:
