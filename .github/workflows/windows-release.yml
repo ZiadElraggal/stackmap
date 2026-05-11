@@ -151,9 +151,22 @@ jobs:
           # Sync the fork's default branch with upstream
           Write-Host "Syncing $owner/winget-pkgs with microsoft/winget-pkgs..."
           gh repo sync "$owner/winget-pkgs" --source microsoft/winget-pkgs --force
-          if ($LASTEXITCODE -ne 0) {
-            Write-Warning "gh repo sync failed; attempting manual merge-upstream via API."
-            gh api -X POST "repos/$owner/winget-pkgs/merge-upstream" -f branch=master
+          $syncOk = ($LASTEXITCODE -eq 0)
+          if (-not $syncOk) {
+            Write-Warning "gh repo sync failed (likely missing 'workflow' PAT scope). Falling back to delete-and-recreate fork."
+            gh repo delete "$owner/winget-pkgs" --yes
+            if ($LASTEXITCODE -ne 0) {
+              Write-Error "Failed to delete fork. The PAT needs 'delete_repo' scope, or add 'workflow' scope so sync can succeed without delete."
+              exit 1
+            }
+            Start-Sleep -Seconds 5
+            gh repo fork microsoft/winget-pkgs --clone=false
+            if ($LASTEXITCODE -ne 0) {
+              Write-Error "Failed to recreate fork."
+              exit 1
+            }
+            Start-Sleep -Seconds 15
+            Write-Host "Fork recreated fresh from upstream."
           }
 
       - name: Submit to winget-pkgs
